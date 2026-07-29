@@ -496,3 +496,31 @@ demo-full: demo-up
 	$(MAKE) demo-web-health
 	$(MAKE) demo-run-mixed
 	@printf '%s\n' 'Full demo stack remains running.'
+
+demo-verification-processor-up:
+	docker compose --profile processor stop event-processor
+	docker compose --profile processor --profile fraud --profile demo \
+		--profile demo-verification up -d --build demo-verification-processor
+
+demo-verification-processor-ready:
+	@attempt=0; while [ $$attempt -lt 30 ]; do \
+		output="$$(docker compose exec -T kafka \
+			/opt/kafka/bin/kafka-consumer-groups.sh \
+			--bootstrap-server kafka:9092 \
+			--describe --group commerce-demo-verification-v1 \
+			--members --verbose 2>/dev/null || true)"; \
+		if printf '%s\n' "$$output" | awk \
+			'$$1 == "commerce-demo-verification-v1" && $$5 + 0 == 3 {found=1} END {exit !found}'; then \
+			printf '%s\n' "$$output"; exit 0; \
+		fi; \
+		attempt=$$((attempt + 1)); sleep 1; \
+	done; \
+	echo "verification processor did not receive all three partitions" >&2; exit 1
+
+demo-verification-takeover:
+	$(PYTHON) scripts/demo-verification-takeover.py
+
+demo-verification-processor-down:
+	docker compose --profile processor --profile demo-verification \
+		rm -sf demo-verification-processor
+	docker compose --profile processor start event-processor

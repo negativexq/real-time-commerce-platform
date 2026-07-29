@@ -195,3 +195,45 @@ run history unusable. Sprint 10 does not include authentication, production
 authorization, DLQ replay, WebSockets, arbitrary scenario code, or cloud
 deployment. Sprint 11 may add richer operational workflows while preserving
 the fixed control boundary and data-safety rules.
+
+### Isolated takeover acceptance verification
+
+Historical lag on `commerce-event-processor-v1` can make a bounded demo run
+finish generation before the primary consumer reaches its new records. Never
+reset or skip that group’s offsets to make a demo faster.
+
+The isolated workflow starts one temporary processor with the fixed
+`commerce-demo-verification-v1` group and `auto.offset.reset=latest`.
+It briefly stops (but does not remove) the primary processor before starting
+the temporary consumer. This prevents the two safe consumers from repeatedly
+racing for the same global Redis lease and lets the verification processor
+remain the deterministic owner. The primary group offsets are not changed.
+Readiness inspects Kafka group membership and requires all three
+`commerce.events` partitions to be assigned before the API creates a run. This
+ordering prevents the new group from establishing its initial offsets after
+the takeover records are published.
+
+```bash
+make demo-verification-processor-up
+make demo-verification-processor-ready
+make demo-verification-takeover
+make demo-verification-processor-down
+```
+
+This is safe only because Redis reservation keys are global by event ID:
+`commerce:processor:v1:event:{event_id}`. The group name is diagnostic value
+data, not part of the key. Two groups therefore cannot own the same event
+concurrently. A completed event is skipped by the other group, and PostgreSQL’s
+event primary key plus canonical hash remains the durable duplicate boundary
+after Redis expiry or eviction. Kafka offsets remain independent per group.
+The down target removes only the temporary processor container.
+It then starts the primary processor again, leaving the normal stack running.
+
+### Accepted frontend audit risk
+
+The web app uses the latest stable compatible Next.js release. npm currently
+reports a PostCSS advisory against Next.js’s nested transitive copy, with no
+non-breaking patched Next.js version available; `npm audit fix` proposes an
+unsafe downgrade to Next.js 9. This upstream transitive risk is documented and
+accepted for the localhost-only demo rather than changing package versions
+solely to silence audit output.

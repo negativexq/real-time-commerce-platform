@@ -47,6 +47,11 @@ Five-minute walkthrough: check infrastructure health, run `normal_customer`,
 run `account_takeover`, inspect duplicate and malformed scenarios, then open
 the Fraud and Processor Grafana dashboards.
 
+If the primary processor has historical lag, use the isolated, non-destructive
+takeover acceptance workflow documented in
+[Interactive Demo Control Center](docs/demo-control-center.md); never reset the
+primary consumer group offsets.
+
 Screenshot placeholders:
 
 - `docs/images/demo-platform-overview.png`

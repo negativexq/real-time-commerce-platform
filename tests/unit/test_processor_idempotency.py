@@ -94,3 +94,13 @@ def test_namespaced_event_id_key() -> None:
         FakeRedis(),
     )
     assert store.key_for(EVENT_ID) == f"commerce:test:v1:{EVENT_ID}"
+
+
+def test_event_id_key_is_global_across_consumer_groups() -> None:
+    first = RedisIdempotencyStore(
+        ProcessorConfig(processor_consumer_group="primary"), FakeRedis()
+    )
+    second = RedisIdempotencyStore(
+        ProcessorConfig(processor_consumer_group="verification"), FakeRedis()
+    )
+    assert first.key_for(EVENT_ID) == second.key_for(EVENT_ID)

@@ -267,6 +267,45 @@ services:
     mem_limit: 320m
     restart: unless-stopped
 
+  demo-verification-processor:
+    profiles: ["demo-verification"]
+    build:
+      context: .
+      dockerfile: services/event_processor/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
+    environment:
+      METRICS_ENABLED: "false"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PROCESSOR_INPUT_TOPIC: commerce.events
+      PROCESSOR_DLQ_TOPIC: commerce.events.dlq
+      PROCESSOR_CONSUMER_GROUP: commerce-demo-verification-v1
+      PROCESSOR_CLIENT_ID: commerce-demo-verification
+      PROCESSOR_AUTO_OFFSET_RESET: latest
+      PROCESSOR_IDEMPOTENCY_KEY_PREFIX: ${PROCESSOR_IDEMPOTENCY_KEY_PREFIX:-commerce:processor:v1:event}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
+      PROCESSOR_REQUIRED_SCHEMA_VERSION: ${PROCESSOR_REQUIRED_SCHEMA_VERSION:-4}
+      FRAUD_ENGINE_ENABLED: "true"
+      FRAUD_OUTBOX_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/event-processor-healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    mem_limit: 320m
+    restart: "no"
+
   postgres-migrate:
     profiles: ["processor", "fraud", "demo"]
     build:
