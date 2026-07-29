@@ -32,20 +32,115 @@ in [Interactive Demo Control Center](docs/demo-control-center.md).
 
 ## Sprint 10 demo quick start
 
+### 1. Prerequisites
+
+- Git
+- Docker Desktop (or Docker Engine)
+- Docker Compose
+- GNU Make
+
+Confirm Docker is running before continuing:
+
 ```bash
-make demo-config-check
+docker compose version
+```
+
+### 2. Clone the repository
+
+```bash
+git clone https://github.com/negativexq/real-time-commerce-platform.git
+cd real-time-commerce-platform
+```
+
+### 3. Environment setup
+
+No environment configuration is required for the local demo; Docker Compose
+provides safe local defaults. To inspect or customize ports and other settings,
+copy the provided template before startup:
+
+```bash
+cp .env.example .env
+```
+
+> Keep `.env` local and never add real credentials to it.
+
+### 4. Start the entire demo environment
+
+```bash
 make demo-up
 ```
 
-- Demo UI: <http://localhost:3003>
-- Demo API docs: <http://localhost:8082/docs>
-- Grafana: <http://localhost:3002>
-- Prometheus: <http://localhost:9090>
-- Kafka UI: <http://localhost:8080>
+This builds and starts Kafka, PostgreSQL, Redis, the processor, fraud outbox
+publisher, observability services, Demo Control API, and Demo Control Web. The
+first startup may take a few minutes while images build and services become
+healthy.
 
-Five-minute walkthrough: check infrastructure health, run `normal_customer`,
-run `account_takeover`, inspect duplicate and malformed scenarios, then open
-the Fraud and Processor Grafana dashboards.
+### 5. Verify the stack
+
+```bash
+make demo-status
+make demo-api-health
+make demo-web-health
+```
+
+The long-running services should show `Up`; services with health checks should
+show `healthy`. The two health commands should return successfully. If services
+are still starting, wait briefly and run these commands again.
+
+### 6. Open the platform
+
+| Service | URL |
+| --- | --- |
+| Demo Dashboard | <http://localhost:3003> |
+| API Docs | <http://localhost:8082/docs> |
+| Kafka UI | <http://localhost:8080> |
+| Prometheus | <http://localhost:9090> |
+| Grafana | <http://localhost:3002> |
+
+### 7. Run your first demo
+
+1. Open the [Demo Dashboard](http://localhost:3003).
+2. Select **Launch Scenario** on the Overview, or **Scenarios** in the sidebar.
+3. Choose **Normal customer** and keep the default bounded settings.
+4. Select **Start scenario**.
+5. Watch the run page update as events are generated and processed. The run
+   should reach **COMPLETED**, with APPROVE decisions and no fraud alert.
+6. Return to **Overview** to see the updated run, throughput, decision, and
+   platform-health data.
+
+### 8. Expected initial behavior
+
+> **Waiting for traffic** is expected before the first scenario starts.
+> Processor rates and latency metrics become available after events are
+> generated and Prometheus completes a scrape.
+
+### 9. Stop the environment
+
+Stop and remove the project containers while preserving local data:
+
+```bash
+make clean
+```
+
+To perform a full reset, including all persisted local project data:
+
+```bash
+make clean-volumes
+```
+
+> **Warning:** `make clean-volumes` removes the project’s named volumes and
+> local demo data. Use it only when you intentionally want a clean slate.
+
+### 10. Quick troubleshooting
+
+- **Ports already in use:** Stop the conflicting local process, or copy
+  `.env.example` to `.env` and change the corresponding host-port setting.
+- **Services still starting:** Run `make demo-status` until the long-running
+  services are `Up` and health-checked services report `healthy`.
+- **Dashboard shows “Waiting for traffic”:** Launch **Normal customer** from
+  **Scenarios**, then allow Prometheus one scrape interval to update.
+- **Rebuild the Docker stack:** Run `make demo-build`, followed by
+  `make demo-up`.
 
 If the primary processor has historical lag, use the isolated, non-destructive
 takeover acceptance workflow documented in
