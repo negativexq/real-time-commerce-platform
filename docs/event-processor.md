@@ -2,11 +2,9 @@
 
 ## Purpose
 
-Sprint 6 adds a synchronous Kafka consumer for `commerce.events`. It validates
-Kafka metadata and shared Sprint 3 contracts, uses Redis leases to suppress
-completed duplicates, invokes a replaceable audit handler, publishes individual
-poison records to `commerce.events.dlq`, and manually commits only terminal
-source records. It does not persist business events to PostgreSQL and does not
+Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
+validation, Redis leases, retries, DLQ, and manual offsets while replacing the
+no-op audit boundary with transactional PostgreSQL repositories. It does not
 perform fraud scoring.
 
 ## Processing flows
@@ -16,13 +14,13 @@ sequenceDiagram
     participant K as commerce.events
     participant P as Processor
     participant R as Redis
-    participant H as Audit handler
+    participant D as PostgreSQL
     K->>P: keyed record + required headers
     P->>P: metadata + shared-registry validation
     P->>R: reserve event_id with token and lease
     R-->>P: reserved
-    P->>H: typed event
-    H-->>P: success
+    P->>D: ledger + business writes in one transaction
+    D-->>P: committed
     P->>R: token-checked completed transition
     R-->>P: completed with long TTL
     P->>K: commit source offset + 1
@@ -57,7 +55,7 @@ sequenceDiagram
 flowchart TD
     A[Source delivery] --> B{Crash point}
     B -->|Before handler success| C[Offset uncommitted; lease expires; redelivery]
-    B -->|After handler, before Redis completed| D[Handler may run again]
+    B -->|After database commit, before Redis completed| D[Redelivery repairs Redis]
     B -->|After Redis completed, before commit| E[Redelivery is duplicate-skipped]
     B -->|After DLQ delivery, before commit| F[Same UUID5; duplicate DLQ still possible]
 ```
@@ -114,12 +112,12 @@ offset, and timestamps—never the event payload.
 - Release is token-checked, so a stale worker cannot delete another lease.
 - A completed duplicate skips the handler and commits.
 
-Redis is operational state and may expire or be evicted. PostgreSQL remains the
-future durable system of record.
+Redis is operational state and may expire or be evicted. PostgreSQL is the
+durable system of record and independently validates identical redelivery.
 
 ## Retry and errors
 
-Only `RetryableProcessingError` is retried. Backoff is exponential, capped, and
+Only `RetryableProcessingError` subclasses are retried. Backoff is exponential, capped, and
 optionally jittered through an injectable RNG. Attempts are bounded; tests
 inject a no-op wait. Permanent validation failures never retry. Permanent
 handler rejection and exhausted retryable handler failures produce a DLQ
@@ -147,19 +145,20 @@ downstream readers should deduplicate by `dlq_record_id`.
 
 ## Delivery semantics and limitations
 
-This is at-least-once consumption with Redis-assisted idempotent processing,
-not exactly once. The important crash windows are:
+This is at-least-once consumption with PostgreSQL durable idempotency and
+Redis-assisted operational idempotency, not exactly once. The important crash
+windows are:
 
 - Before handler success: no commit; the processing lease expires; redelivery.
-- After handler success but before Redis completion: the handler may run again.
-  Future side-effecting handlers must be independently idempotent.
+- After PostgreSQL commit but before Redis completion: redelivery compares the
+  durable event hash, skips repeated business effects, and repairs Redis.
 - After Redis completion but before Kafka commit: redelivery is skipped and
   committed.
 - After DLQ delivery but before source commit: deterministic identity is reused,
   but Kafka can still contain a duplicate DLQ record.
 
-There are no Kafka transactions, retry topics, upcasters, PostgreSQL writes,
-fraud decisions, metrics server, or parallel processing in Sprint 6.
+There are no Kafka transactions, retry topics, upcasters, fraud decisions,
+metrics server, or parallel processing in Sprint 7.
 
 ## Configuration and operation
 
@@ -187,9 +186,10 @@ make processor-logs
 make processor-down
 ```
 
-The service has no host port. Its health check observes a local heartbeat file
-updated by the poll loop. SIGINT/SIGTERM stops new polling, closes the consumer,
-flushes the DLQ producer boundedly, closes Redis, and logs the run summary.
+The service has no host port. Startup opens a bounded psycopg pool, checks
+`SELECT 1` and schema version 2, then starts Kafka polling. SIGINT/SIGTERM stops
+new polling, closes the consumer, flushes the DLQ producer boundedly, and closes
+Redis and PostgreSQL gracefully.
 
 Available bounded workflows:
 
@@ -213,6 +213,6 @@ tracks consumed/valid/processed/duplicate/DLQ counts, validation categories,
 event types, retries, Kafka/Redis/commit failures, latency aggregates, and
 unresolved records.
 
-Future work will introduce an independently idempotent PostgreSQL persistence
-handler before fraud processing. PostgreSQL is deliberately not a dependency
-of this Sprint 6 service.
+Full architecture and recovery details are in
+[PostgreSQL persistence](postgresql-persistence.md). Future work may add a
+fraud processor without changing the transaction/offset ordering.

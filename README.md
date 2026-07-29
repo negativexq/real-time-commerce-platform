@@ -6,10 +6,10 @@ Silicon development machine.
 
 ## Current status
 
-Sprints 4 and 5 are completed. Sprint 6 is current and adds a Kafka event
-processor with shared-contract validation, Redis-assisted idempotency, bounded
-retries, manual offsets, and confirmed dead-letter publication.
-Business events are not yet persisted to PostgreSQL, and no fraud engine exists.
+Sprints 0 through 6 are completed. Sprint 7 is current and adds transactional
+PostgreSQL persistence, typed repositories, versioned migrations, durable
+event idempotency, and exact monetary/refund checks to the Kafka processor.
+Fraud scoring is not implemented.
 
 Sprint 3 shared event contracts and canonical serialization are completed and
 remain the generator's only schema source.
@@ -22,6 +22,8 @@ Persona and anomaly semantics are documented in
 [Stateful personas and controlled anomalies](docs/personas-and-anomalies.md).
 Processor behavior and failure semantics are documented in
 [Kafka event processor](docs/event-processor.md).
+The schema, migrations, transaction boundary, and recovery behavior are
+documented in [PostgreSQL persistence](docs/postgresql-persistence.md).
 
 ## Requirements
 
@@ -48,7 +50,7 @@ cp .env.example .env
 
 Never store production or real credentials in this repository.
 
-## Sprint 6 architecture
+## Sprint 7 architecture
 
 ```text
 Host / Compose clients
@@ -64,6 +66,8 @@ Host / Compose clients
     ├── processor profile ─────────────── event-processor
     │                                      ├── validates shared contracts
     │                                      ├── Redis idempotency leases
+    │                                      ├── one PostgreSQL transaction/event
+    │                                      ├── typed business repositories
     │                                      └── commerce.events.dlq
     │
     ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
@@ -122,8 +126,9 @@ make processor-retry-smoke
 ```
 
 A valid record is parsed through the shared registry, atomically reserved by
-`event_id`, handled by the current no-op audit boundary, marked completed in
-Redis, and then committed. A completed duplicate skips the handler and commits.
+`event_id`, committed to PostgreSQL as a ledger plus business effects, marked
+completed in Redis, and then committed in Kafka. PostgreSQL detects identical
+redelivery independently and repairs Redis completion without repeating effects.
 An invalid record is committed only after its deterministic DLQ record has a
 confirmed Kafka delivery. This is at-least-once processing, not exactly once.
 
@@ -138,7 +143,7 @@ make generator-anomalies
 ```
 
 Suspicious and account-takeover patterns are synthetic behavior, not fraud
-classification. No consumer, persistence processor, or fraud engine exists yet.
+classification. The persistence processor does not implement a fraud engine.
 
 ## Kafka
 
@@ -163,20 +168,24 @@ Ordering exists only within a partition, not globally.
 
 ## PostgreSQL
 
-PostgreSQL is the durable system of record. Future consumers will persist
-important events and outcomes here so they survive process restarts and cannot
-be lost through cache expiry or eviction.
+PostgreSQL is the durable system of record. The event processor persists every
+valid new event and its business effects in one explicit transaction before
+Redis completion and Kafka offset commit.
 
 - Host connection: `localhost:5432`
 - Compose connection: `postgres:5432`
 - Encoding: UTF-8
 - Database timezone: UTC
 
-Initial tables:
+Core Sprint 7 tables:
 
 | Table | Purpose |
 | --- | --- |
 | `processed_events` | Idempotently records processed event envelopes |
+| `customers`, `sessions` | Durable customer and session parents |
+| `product_views` | Immutable event-level views |
+| `carts`, `cart_items` | Latest cart state and exact items |
+| `orders`, `payments`, `refunds` | Exact commerce outcomes |
 | `fraud_alerts` | Stores explainable fraud decisions and scores |
 | `dead_letter_events` | Stores failed records and transport context |
 
@@ -184,9 +193,18 @@ The schema includes indexes for common event, decision, correlation, and time
 lookups. Check constraints enforce positive event versions, fraud scores from
 0 through 100, and decisions of `APPROVE`, `REVIEW`, or `BLOCK`.
 
-Initialization SQL in `database/init/` runs only when PostgreSQL initializes an
-empty data volume. Changes to those files do not alter an already initialized
-database.
+Initialization SQL in `database/init/` runs only for an empty volume. Ordered
+SQL migrations evolve existing volumes with checksums, advisory locking, and
+transactional application.
+
+Apply and inspect migrations, then safely inspect estimated row counts:
+
+```bash
+make db-migrate
+make db-migration-status
+make db-schema-check
+make db-counts
+```
 
 ## Redis
 
@@ -251,6 +269,11 @@ make kafka-smoke
 make postgres-tables
 make storage-status
 make storage-smoke
+make persistence-smoke
+make persistence-duplicate-smoke
+make persistence-recovery-smoke
+make persistence-dependency-smoke
+make persistence-refund-smoke
 ```
 
 The storage smoke test checks both health endpoints and all required tables. It
@@ -353,7 +376,8 @@ Redis memory are conservatively limited for a 16 GB M2 MacBook Air.
 ## Repository layout
 
 ```text
-database/init/  PostgreSQL first-run initialization SQL
+database/init/       PostgreSQL first-run initialization SQL
+database/migrations/ Ordered, checksum-verified schema migrations
 docs/           Contract and architecture documentation
 infrastructure/ Kafka infrastructure scripts
 scripts/        Container-backed smoke tests
@@ -363,5 +387,5 @@ tests/          Cross-service test suites
 
 ## Roadmap
 
-Later sprints may introduce PostgreSQL business persistence, fraud
-classification, Prometheus, and Grafana. They are outside Sprint 6.
+Later sprints may introduce fraud classification, Prometheus, and Grafana.
+They are outside Sprint 7.

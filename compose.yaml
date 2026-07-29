@@ -177,6 +177,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       PROCESSOR_INPUT_TOPIC: ${PROCESSOR_INPUT_TOPIC:-commerce.events}
@@ -204,8 +208,36 @@ services:
       PROCESSOR_SHUTDOWN_TIMEOUT_SECONDS: ${PROCESSOR_SHUTDOWN_TIMEOUT_SECONDS:-10}
       PROCESSOR_LOG_LEVEL: ${PROCESSOR_LOG_LEVEL:-INFO}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
+      PROCESSOR_DB_POOL_MIN_SIZE: ${PROCESSOR_DB_POOL_MIN_SIZE:-1}
+      PROCESSOR_DB_POOL_MAX_SIZE: ${PROCESSOR_DB_POOL_MAX_SIZE:-4}
+      PROCESSOR_DB_CONNECT_TIMEOUT_SECONDS: ${PROCESSOR_DB_CONNECT_TIMEOUT_SECONDS:-5}
+      PROCESSOR_DB_ACQUIRE_TIMEOUT_SECONDS: ${PROCESSOR_DB_ACQUIRE_TIMEOUT_SECONDS:-5}
+      PROCESSOR_DB_STATEMENT_TIMEOUT_MS: ${PROCESSOR_DB_STATEMENT_TIMEOUT_MS:-5000}
+      PROCESSOR_DB_MAX_IDLE_SECONDS: ${PROCESSOR_DB_MAX_IDLE_SECONDS:-300}
+      PROCESSOR_DB_HEALTHCHECK_INTERVAL_SECONDS: ${PROCESSOR_DB_HEALTHCHECK_INTERVAL_SECONDS:-30}
+      PROCESSOR_DB_STARTUP_ATTEMPTS: ${PROCESSOR_DB_STARTUP_ATTEMPTS:-5}
+      PROCESSOR_DB_STARTUP_BACKOFF_SECONDS: ${PROCESSOR_DB_STARTUP_BACKOFF_SECONDS:-1}
+      PROCESSOR_REQUIRED_SCHEMA_VERSION: ${PROCESSOR_REQUIRED_SCHEMA_VERSION:-2}
+      PROCESSOR_PERSIST_RAW_EVENT_JSON: ${PROCESSOR_PERSIST_RAW_EVENT_JSON:-true}
+      PROCESSOR_DB_LOG_SLOW_QUERY_MS: ${PROCESSOR_DB_LOG_SLOW_QUERY_MS:-250}
     mem_limit: 320m
     restart: unless-stopped
+
+  postgres-migrate:
+    profiles: ["processor"]
+    build:
+      context: .
+      dockerfile: services/event_processor/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
+      PROCESSOR_REQUIRED_SCHEMA_VERSION: ${PROCESSOR_REQUIRED_SCHEMA_VERSION:-2}
+    entrypoint:
+      ["python", "-m", "services.event_processor.persistence.migrations", "migrate"]
+    restart: "no"
 
 volumes:
   kafka-data:

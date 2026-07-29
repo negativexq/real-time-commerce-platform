@@ -19,3 +19,23 @@ class PermanentProcessingError(ProcessorError):
 
 class FatalInfrastructureError(ProcessorError):
     """An unrecoverable application infrastructure failure."""
+
+
+class RetryableDatabaseError(RetryableProcessingError):
+    """A transient database operation may succeed on retry."""
+
+
+class MissingBusinessDependencyError(RetryableProcessingError):
+    """A valid child event arrived before its required durable parent."""
+
+
+class PermanentDatabaseIntegrityError(PermanentProcessingError):
+    """A deterministic durable-data conflict cannot be retried safely."""
+
+
+class AlreadyPersistedEvent(ProcessorError):
+    """The identical durable event and its business effects already committed."""
+
+
+class StartupDatabaseError(FatalInfrastructureError):
+    """PostgreSQL or the required schema is unavailable at startup."""

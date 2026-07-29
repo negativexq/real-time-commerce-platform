@@ -12,10 +12,15 @@ from types import FrameType
 from services.event_processor.config import ProcessorConfig, parse_config
 from services.event_processor.consumer import KafkaEventConsumer
 from services.event_processor.dlq import DlqPublisher
-from services.event_processor.handler import default_handler_registry
 from services.event_processor.idempotency import RedisIdempotencyStore
 from services.event_processor.logging import configure_logging, get_logger
 from services.event_processor.models import RunSummary
+from services.event_processor.persistence import (
+    Database,
+    UnitOfWorkFactory,
+    default_persistence_registry,
+)
+from services.event_processor.persistence.database import safe_postgres_endpoint
 from services.event_processor.processor import MessageProcessor
 from shared.schemas import EVENT_PAYLOAD_REGISTRY
 
@@ -40,6 +45,7 @@ def run_processor(
     store: RedisIdempotencyStore,
     dlq: DlqPublisher,
     shutdown: ShutdownController,
+    database: Database,
 ) -> tuple[int, RunSummary]:
     """Run until signal, terminal-count bound, idle timeout, or unresolved work."""
     logger = get_logger()
@@ -50,11 +56,13 @@ def run_processor(
         store,
         dlq,
         consumer,
-        default_handler_registry(),
+        default_persistence_registry(),
         summary,
         processor_instance_id=instance_id,
+        persistence=UnitOfWorkFactory(database, config),
     )
     store.ping()
+    database.open()
     consumer.subscribe()
     HEALTH_FILE.touch()
     last_record_at = monotonic()
@@ -67,6 +75,8 @@ def run_processor(
         consumer_group=config.processor_consumer_group,
         client_id=config.processor_client_id,
         redis_endpoint=_safe_redis_endpoint(config.redis_url),
+        postgres_endpoint=safe_postgres_endpoint(config.postgres_dsn),
+        required_schema_version=config.processor_required_schema_version,
         run_mode="finite" if config.processor_max_messages else "continuous",
         supported_event_count=len(EVENT_PAYLOAD_REGISTRY),
     )
@@ -100,6 +110,7 @@ def run_processor(
         consumer.close()
         dlq.close()
         store.close()
+        database.close()
         logger.info("processor_stopped", **summary.as_log())
     return (1 if summary.unresolved_records else 0), summary
 
@@ -134,6 +145,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
             RedisIdempotencyStore(config),
             DlqPublisher(config),
             shutdown,
+            Database(config),
         )
         return code
     except Exception:

@@ -4,13 +4,16 @@ import random
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from time import perf_counter, sleep
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from services.event_processor.config import ProcessorConfig
 from services.event_processor.dlq import DlqPublisher, build_dlq_envelope
 from services.event_processor.errors import (
+    MissingBusinessDependencyError,
+    PermanentDatabaseIntegrityError,
     PermanentProcessingError,
+    RetryableDatabaseError,
     RetryableProcessingError,
 )
 from services.event_processor.handler import EventHandler, resolve_handler
@@ -27,6 +30,11 @@ from services.event_processor.models import (
     RunSummary,
     ValidationCategory,
     ValidationErrorInfo,
+)
+from services.event_processor.persistence.models import PersistenceResult
+from services.event_processor.persistence.unit_of_work import (
+    TransactionalHandler,
+    UnitOfWorkFactory,
 )
 from services.event_processor.retry import RetryPolicy, run_with_retry
 from services.event_processor.validation import validate_message
@@ -48,10 +56,11 @@ class MessageProcessor:
         idempotency: RedisIdempotencyStore,
         dlq: DlqPublisher,
         committer: OffsetCommitter,
-        handlers: Mapping[EventType, EventHandler],
+        handlers: Mapping[EventType, EventHandler | TransactionalHandler],
         summary: RunSummary,
         *,
         processor_instance_id: str,
+        persistence: UnitOfWorkFactory | None = None,
         wait: Callable[[float], object] = sleep,
         rng: random.Random | None = None,
     ) -> None:
@@ -62,6 +71,7 @@ class MessageProcessor:
         self._handlers = handlers
         self._summary = summary
         self._instance_id = processor_instance_id
+        self._persistence = persistence
         self._wait = wait
         self._rng = rng or random.Random()
         self._logger = get_logger()
@@ -97,6 +107,14 @@ class MessageProcessor:
             return ProcessingOutcome(ProcessingStatus.UNRESOLVED)
 
         if reservation.state is ReservationState.COMPLETED:
+            recovered_persisted = False
+            if self._persistence is not None:
+                recovery = self._persist_with_retry(event, message)
+                if isinstance(recovery, ProcessingOutcome):
+                    return recovery
+                recovered_persisted = recovery.already_persisted
+                if not recovery.already_persisted:
+                    self._record_persistence(recovery)
             self._logger.info(
                 "duplicate_event_skipped",
                 event_id=str(event.event_id),
@@ -108,6 +126,8 @@ class MessageProcessor:
             )
             self._commit(message)
             self._summary.duplicate_records += 1
+            if self._persistence is not None:
+                self._summary.already_persisted_events += int(recovered_persisted)
             return ProcessingOutcome(
                 ProcessingStatus.DUPLICATE, event_type=event.event_type
             )
@@ -123,9 +143,10 @@ class MessageProcessor:
             return ProcessingOutcome(ProcessingStatus.UNRESOLVED)
 
         attempts = 1
+        persistence_result = PersistenceResult(False)
         try:
             handler = resolve_handler(self._handlers, event.event_type)
-            _, attempts = run_with_retry(
+            persistence_result, attempts = run_with_retry(
                 lambda attempt: self._handle(handler, event, message, attempt),
                 self._retry_policy,
                 self._wait,
@@ -134,21 +155,41 @@ class MessageProcessor:
             )
         except PermanentProcessingError as exc:
             self._summary.processing_failures += 1
+            if isinstance(exc, PermanentDatabaseIntegrityError):
+                self._summary.integrity_failures += 1
+                self._summary.database_errors += 1
             self._safe_release(event.event_id, token)
             return self._dead_letter(
                 message,
-                self._processing_error(event, exc, "permanent_processing_error"),
+                self._processing_error(
+                    event,
+                    exc,
+                    "database_integrity_error"
+                    if isinstance(exc, PermanentDatabaseIntegrityError)
+                    else "permanent_processing_error",
+                ),
                 attempts,
             )
         except RetryableProcessingError as exc:
             self._summary.processing_failures += 1
             self._summary.retry_exhausted += 1
+            if isinstance(exc, MissingBusinessDependencyError):
+                self._summary.missing_dependency_errors += 1
+            if isinstance(exc, RetryableDatabaseError):
+                self._summary.database_errors += 1
             self._safe_release(event.event_id, token)
             return self._dead_letter(
                 message,
-                self._processing_error(event, exc, "retry_exhausted"),
+                self._processing_error(
+                    event,
+                    exc,
+                    "missing_business_dependency"
+                    if isinstance(exc, MissingBusinessDependencyError)
+                    else "retry_exhausted",
+                ),
                 self._config.processor_max_processing_attempts,
             )
+        self._record_persistence(persistence_result)
         try:
             completed = self._idempotency.complete(
                 event.event_id, token, datetime.now(UTC)
@@ -178,35 +219,102 @@ class MessageProcessor:
             processing_attempt=attempts,
             processing_duration_ms=round(duration, 3),
             idempotency_status="completed",
+            database_transaction_status="already_persisted"
+            if persistence_result.already_persisted
+            else "committed",
+            affected_tables=list(persistence_result.affected_tables),
+            already_persisted=persistence_result.already_persisted,
+            database_duration_ms=round(persistence_result.duration_ms, 3),
         )
         return ProcessingOutcome(ProcessingStatus.PROCESSED, attempts, event.event_type)
 
     def _handle(
         self,
-        handler: EventHandler,
+        handler: EventHandler | TransactionalHandler,
         event: EventEnvelope[ContractModel],
         message: ConsumedMessage,
         attempt: int,
-    ) -> None:
-        handler.handle(
-            event,
-            ProcessingContext(
-                message.topic,
-                message.partition,
-                message.offset,
-                self._config.processor_consumer_group,
-                self._instance_id,
-                attempt,
-            ),
+    ) -> PersistenceResult:
+        context = ProcessingContext(
+            message.topic,
+            message.partition,
+            message.offset,
+            self._config.processor_consumer_group,
+            self._instance_id,
+            attempt,
         )
+        if self._persistence is not None:
+            transactional = cast(TransactionalHandler, handler)
+            self._summary.database_transactions_started += 1
+            try:
+                return self._persistence.persist(event, message, context, transactional)
+            except Exception:
+                self._summary.database_transactions_rolled_back += 1
+                raise
+        cast(EventHandler, handler).handle(
+            event,
+            context,
+        )
+        return PersistenceResult(False)
 
     def _on_retry(self, attempt: int, error: Exception) -> None:
         self._summary.retries += 1
+        if isinstance(error, (RetryableDatabaseError, MissingBusinessDependencyError)):
+            self._summary.database_retries += 1
         self._logger.warning(
             "processing_retry",
             processing_attempt=attempt,
             error_type=type(error).__name__,
         )
+
+    def _record_persistence(self, result: PersistenceResult) -> None:
+        if self._persistence is None:
+            return
+        if result.already_persisted:
+            self._summary.already_persisted_events += 1
+        else:
+            self._summary.database_transactions_committed += 1
+            self._summary.rows_written_by_table.update(result.rows_written)
+        if result.duration_ms >= self._config.processor_db_log_slow_query_ms:
+            self._summary.slow_database_operations += 1
+
+    def _persist_with_retry(
+        self,
+        event: EventEnvelope[ContractModel],
+        message: ConsumedMessage,
+    ) -> PersistenceResult | ProcessingOutcome:
+        attempts = 1
+        try:
+            handler = resolve_handler(self._handlers, event.event_type)
+            result, attempts = run_with_retry(
+                lambda attempt: self._handle(handler, event, message, attempt),
+                self._retry_policy,
+                self._wait,
+                self._rng,
+                self._on_retry,
+            )
+            return result
+        except PermanentProcessingError as exc:
+            self._summary.integrity_failures += int(
+                isinstance(exc, PermanentDatabaseIntegrityError)
+            )
+            return self._dead_letter(
+                message,
+                self._processing_error(event, exc, "database_integrity_error"),
+                attempts,
+            )
+        except RetryableProcessingError as exc:
+            self._summary.retry_exhausted += 1
+            category = (
+                "missing_business_dependency"
+                if isinstance(exc, MissingBusinessDependencyError)
+                else "retry_exhausted"
+            )
+            return self._dead_letter(
+                message,
+                self._processing_error(event, exc, category),
+                self._config.processor_max_processing_attempts,
+            )
 
     def _safe_release(self, event_id: UUID, token: str) -> None:
         try:
@@ -265,7 +373,15 @@ class MessageProcessor:
         error_category = (
             ValidationCategory.RETRY_EXHAUSTED
             if category == "retry_exhausted"
-            else ValidationCategory.PERMANENT_PROCESSING_ERROR
+            else (
+                ValidationCategory.MISSING_BUSINESS_DEPENDENCY
+                if category == "missing_business_dependency"
+                else (
+                    ValidationCategory.DATABASE_INTEGRITY_ERROR
+                    if category == "database_integrity_error"
+                    else ValidationCategory.PERMANENT_PROCESSING_ERROR
+                )
+            )
         )
         return ValidationErrorInfo(
             error_category,

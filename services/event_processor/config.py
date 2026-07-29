@@ -43,6 +43,21 @@ class ProcessorConfig(BaseModel):
     processor_shutdown_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
     processor_log_level: LogLevel = "INFO"
     redis_url: NonBlank = "redis://redis:6379/0"
+    postgres_dsn: NonBlank = (
+        "postgresql://commerce:commerce_local_dev@postgres:5432/commerce"
+    )
+    processor_db_pool_min_size: int = Field(default=1, gt=0, le=20)
+    processor_db_pool_max_size: int = Field(default=4, gt=0, le=50)
+    processor_db_connect_timeout_seconds: int = Field(default=5, gt=0, le=120)
+    processor_db_acquire_timeout_seconds: float = Field(default=5.0, gt=0, le=120)
+    processor_db_statement_timeout_ms: int = Field(default=5_000, gt=0)
+    processor_db_max_idle_seconds: float = Field(default=300.0, gt=0)
+    processor_db_healthcheck_interval_seconds: float = Field(default=30.0, gt=0)
+    processor_db_startup_attempts: int = Field(default=5, gt=0, le=100)
+    processor_db_startup_backoff_seconds: float = Field(default=1.0, ge=0, le=60)
+    processor_required_schema_version: int = Field(default=2, gt=0)
+    processor_persist_raw_event_json: bool = True
+    processor_db_log_slow_query_ms: int = Field(default=250, gt=0)
     processor_max_messages: int | None = Field(default=None, gt=0)
     processor_from_beginning: bool = False
 
@@ -61,6 +76,8 @@ class ProcessorConfig(BaseModel):
             <= self.processor_idempotency_processing_ttl_seconds
         ):
             raise ValueError("completed TTL must be greater than processing TTL")
+        if self.processor_db_pool_max_size < self.processor_db_pool_min_size:
+            raise ValueError("database pool maximum must be at least its minimum")
         return self
 
     @classmethod
@@ -108,6 +125,27 @@ class ProcessorConfig(BaseModel):
             ),
             "PROCESSOR_LOG_LEVEL": "processor_log_level",
             "REDIS_URL": "redis_url",
+            "POSTGRES_DSN": "postgres_dsn",
+            "PROCESSOR_DB_POOL_MIN_SIZE": "processor_db_pool_min_size",
+            "PROCESSOR_DB_POOL_MAX_SIZE": "processor_db_pool_max_size",
+            "PROCESSOR_DB_CONNECT_TIMEOUT_SECONDS": (
+                "processor_db_connect_timeout_seconds"
+            ),
+            "PROCESSOR_DB_ACQUIRE_TIMEOUT_SECONDS": (
+                "processor_db_acquire_timeout_seconds"
+            ),
+            "PROCESSOR_DB_STATEMENT_TIMEOUT_MS": "processor_db_statement_timeout_ms",
+            "PROCESSOR_DB_MAX_IDLE_SECONDS": "processor_db_max_idle_seconds",
+            "PROCESSOR_DB_HEALTHCHECK_INTERVAL_SECONDS": (
+                "processor_db_healthcheck_interval_seconds"
+            ),
+            "PROCESSOR_DB_STARTUP_ATTEMPTS": "processor_db_startup_attempts",
+            "PROCESSOR_DB_STARTUP_BACKOFF_SECONDS": (
+                "processor_db_startup_backoff_seconds"
+            ),
+            "PROCESSOR_REQUIRED_SCHEMA_VERSION": ("processor_required_schema_version"),
+            "PROCESSOR_PERSIST_RAW_EVENT_JSON": "processor_persist_raw_event_json",
+            "PROCESSOR_DB_LOG_SLOW_QUERY_MS": "processor_db_log_slow_query_ms",
         }
         return cls.model_validate(
             {field: source[name] for name, field in names.items() if name in source}

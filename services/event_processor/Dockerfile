@@ -24,6 +24,8 @@ RUN python -m pip install --no-cache-dir /wheels/* \
 
 WORKDIR /app
 COPY --chown=processor:processor scripts/processor-*.py ./scripts/
+COPY --chown=processor:processor scripts/persistence-*.py ./scripts/
+COPY --chown=processor:processor database/migrations ./database/migrations
 
 USER processor
 

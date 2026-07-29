@@ -27,6 +27,8 @@ class ValidationCategory(StrEnum):
     UNSUPPORTED_EVENT_VERSION = "unsupported_event_version"
     PERMANENT_PROCESSING_ERROR = "permanent_processing_error"
     RETRY_EXHAUSTED = "retry_exhausted"
+    MISSING_BUSINESS_DEPENDENCY = "missing_business_dependency"
+    DATABASE_INTEGRITY_ERROR = "database_integrity_error"
 
 
 class ProcessingStatus(StrEnum):
@@ -98,6 +100,16 @@ class RunSummary:
     latency_max_ms: float = 0
     validation_failures: Counter[ValidationCategory] = field(default_factory=Counter)
     processed_events: Counter[EventType] = field(default_factory=Counter)
+    database_transactions_started: int = 0
+    database_transactions_committed: int = 0
+    database_transactions_rolled_back: int = 0
+    already_persisted_events: int = 0
+    database_retries: int = 0
+    database_errors: int = 0
+    missing_dependency_errors: int = 0
+    integrity_failures: int = 0
+    rows_written_by_table: Counter[str] = field(default_factory=Counter)
+    slow_database_operations: int = 0
 
     def record_latency(self, milliseconds: float) -> None:
         self.latency_total_ms += milliseconds
@@ -135,4 +147,16 @@ class RunSummary:
             "processing_latency_average_ms": round(average, 3),
             "processing_latency_max_ms": round(self.latency_max_ms, 3),
             "unresolved_records": self.unresolved_records,
+            "database_transactions_started": self.database_transactions_started,
+            "database_transactions_committed": self.database_transactions_committed,
+            "database_transactions_rolled_back": (
+                self.database_transactions_rolled_back
+            ),
+            "already_persisted_events": self.already_persisted_events,
+            "database_retries": self.database_retries,
+            "database_errors": self.database_errors,
+            "missing_dependency_errors": self.missing_dependency_errors,
+            "integrity_failures": self.integrity_failures,
+            "rows_written_by_table": dict(sorted(self.rows_written_by_table.items())),
+            "slow_database_operations": self.slow_database_operations,
         }

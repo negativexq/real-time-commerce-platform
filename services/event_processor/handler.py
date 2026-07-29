@@ -42,9 +42,9 @@ def default_handler_registry() -> Mapping[EventType, EventHandler]:
     return MappingProxyType({event_type: handler for event_type in EventType})
 
 
-def resolve_handler(
-    registry: Mapping[EventType, EventHandler], event_type: EventType
-) -> EventHandler:
+def resolve_handler[HandlerT](
+    registry: Mapping[EventType, HandlerT], event_type: EventType
+) -> HandlerT:
     try:
         return registry[event_type]
     except KeyError as exc:

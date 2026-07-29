@@ -9,7 +9,11 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	generator-anomaly-smoke processor-build processor-up processor-down \
 	processor-run processor-logs processor-status processor-sample processor-smoke \
 	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
-	processor-idempotency-status processor-clear-test-state clean clean-volumes
+	processor-idempotency-status processor-clear-test-state clean clean-volumes \
+	db-migrate db-migration-status db-schema-check db-tables db-counts \
+	db-reset-test-data persistence-sample persistence-smoke \
+	persistence-duplicate-smoke persistence-recovery-smoke \
+	persistence-dependency-smoke persistence-refund-smoke
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -63,6 +67,30 @@ postgres-shell:
 postgres-tables:
 	docker compose exec postgres sh -c \
 		'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "\dt+"'
+
+db-migrate:
+	docker compose --profile processor run --rm postgres-migrate
+
+db-migration-status:
+	docker compose --profile processor run --rm --entrypoint python \
+		postgres-migrate -m services.event_processor.persistence.migrations status
+
+db-schema-check:
+	docker compose --profile processor run --rm --entrypoint python \
+		postgres-migrate -m services.event_processor.persistence.migrations check
+
+db-tables: postgres-tables
+
+db-counts:
+	docker compose exec -T postgres sh -c \
+		'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c \
+		"SELECT relname AS table_name, n_live_tup AS estimated_rows FROM pg_stat_user_tables ORDER BY relname;"'
+
+db-reset-test-data:
+	@test -n "$(TEST_RUN_ID)" || (echo "TEST_RUN_ID is required" >&2; exit 2)
+	docker compose exec -T postgres sh -c \
+		'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+		-v run_id="$(TEST_RUN_ID)" -f /dev/stdin' < scripts/reset-persistence-test-data.sql
 
 redis-cli:
 	docker compose exec redis redis-cli
@@ -180,6 +208,30 @@ processor-dlq-smoke:
 processor-retry-smoke:
 	docker compose --profile processor run --rm \
 		--entrypoint python event-processor /app/scripts/processor-smoke.py retry
+
+persistence-sample:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py sample
+
+persistence-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py normal
+
+persistence-duplicate-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py duplicate
+
+persistence-recovery-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py recovery
+
+persistence-dependency-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py dependency
+
+persistence-refund-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/persistence-smoke.py refund
 
 processor-idempotency-status:
 	docker compose exec -T redis redis-cli --scan \
