@@ -117,6 +117,38 @@ services:
     mem_limit: 384m
     restart: unless-stopped
 
+  event-generator:
+    profiles: ["generator"]
+    build:
+      context: .
+      dockerfile: services/event_generator/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_EVENTS_TOPIC: ${KAFKA_EVENTS_TOPIC:-commerce.events}
+      KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-event-generator}
+      KAFKA_COMPRESSION_TYPE: ${KAFKA_COMPRESSION_TYPE:-lz4}
+      KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-20}
+      KAFKA_BATCH_SIZE: ${KAFKA_BATCH_SIZE:-65536}
+      KAFKA_DELIVERY_TIMEOUT_MS: ${KAFKA_DELIVERY_TIMEOUT_MS:-30000}
+      KAFKA_REQUEST_TIMEOUT_MS: ${KAFKA_REQUEST_TIMEOUT_MS:-10000}
+      GENERATOR_RATE_PER_SECOND: ${GENERATOR_RATE_PER_SECOND:-1.0}
+      GENERATOR_MAX_PRODUCT_VIEWS: ${GENERATOR_MAX_PRODUCT_VIEWS:-3}
+      GENERATOR_ADD_TO_CART_PROBABILITY: ${GENERATOR_ADD_TO_CART_PROBABILITY:-0.55}
+      GENERATOR_CHECKOUT_PROBABILITY: ${GENERATOR_CHECKOUT_PROBABILITY:-0.70}
+      GENERATOR_PAYMENT_SUCCESS_PROBABILITY: ${GENERATOR_PAYMENT_SUCCESS_PROBABILITY:-0.85}
+      GENERATOR_REFUND_PROBABILITY: ${GENERATOR_REFUND_PROBABILITY:-0.05}
+      GENERATOR_SEED: ${GENERATOR_SEED:-}
+      GENERATOR_LOG_LEVEL: ${GENERATOR_LOG_LEVEL:-INFO}
+      GENERATOR_FLUSH_TIMEOUT_SECONDS: ${GENERATOR_FLUSH_TIMEOUT_SECONDS:-10}
+      GENERATOR_JOURNEYS: ${GENERATOR_JOURNEYS:-}
+    mem_limit: 320m
+    restart: unless-stopped
+
 volumes:
   kafka-data:
     name: real-time-commerce-platform-kafka-data

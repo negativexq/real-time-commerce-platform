@@ -11,7 +11,9 @@ requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "Real-Time Commerce Platform Contributors" }]
 dependencies = [
+    "confluent-kafka==2.11.1",
     "pydantic>=2.11,<3",
+    "structlog==25.4.0",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +24,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["shared*"]
+include = ["services*", "shared*"]
 
 [tool.ruff]
 target-version = "py312"

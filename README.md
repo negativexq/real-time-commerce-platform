@@ -6,13 +6,18 @@ Silicon development machine.
 
 ## Current status
 
-Sprint 3 adds strict, versioned shared event contracts and canonical JSON
-serialization on top of the existing Kafka, PostgreSQL, and Redis
-infrastructure. No application producer, consumer, event generator, processor,
-fraud consumer, or business runtime exists yet.
+Sprint 4 adds the first runnable application service: a basic seeded event
+generator that publishes coherent, contract-valid customer journeys to Kafka.
+No Kafka consumer, persistence processor, Redis application logic, or fraud
+service exists yet.
+
+Sprint 3 shared event contracts and canonical serialization are completed and
+remain the generator's only schema source.
 
 The envelope, payloads, registry, versioning policy, and partition-key guidance
 are documented in [Event contracts](docs/event-contracts.md).
+Generator operation and boundaries are documented in
+[Event generator](docs/event-generator.md).
 
 ## Requirements
 
@@ -39,7 +44,7 @@ cp .env.example .env
 
 Never store production or real credentials in this repository.
 
-## Sprint 2 architecture
+## Sprint 4 architecture
 
 ```text
 Host / Compose clients
@@ -47,6 +52,9 @@ Host / Compose clients
     ├── localhost:29092 / kafka:9092 ── Kafka KRaft broker
     │                                      ├── kafka-init
     │                                      └── Kafka UI on localhost:8080
+    │
+    ├── generator profile ─────────────── event-generator
+    │                                      └── publishes commerce.events
     │
     ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
     │                                      └── durable named volume
@@ -57,6 +65,29 @@ Host / Compose clients
 
 All published ports bind to `127.0.0.1`. Services communicate through the
 existing Compose network.
+
+## Event generator quick start
+
+The default stack stays infrastructure-only. Build and publish a deterministic
+five-journey sample:
+
+```bash
+make up
+make generator-build
+make generator-sample
+```
+
+Run continuously, inspect status/logs, or stop only the generator:
+
+```bash
+make generator-up
+make generator-status
+make generator-logs
+make generator-down
+```
+
+Open Kafka UI at <http://localhost:8080>, select the local cluster, open
+`commerce.events`, and use the Messages tab to inspect generated events.
 
 ## Kafka
 
@@ -217,6 +248,14 @@ make redis-cli        # Open redis-cli
 make storage-smoke    # Test PostgreSQL and Redis
 make storage-status   # Show storage service status
 make storage-logs     # Follow PostgreSQL and Redis logs
+make generator-build  # Build the event-generator image
+make generator-up     # Start continuous generation
+make generator-down   # Remove only the generator service
+make generator-logs   # Follow structured generator logs
+make generator-run    # Run continuous generation interactively
+make generator-sample # Publish five deterministic journeys
+make generator-status # Show generator profile status
+make generator-smoke  # Run bounded producer end-to-end validation
 make clean            # Stop containers and preserve volumes
 make clean-volumes    # Delete all persisted local data
 ```
@@ -257,5 +296,5 @@ tests/          Cross-service test suites
 
 ## Roadmap
 
-Later sprints may introduce Python event generators and consumers, fraud
-processing, Prometheus, and Grafana. They are outside Sprint 3.
+Later sprints may introduce advanced generation behavior, Kafka consumers,
+fraud processing, Prometheus, and Grafana. They are outside Sprint 4.

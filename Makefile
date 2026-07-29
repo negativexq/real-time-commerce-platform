@@ -2,7 +2,9 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 .PHONY: lint format format-check type-check test check compose-config up down logs ps \
 	kafka-topics kafka-describe kafka-smoke postgres-shell postgres-tables redis-cli \
-	storage-smoke storage-status storage-logs clean clean-volumes
+	storage-smoke storage-status storage-logs generator-build generator-up \
+	generator-down generator-logs generator-run generator-sample generator-status \
+	generator-smoke clean clean-volumes
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -68,6 +70,32 @@ storage-status:
 
 storage-logs:
 	docker compose logs -f postgres redis
+
+generator-build:
+	docker compose --profile generator build event-generator
+
+generator-up:
+	docker compose --profile generator up -d --build event-generator
+
+generator-down:
+	docker compose --profile generator rm -sf event-generator
+
+generator-logs:
+	docker compose --profile generator logs -f event-generator
+
+generator-run:
+	docker compose --profile generator run --rm event-generator
+
+generator-sample:
+	docker compose --profile generator run --rm event-generator \
+		--journeys 5 --seed 42
+
+generator-status:
+	docker compose --profile generator ps event-generator
+
+generator-smoke:
+	docker compose --profile generator run --rm \
+		--entrypoint python event-generator /app/scripts/generator-smoke.py
 
 clean:
 	docker compose down

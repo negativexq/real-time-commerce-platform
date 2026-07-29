@@ -2,7 +2,12 @@
 
 from shared.schemas.cart import AddedToCartPayload, CheckoutStartedPayload
 from shared.schemas.customer import UserRegisteredPayload
-from shared.schemas.envelope import EventEnvelope, canonical_json, parse_event
+from shared.schemas.envelope import (
+    CURRENT_EVENT_VERSION,
+    EventEnvelope,
+    canonical_json,
+    parse_event,
+)
 from shared.schemas.fraud import FraudAlertCreatedPayload
 from shared.schemas.order import OrderCreatedPayload
 from shared.schemas.payment import PaymentCompletedPayload, PaymentFailedPayload
@@ -13,6 +18,7 @@ from shared.schemas.session import SessionStartedPayload
 
 __all__ = [
     "EVENT_PAYLOAD_REGISTRY",
+    "CURRENT_EVENT_VERSION",
     "AddedToCartPayload",
     "CheckoutStartedPayload",
     "EventEnvelope",

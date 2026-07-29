@@ -14,6 +14,7 @@ from shared.schemas.base import ContractModel, NonEmptyString
 from shared.schemas.registry import EVENT_PAYLOAD_REGISTRY
 
 MAX_PRODUCER_CLOCK_SKEW = timedelta(minutes=5)
+CURRENT_EVENT_VERSION = 1
 
 
 class EventEnvelope[PayloadT: ContractModel](ContractModel):
@@ -95,6 +96,7 @@ def parse_event(data: str | bytes) -> EventEnvelope[ContractModel]:
 
 __all__ = [
     "MAX_PRODUCER_CLOCK_SKEW",
+    "CURRENT_EVENT_VERSION",
     "EventEnvelope",
     "canonical_json",
     "parse_event",
