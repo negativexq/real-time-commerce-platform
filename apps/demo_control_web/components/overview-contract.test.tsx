@@ -5,6 +5,7 @@ import {
   displayNumber,
   FraudScope,
   latencyMilliseconds,
+  throughputEmptyMessage,
   type OverviewFraudSummary,
   ZeroDecisionState,
 } from "./overview-dashboard";
@@ -25,6 +26,16 @@ describe("Overview data contracts", () => {
   it("renders zero metrics as zero and null metrics as unavailable", () => {
     expect(displayNumber(0, 2)).toBe("0.00");
     expect(displayNumber(null, 2)).toBe("N/A");
+  });
+
+  it("distinguishes loading from unavailable throughput metrics", () => {
+    expect(throughputEmptyMessage(null)).toBe("Waiting for traffic");
+    expect(
+      throughputEmptyMessage({
+        status: "degraded",
+        values: {processed_rate: null},
+      }),
+    ).toBe("Metrics unavailable");
   });
 
   it("uses milliseconds for average latency", () => {

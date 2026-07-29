@@ -123,6 +123,17 @@ export function ZeroDecisionState() {
   return <div className="decision-empty">No decisions for selected run</div>;
 }
 
+export function throughputEmptyMessage(metrics: Metrics | null) {
+  if (metrics === null) return "Waiting for traffic";
+  if (
+    metrics.status === "degraded" ||
+    metrics.values.processed_rate == null
+  ) {
+    return "Metrics unavailable";
+  }
+  return "Waiting for traffic";
+}
+
 function formatDuration(run: Run) {
   const elapsed =
     new Date(run.updated_at).getTime() - new Date(run.created_at).getTime();
@@ -360,10 +371,7 @@ export default function OverviewDashboard() {
           >
             {throughput.length === 0 ? (
               <div className="chart-empty">
-                {metrics?.status === "degraded" ||
-                metrics?.values.processed_rate == null
-                  ? "Metrics unavailable"
-                  : "Waiting for traffic"}
+                {throughputEmptyMessage(metrics)}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
