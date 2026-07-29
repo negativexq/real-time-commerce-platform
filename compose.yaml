@@ -535,7 +535,7 @@ services:
       demo-control-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://demo-control-web:3000"]
       interval: 10s
       timeout: 4s
       retries: 8
