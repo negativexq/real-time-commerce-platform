@@ -2,13 +2,13 @@
 
 from collections.abc import Callable
 from typing import Protocol
-from uuid import UUID
 
 from confluent_kafka import Producer  # type: ignore[import-untyped]
 
 from services.event_generator.config import GeneratorConfig
 from services.event_generator.logging import get_logger
 from services.event_generator.messages import KafkaHeaders, PublishableMessage
+from shared.kafka_metadata import event_message_headers, event_message_key
 from shared.schemas import EventEnvelope, canonical_json
 from shared.schemas.base import ContractModel
 
@@ -50,22 +50,12 @@ class ProducerDeliveryError(RuntimeError):
 
 def message_key(event: EventEnvelope[ContractModel]) -> bytes:
     """Select customer ID when present, otherwise correlation ID."""
-    customer_id = getattr(event.payload, "customer_id", None)
-    selected = customer_id if isinstance(customer_id, UUID) else event.correlation_id
-    return str(selected).encode()
+    return event_message_key(event)
 
 
 def message_headers(event: EventEnvelope[ContractModel]) -> KafkaHeaders:
     """Build compact UTF-8 Kafka metadata headers."""
-    values = {
-        "event_id": str(event.event_id),
-        "event_type": event.event_type.value,
-        "event_version": str(event.event_version),
-        "correlation_id": str(event.correlation_id),
-        "source": event.source,
-        "content_type": "application/json",
-    }
-    return [(name, value.encode()) for name, value in values.items()]
+    return event_message_headers(event)
 
 
 class KafkaEventProducer:

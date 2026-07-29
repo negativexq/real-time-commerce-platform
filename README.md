@@ -6,11 +6,10 @@ Silicon development machine.
 
 ## Current status
 
-Sprint 4 (the basic producer) is completed. Sprint 5 is current and adds
-stateful, persona-driven multi-journey behavior plus disabled-by-default,
-controlled raw Kafka anomalies.
-No Kafka consumer, persistence processor, Redis application logic, or fraud
-service exists yet.
+Sprints 4 and 5 are completed. Sprint 6 is current and adds a Kafka event
+processor with shared-contract validation, Redis-assisted idempotency, bounded
+retries, manual offsets, and confirmed dead-letter publication.
+Business events are not yet persisted to PostgreSQL, and no fraud engine exists.
 
 Sprint 3 shared event contracts and canonical serialization are completed and
 remain the generator's only schema source.
@@ -21,6 +20,8 @@ Generator operation and boundaries are documented in
 [Event generator](docs/event-generator.md).
 Persona and anomaly semantics are documented in
 [Stateful personas and controlled anomalies](docs/personas-and-anomalies.md).
+Processor behavior and failure semantics are documented in
+[Kafka event processor](docs/event-processor.md).
 
 ## Requirements
 
@@ -47,7 +48,7 @@ cp .env.example .env
 
 Never store production or real credentials in this repository.
 
-## Sprint 5 architecture
+## Sprint 6 architecture
 
 ```text
 Host / Compose clients
@@ -60,6 +61,10 @@ Host / Compose clients
     │                                      ├── in-memory customer state
     │                                      ├── persona strategy registry
     │                                      └── publishes commerce.events
+    ├── processor profile ─────────────── event-processor
+    │                                      ├── validates shared contracts
+    │                                      ├── Redis idempotency leases
+    │                                      └── commerce.events.dlq
     │
     ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
     │                                      └── durable named volume
@@ -94,6 +99,34 @@ make generator-down
 Open Kafka UI at <http://localhost:8080>, select the local cluster, open
 `commerce.events`, and use the Messages tab to inspect generated events.
 
+## Event processor quick start
+
+The processor is profile-gated and does not start with the default stack:
+
+```bash
+make processor-build
+make processor-up
+make processor-status
+make processor-logs
+```
+
+Publish and process bounded valid data, demonstrate completed duplicate
+suppression, or route malformed records to the DLQ:
+
+```bash
+make processor-sample
+make processor-smoke
+make processor-duplicate-smoke
+make processor-dlq-smoke
+make processor-retry-smoke
+```
+
+A valid record is parsed through the shared registry, atomically reserved by
+`event_id`, handled by the current no-op audit boundary, marked completed in
+Redis, and then committed. A completed duplicate skips the handler and commits.
+An invalid record is committed only after its deterministic DLQ record has a
+confirmed Kafka delivery. This is at-least-once processing, not exactly once.
+
 Run deterministic persona and anomaly demonstrations:
 
 ```bash
@@ -123,7 +156,7 @@ Automatic topic creation is disabled.
 | Topic | Partitions | Replicas | Cleanup | Purpose |
 | --- | ---: | ---: | --- | --- |
 | `commerce.events` | 3 | 1 | delete | Future commerce event stream |
-| `commerce.events.dlq` | 1 | 1 | delete | Future invalid-event dead letters |
+| `commerce.events.dlq` | 1 | 1 | delete | Processor invalid/exhausted dead letters |
 | `commerce.fraud.alerts` | 3 | 1 | delete | Future explainable fraud alerts |
 
 Ordering exists only within a partition, not globally.
@@ -282,6 +315,14 @@ make generator-takeover # Demonstrate prior history then takeover
 make generator-anomalies # Publish all controlled anomaly types
 make generator-persona-smoke # Validate persona/state patterns
 make generator-anomaly-smoke # Validate raw anomaly records
+make processor-build  # Build the event-processor image
+make processor-up     # Start continuous processing
+make processor-down   # Remove only the processor
+make processor-run    # Run interactively
+make processor-smoke  # Validate normal bounded processing
+make processor-duplicate-smoke # Prove completed duplicate suppression
+make processor-dlq-smoke # Validate malformed-record DLQ handling
+make processor-retry-smoke # Validate bounded retry then success
 make clean            # Stop containers and preserve volumes
 make clean-volumes    # Delete all persisted local data
 ```
@@ -322,5 +363,5 @@ tests/          Cross-service test suites
 
 ## Roadmap
 
-Later sprints may introduce Kafka consumers, persistence and DLQ processors,
-fraud classification, Prometheus, and Grafana. They are outside Sprint 5.
+Later sprints may introduce PostgreSQL business persistence, fraud
+classification, Prometheus, and Grafana. They are outside Sprint 6.

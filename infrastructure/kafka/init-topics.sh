@@ -26,6 +26,12 @@ wait_for_kafka() {
 create_topic() {
   local topic="$1"
   local partitions="$2"
+  local retention_ms="${3:-}"
+  local extra_config=()
+
+  if [[ -n "${retention_ms}" ]]; then
+    extra_config=(--config "retention.ms=${retention_ms}")
+  fi
 
   "${kafka_topics}" \
     --bootstrap-server "${bootstrap_server}" \
@@ -34,7 +40,8 @@ create_topic() {
     --topic "${topic}" \
     --partitions "${partitions}" \
     --replication-factor 1 \
-    --config cleanup.policy=delete
+    --config cleanup.policy=delete \
+    "${extra_config[@]}"
 }
 
 verify_topic() {
@@ -51,7 +58,9 @@ verify_topic() {
 
 wait_for_kafka
 create_topic "commerce.events" 3
-create_topic "commerce.events.dlq" 1
+# Seven-day local retention bounds poison-record storage without recreating
+# an existing topic; --if-not-exists preserves any current topic configuration.
+create_topic "commerce.events.dlq" 1 604800000
 create_topic "commerce.fraud.alerts" 3
 
 verify_topic "commerce.events"

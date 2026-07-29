@@ -6,7 +6,10 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	generator-down generator-logs generator-run generator-sample generator-status \
 	generator-smoke generator-personas generator-normal generator-suspicious \
 	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
-	generator-anomaly-smoke clean clean-volumes
+	generator-anomaly-smoke processor-build processor-up processor-down \
+	processor-run processor-logs processor-status processor-sample processor-smoke \
+	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
+	processor-idempotency-status processor-clear-test-state clean clean-volumes
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -139,6 +142,54 @@ generator-persona-smoke:
 generator-anomaly-smoke:
 	docker compose --profile generator run --rm \
 		--entrypoint python event-generator /app/scripts/generator-anomaly-smoke.py
+
+processor-build:
+	docker compose --profile processor build event-processor
+
+processor-up:
+	docker compose --profile processor up -d --build event-processor
+
+processor-down:
+	docker compose --profile processor rm -sf event-processor
+
+processor-run:
+	docker compose --profile processor run --rm event-processor
+
+processor-logs:
+	docker compose --profile processor logs -f event-processor
+
+processor-status:
+	docker compose --profile processor ps event-processor
+
+processor-sample:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+
+processor-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+
+processor-duplicate-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/processor-smoke.py duplicate
+
+processor-dlq-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/processor-smoke.py dlq
+
+processor-retry-smoke:
+	docker compose --profile processor run --rm \
+		--entrypoint python event-processor /app/scripts/processor-smoke.py retry
+
+processor-idempotency-status:
+	docker compose exec -T redis redis-cli --scan \
+		--pattern 'commerce:processor:*' | head -100
+
+processor-clear-test-state:
+	@docker compose exec -T redis sh -c \
+		'redis-cli --scan --pattern "commerce:processor:test:*" | \
+		xargs -r redis-cli DEL >/dev/null'
+	@printf '%s\n' 'Deleted only commerce:processor:test:* Redis keys.'
 
 clean:
 	docker compose down
