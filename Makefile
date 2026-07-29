@@ -1,7 +1,8 @@
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
 .PHONY: lint format format-check type-check test check compose-config up down logs ps \
-	kafka-topics kafka-describe kafka-smoke clean clean-volumes
+	kafka-topics kafka-describe kafka-smoke postgres-shell postgres-tables redis-cli \
+	storage-smoke storage-status storage-logs clean clean-volumes
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -48,9 +49,30 @@ kafka-smoke:
 		-v "$(CURDIR)/scripts/kafka-smoke.sh:/opt/commerce/kafka-smoke.sh:ro" \
 		--entrypoint /bin/bash kafka-init /opt/commerce/kafka-smoke.sh
 
+postgres-shell:
+	docker compose exec postgres sh -c \
+		'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+postgres-tables:
+	docker compose exec postgres sh -c \
+		'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c "\dt+"'
+
+redis-cli:
+	docker compose exec redis redis-cli
+
+storage-smoke:
+	./scripts/storage-smoke.sh
+
+storage-status:
+	docker compose ps postgres redis
+
+storage-logs:
+	docker compose logs -f postgres redis
+
 clean:
 	docker compose down
 
 clean-volumes:
-	@printf '%s\n' 'WARNING: deleting all persisted Kafka data.'
+	@printf '%s\n' \
+		'WARNING: deleting all persisted Kafka, PostgreSQL, and Redis data.'
 	docker compose down --volumes
