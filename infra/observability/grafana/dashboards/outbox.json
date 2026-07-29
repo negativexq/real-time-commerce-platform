@@ -1,0 +1,14 @@
+{
+  "uid": "commerce-outbox", "title": "Fraud Alert Outbox", "description": "Source processing is complete before derived alert publication; pending publication never rolls back the source event.", "schemaVersion": 41, "version": 1, "refresh": "10s", "time": {"from": "now-1h", "to": "now"}, "tags": ["commerce", "outbox"], "templating": {"list": []},
+  "panels": [
+    {"id": 1, "title": "Rows by status", "type": "stat", "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}, "targets": [{"expr": "commerce_outbox_rows", "legendFormat": "{{status}}"}]},
+    {"id": 2, "title": "Oldest pending age", "type": "stat", "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0}, "targets": [{"expr": "commerce_outbox_oldest_pending_age_seconds"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 3, "title": "Publisher health", "type": "stat", "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0}, "targets": [{"expr": "commerce_outbox_healthy"}]},
+    {"id": 4, "title": "Claim and recovery rate", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 6}, "targets": [{"expr": "sum(rate(commerce_outbox_claims_total[5m]))", "legendFormat": "claims"}, {"expr": "sum(rate(commerce_outbox_recovered_claims_total[5m]))", "legendFormat": "recovered"}]},
+    {"id": 5, "title": "Publication outcomes", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 6}, "targets": [{"expr": "sum by (result) (rate(commerce_outbox_publications_total[5m]))", "legendFormat": "{{result}}"}]},
+    {"id": 6, "title": "Publish latency", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 6}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le, result) (rate(commerce_outbox_publish_duration_seconds_bucket[5m])))", "legendFormat": "{{result}} p95"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 7, "title": "Kafka delivery failures", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 14}, "targets": [{"expr": "sum(rate(commerce_outbox_delivery_attempts_total{result=\"failed\"}[5m]))"}]},
+    {"id": 8, "title": "Batch duration", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 14}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(commerce_outbox_batch_duration_seconds_bucket[5m])))", "legendFormat": "p95"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 9, "title": "Seconds since last publish", "type": "stat", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14}, "targets": [{"expr": "time() - commerce_outbox_last_success_timestamp_seconds"}], "fieldConfig": {"defaults": {"unit": "s"}}}
+  ]
+}

@@ -1,6 +1,7 @@
 """Event-generator CLI and graceful application lifecycle."""
 
 import argparse
+import os
 import random
 import signal
 import sys
@@ -22,6 +23,7 @@ from services.event_generator.logging import configure_logging, get_logger
 from services.event_generator.producer import KafkaEventProducer
 from services.event_generator.summary import RunSummary
 from shared.commerce_common.enums import CustomerPersona
+from shared.observability import ApplicationMetrics, MetricsConfig, MetricsServer
 
 
 class ShutdownController:
@@ -106,6 +108,7 @@ def run_generation(
     builder: JourneyBuilder,
     producer: KafkaEventProducer,
     shutdown: ShutdownController,
+    metrics: ApplicationMetrics | None = None,
 ) -> int:
     """Run finite or continuous generation and perform a bounded final flush."""
     logger = get_logger()
@@ -115,6 +118,8 @@ def run_generation(
     interval = min(1.0 / config.generator_rate_per_second, 60.0)
     injector = AnomalyInjector(config, random.Random(config.generator_seed))
     summary = RunSummary()
+    if metrics is not None:
+        metrics.generator_rate.set(config.generator_rate_per_second)
 
     logger.info(
         "generator_started",
@@ -136,6 +141,8 @@ def run_generation(
         for position, message in enumerate(messages):
             producer.publish_message(message)
             if message.anomaly_type is not None:
+                if metrics is not None:
+                    metrics.generator_anomalies.labels(message.anomaly_type.value).inc()
                 logger.warning(
                     "synthetic_anomaly_published",
                     anomaly_type=message.anomaly_type.value,
@@ -162,6 +169,21 @@ def run_generation(
                 if message.anomaly_type is not None
             ],
         )
+        if metrics is not None:
+            persona = journey.persona.value
+            metrics.generator_journeys.labels(persona, "generated").inc()
+            metrics.generator_journey_duration.labels(persona).observe(
+                perf_counter() - started
+            )
+            for event in journey.events:
+                metrics.generator_events_generated.labels(
+                    event.event_type.value, persona
+                ).inc()
+            metrics.generator_active_customers.set(
+                sum(summary.customers_per_persona.values())
+            )
+            metrics.generator_healthy.set(1)
+            metrics.success()
         logger.info(
             "journey_generated",
             correlation_id=str(journey.correlation_id),
@@ -197,6 +219,21 @@ def main(arguments: Sequence[str] | None = None) -> int:
         config = parse_config(arguments)
         configure_logging(config.generator_log_level)
         shutdown = ShutdownController()
+        metrics_config = MetricsConfig.from_environment(
+            "event-generator",
+            9102,
+            os.environ,
+            port_environment_name="GENERATOR_METRICS_PORT",
+        )
+        metrics = ApplicationMetrics(
+            metrics_config.service_name, metrics_config.namespace
+        )
+        metrics_server = MetricsServer(metrics_config, metrics.registry)
+        try:
+            metrics_server.start()
+        except OSError:
+            get_logger().exception("metrics_server_failed")
+            metrics.generator_healthy.set(0)
 
         def handle_signal(signum: int, frame: FrameType | None) -> None:
             del frame
@@ -208,12 +245,15 @@ def main(arguments: Sequence[str] | None = None) -> int:
         ready_path = Path("/tmp/event-generator-ready")
         ready_path.touch()
         try:
-            return run_generation(
+            code = run_generation(
                 config,
                 build_journey_builder(config),
-                KafkaEventProducer(config),
+                KafkaEventProducer(config, metrics=metrics),
                 shutdown,
+                metrics,
             )
+            metrics_server.stop()
+            return code
         finally:
             ready_path.unlink(missing_ok=True)
     except Exception:

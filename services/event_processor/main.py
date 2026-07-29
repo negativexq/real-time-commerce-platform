@@ -1,5 +1,6 @@
 """Processor CLI, signal handling, finite mode, and graceful shutdown."""
 
+import os
 import signal
 import socket
 import sys
@@ -22,6 +23,7 @@ from services.event_processor.persistence import (
 )
 from services.event_processor.persistence.database import safe_postgres_endpoint
 from services.event_processor.processor import MessageProcessor
+from shared.observability import ApplicationMetrics, MetricsConfig, MetricsServer
 from shared.schemas import EVENT_PAYLOAD_REGISTRY
 
 HEALTH_FILE = Path("/tmp/event-processor-healthy")
@@ -46,6 +48,7 @@ def run_processor(
     dlq: DlqPublisher,
     shutdown: ShutdownController,
     database: Database,
+    metrics: ApplicationMetrics | None = None,
 ) -> tuple[int, RunSummary]:
     """Run until signal, terminal-count bound, idle timeout, or unresolved work."""
     logger = get_logger()
@@ -60,6 +63,7 @@ def run_processor(
         summary,
         processor_instance_id=instance_id,
         persistence=UnitOfWorkFactory(database, config),
+        metrics=metrics,
     )
     store.ping()
     database.open()
@@ -88,6 +92,8 @@ def run_processor(
             ):
                 break
             message = consumer.poll()
+            if metrics is not None:
+                metrics.processor_last_poll.set_to_current_time()
             HEALTH_FILE.touch()
             if message is None:
                 if (
@@ -112,6 +118,10 @@ def run_processor(
         store.close()
         database.close()
         logger.info("processor_stopped", **summary.as_log())
+        if metrics is not None:
+            metrics.processor_shutdowns.labels(
+                "unresolved" if summary.unresolved_records else "graceful"
+            ).inc()
     return (1 if summary.unresolved_records else 0), summary
 
 
@@ -131,6 +141,21 @@ def main(arguments: Sequence[str] | None = None) -> int:
         config = parse_config(arguments)
         configure_logging(config.processor_log_level)
         shutdown = ShutdownController()
+        metrics_config = MetricsConfig.from_environment(
+            "event-processor",
+            9101,
+            os.environ,
+            port_environment_name="PROCESSOR_METRICS_PORT",
+        )
+        metrics = ApplicationMetrics(
+            metrics_config.service_name, metrics_config.namespace
+        )
+        metrics_server = MetricsServer(metrics_config, metrics.registry)
+        try:
+            metrics_server.start()
+        except OSError:
+            get_logger().exception("metrics_server_failed")
+            metrics.service_healthy.labels(metrics.service).set(0)
 
         def handle_signal(signum: int, frame: FrameType | None) -> None:
             del frame
@@ -141,12 +166,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
         signal.signal(signal.SIGTERM, handle_signal)
         code, _ = run_processor(
             config,
-            KafkaEventConsumer(config),
-            RedisIdempotencyStore(config),
+            KafkaEventConsumer(config, metrics=metrics),
+            RedisIdempotencyStore(config, metrics=metrics),
             DlqPublisher(config),
             shutdown,
             Database(config),
+            metrics,
         )
+        metrics_server.stop()
         return code
     except Exception:
         get_logger().exception("processor_failed")

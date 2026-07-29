@@ -128,6 +128,10 @@ services:
       kafka-init:
         condition: service_completed_successfully
     environment:
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_HOST: 0.0.0.0
+      METRICS_NAMESPACE: ${METRICS_NAMESPACE:-commerce}
+      GENERATOR_METRICS_PORT: ${GENERATOR_METRICS_PORT:-9102}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_EVENTS_TOPIC: ${KAFKA_EVENTS_TOPIC:-commerce.events}
       KAFKA_CLIENT_ID: ${KAFKA_CLIENT_ID:-event-generator}
@@ -182,6 +186,10 @@ services:
       postgres-migrate:
         condition: service_completed_successfully
     environment:
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_HOST: 0.0.0.0
+      METRICS_NAMESPACE: ${METRICS_NAMESPACE:-commerce}
+      PROCESSOR_METRICS_PORT: ${PROCESSOR_METRICS_PORT:-9101}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       PROCESSOR_INPUT_TOPIC: ${PROCESSOR_INPUT_TOPIC:-commerce.events}
       PROCESSOR_DLQ_TOPIC: ${PROCESSOR_DLQ_TOPIC:-commerce.events.dlq}
@@ -289,6 +297,10 @@ services:
       postgres-migrate:
         condition: service_completed_successfully
     environment:
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_HOST: 0.0.0.0
+      METRICS_NAMESPACE: ${METRICS_NAMESPACE:-commerce}
+      FRAUD_OUTBOX_METRICS_PORT: ${FRAUD_OUTBOX_METRICS_PORT:-9103}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
       PROCESSOR_REQUIRED_SCHEMA_VERSION: ${PROCESSOR_REQUIRED_SCHEMA_VERSION:-3}
@@ -310,6 +322,114 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
+  kafka-exporter:
+    profiles: ["observability"]
+    image: danielqsj/kafka-exporter:v1.9.0
+    command:
+      - --kafka.server=kafka:9092
+      - --web.listen-address=:9308
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9308/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    mem_limit: 128m
+    restart: unless-stopped
+
+  postgres-exporter:
+    profiles: ["observability"]
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    environment:
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce?sslmode=disable}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9187/metrics"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    mem_limit: 128m
+    restart: unless-stopped
+
+  redis-exporter:
+    profiles: ["observability"]
+    image: oliver006/redis_exporter:v1.74.0
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/redis_exporter", "--version"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    mem_limit: 96m
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.12.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-7d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-2GB}
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infra/observability/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      kafka-exporter:
+        condition: service_healthy
+      postgres-exporter:
+        condition: service_healthy
+      redis-exporter:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "-O", "-", "http://localhost:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: 384m
+    restart: unless-stopped
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:13.1.0
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3002}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-commerce_local_dev}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/health | grep -q ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: 384m
+    restart: unless-stopped
+
 volumes:
   kafka-data:
     name: real-time-commerce-platform-kafka-data
@@ -317,3 +437,7 @@ volumes:
     name: real-time-commerce-platform-postgres-data
   redis-data:
     name: real-time-commerce-platform-redis-data
+  prometheus_data:
+    name: real-time-commerce-platform-prometheus-data
+  grafana_data:
+    name: real-time-commerce-platform-grafana-data

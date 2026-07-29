@@ -1,0 +1,15 @@
+{
+  "uid": "commerce-persistence", "title": "PostgreSQL Persistence", "description": "Application transaction guarantees, pool behavior, and PostgreSQL exporter health.", "schemaVersion": 41, "version": 1, "refresh": "10s", "time": {"from": "now-1h", "to": "now"}, "tags": ["commerce", "postgresql"], "templating": {"list": []},
+  "panels": [
+    {"id": 1, "title": "Transactions by result", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}, "targets": [{"expr": "sum by (result) (rate(commerce_database_transactions_total[5m]))", "legendFormat": "{{result}}"}]},
+    {"id": 2, "title": "Transaction latency percentiles", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}, "targets": [{"expr": "histogram_quantile(0.50, sum by (le) (rate(commerce_database_transaction_duration_seconds_bucket[5m])))", "legendFormat": "p50"}, {"expr": "histogram_quantile(0.95, sum by (le) (rate(commerce_database_transaction_duration_seconds_bucket[5m])))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.99, sum by (le) (rate(commerce_database_transaction_duration_seconds_bucket[5m])))", "legendFormat": "p99"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 3, "title": "Rows written by table", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}, "targets": [{"expr": "sum by (table) (rate(commerce_database_rows_written_total[5m]))", "legendFormat": "{{table}}"}]},
+    {"id": 4, "title": "Pool utilization", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "targets": [{"expr": "commerce_database_pool_connections", "legendFormat": "{{state}}"}]},
+    {"id": 5, "title": "Pool acquisition latency", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(commerce_database_pool_acquire_duration_seconds_bucket[5m])))", "legendFormat": "p95"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 6, "title": "Active PostgreSQL connections", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}, "targets": [{"expr": "sum(pg_stat_activity_count{datname=\"commerce\",state=\"active\"})", "legendFormat": "active"}]},
+    {"id": 7, "title": "Deadlocks", "type": "timeseries", "gridPos": {"h": 7, "w": 6, "x": 0, "y": 16}, "targets": [{"expr": "rate(pg_stat_database_deadlocks{datname=\"commerce\"}[5m])"}]},
+    {"id": 8, "title": "Database size", "type": "stat", "gridPos": {"h": 7, "w": 6, "x": 6, "y": 16}, "targets": [{"expr": "pg_database_size_bytes{datname=\"commerce\"}"}], "fieldConfig": {"defaults": {"unit": "bytes"}}},
+    {"id": 9, "title": "Cache hit ratio", "type": "stat", "gridPos": {"h": 7, "w": 6, "x": 12, "y": 16}, "targets": [{"expr": "pg_stat_database_blks_hit{datname=\"commerce\"} / clamp_min(pg_stat_database_blks_hit{datname=\"commerce\"} + pg_stat_database_blks_read{datname=\"commerce\"}, 1)"}], "fieldConfig": {"defaults": {"unit": "percentunit"}}},
+    {"id": 10, "title": "Database health", "type": "stat", "gridPos": {"h": 7, "w": 6, "x": 18, "y": 16}, "targets": [{"expr": "min(up{job=\"postgres-exporter\"})"}]}
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "uid": "commerce-platform-overview",
+  "title": "Commerce Platform Overview",
+  "description": "Operational and business landing view for the local real-time commerce platform.",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "10s",
+  "time": {"from": "now-1h", "to": "now"},
+  "tags": ["commerce", "overview"],
+  "templating": {"list": [
+    {"name": "service", "type": "query", "datasource": {"type": "prometheus", "uid": "commerce-prometheus"}, "query": {"query": "label_values(commerce_service_up, service)"}, "includeAll": true, "current": {"text": "All", "value": "$__all"}},
+    {"name": "topic", "type": "query", "datasource": {"type": "prometheus", "uid": "commerce-prometheus"}, "query": {"query": "label_values(kafka_topic_partitions, topic)"}, "includeAll": true, "current": {"text": "All", "value": "$__all"}}
+  ]},
+  "panels": [
+    {"id": 1, "title": "Platform health status", "description": "Recoverable application health, never a constant.", "type": "stat", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "min(commerce_service_healthy{service=~\"$service\"})", "legendFormat": "health"}], "fieldConfig": {"defaults": {"min": 0, "max": 1, "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}},
+    {"id": 2, "title": "Events received rate", "type": "timeseries", "gridPos": {"h": 7, "w": 9, "x": 6, "y": 0}, "targets": [{"expr": "sum(rate(commerce_processor_events_received_total[5m]))", "legendFormat": "received/s"}]},
+    {"id": 3, "title": "Processed rate", "type": "timeseries", "gridPos": {"h": 7, "w": 9, "x": 15, "y": 0}, "targets": [{"expr": "sum(rate(commerce_processor_events_terminal_total{result=\"processed\"}[5m]))", "legendFormat": "processed/s"}]},
+    {"id": 4, "title": "Current consumer lag", "type": "stat", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 5}, "targets": [{"expr": "sum(kafka_consumergroup_lag)", "legendFormat": "lag"}]},
+    {"id": 5, "title": "Processing p50 / p95 / p99", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10}, "targets": [{"expr": "histogram_quantile(0.50, sum by (le) (rate(commerce_processor_event_processing_duration_seconds_bucket[5m])))", "legendFormat": "p50"}, {"expr": "histogram_quantile(0.95, sum by (le) (rate(commerce_processor_event_processing_duration_seconds_bucket[5m])))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.99, sum by (le) (rate(commerce_processor_event_processing_duration_seconds_bucket[5m])))", "legendFormat": "p99"}], "fieldConfig": {"defaults": {"unit": "s"}}},
+    {"id": 6, "title": "DLQ and duplicate rate", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10}, "targets": [{"expr": "sum(rate(commerce_processor_events_terminal_total{result=\"dlq\"}[5m]))", "legendFormat": "DLQ"}, {"expr": "sum(rate(commerce_processor_events_terminal_total{result=\"duplicate\"}[5m]))", "legendFormat": "duplicate"}]},
+    {"id": 7, "title": "Fraud decisions", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 18}, "targets": [{"expr": "sum by (decision) (rate(commerce_fraud_evaluations_total[5m]))", "legendFormat": "{{decision}}"}]},
+    {"id": 8, "title": "Fraud alerts created", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 18}, "targets": [{"expr": "sum(rate(commerce_fraud_alerts_created_total[5m]))", "legendFormat": "alerts/s"}]},
+    {"id": 9, "title": "Pending outbox rows", "type": "stat", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 18}, "targets": [{"expr": "sum(commerce_outbox_rows{status=\"pending\"})", "legendFormat": "pending"}]}
+  ]
+}

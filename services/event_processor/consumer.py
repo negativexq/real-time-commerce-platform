@@ -14,6 +14,7 @@ from services.event_processor.config import ProcessorConfig
 from services.event_processor.errors import FatalInfrastructureError
 from services.event_processor.logging import get_logger
 from services.event_processor.models import ConsumedMessage
+from shared.observability.metrics import ApplicationMetrics
 
 
 class ConsumerClient(Protocol):
@@ -34,12 +35,16 @@ class KafkaEventConsumer:
     """Synchronous consumer with explicit next-offset commits."""
 
     def __init__(
-        self, config: ProcessorConfig, client: ConsumerClient | None = None
+        self,
+        config: ProcessorConfig,
+        client: ConsumerClient | None = None,
+        metrics: ApplicationMetrics | None = None,
     ) -> None:
         self._config = config
         self._client = client or Consumer(self.kafka_config(config))
         self._logger = get_logger()
         self._revoked: set[tuple[str, int]] = set()
+        self._metrics = metrics
 
     @staticmethod
     def kafka_config(config: ProcessorConfig) -> dict[str, object]:
@@ -82,6 +87,9 @@ class KafkaEventConsumer:
                 for item in partitions
             ],
         )
+        if self._metrics is not None:
+            self._metrics.processor_rebalances.labels("assigned").inc()
+            self._metrics.processor_assigned.set(len(partitions))
 
     def on_revoke(
         self, consumer: ConsumerClient, partitions: list[TopicPartition]
@@ -97,9 +105,14 @@ class KafkaEventConsumer:
                 for item in partitions
             ],
         )
+        if self._metrics is not None:
+            self._metrics.processor_rebalances.labels("revoked").inc()
+            self._metrics.processor_assigned.set(0)
 
     def poll(self) -> ConsumedMessage | None:
         raw = self._client.poll(self._config.processor_poll_timeout_seconds)
+        if self._metrics is not None:
+            self._metrics.processor_last_poll.set_to_current_time()
         if raw is None:
             return None
         error = raw.error()

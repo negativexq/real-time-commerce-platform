@@ -1,0 +1,20 @@
+groups:
+  - name: commerce-recording
+    interval: 10s
+    rules:
+      - record: commerce:processor_events_received:rate5m
+        expr: sum(rate(commerce_processor_events_received_total[5m]))
+      - record: commerce:processor_events_processed:rate5m
+        expr: sum(rate(commerce_processor_events_terminal_total{result="processed"}[5m]))
+      - record: commerce:processor_error_ratio:rate5m
+        expr: sum(rate(commerce_processor_events_terminal_total{result=~"failed|dlq|unresolved"}[5m])) / clamp_min(sum(rate(commerce_processor_events_terminal_total[5m])), 1)
+      - record: commerce:processor_latency_seconds:p95
+        expr: histogram_quantile(0.95, sum by (le) (rate(commerce_processor_event_processing_duration_seconds_bucket[5m])))
+      - record: commerce:kafka_consumer_lag:sum
+        expr: sum(kafka_consumergroup_lag)
+      - record: commerce:fraud_decisions:rate5m
+        expr: sum by (decision) (rate(commerce_fraud_evaluations_total[5m]))
+      - record: commerce:outbox_pending:sum
+        expr: sum(commerce_outbox_rows{status="pending"})
+      - record: commerce:outbox_oldest_pending_age_seconds:max
+        expr: max(commerce_outbox_oldest_pending_age_seconds)

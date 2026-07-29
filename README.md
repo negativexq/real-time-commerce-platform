@@ -6,9 +6,10 @@ Silicon development machine.
 
 ## Current status
 
-Sprints 0 through 7 are completed. Sprint 8 is current and adds deterministic
-rule-based fraud evaluations, APPROVE/REVIEW/BLOCK decisions, atomic fraud
-alerts, and an at-least-once transactional alert outbox.
+Sprints 0 through 8 are completed. Sprint 9 is current and adds bounded
+application-native Prometheus metrics, infrastructure exporters, recording and
+local demonstration alert rules, and automatically provisioned Grafana
+dashboards.
 
 Sprint 3 shared event contracts and canonical serialization are completed and
 remain the generator's only schema source.
@@ -25,6 +26,46 @@ The schema, migrations, transaction boundary, and recovery behavior are
 documented in [PostgreSQL persistence](docs/postgresql-persistence.md).
 The rule registry, scoring, persistence, and crash windows are documented in
 [Rule-based fraud engine](docs/fraud-engine.md).
+Metrics, health semantics, exporters, rules, dashboards, and smoke workflows
+are documented in [Prometheus and Grafana observability](docs/observability.md).
+
+## Sprint 9 observability quick start
+
+The default infrastructure startup is unchanged:
+
+```bash
+docker compose up -d
+```
+
+Start monitoring explicitly, or run it with the processor and fraud publisher:
+
+```bash
+docker compose --profile observability up -d
+docker compose --profile processor --profile fraud --profile observability \
+  up -d --build
+```
+
+- Prometheus: <http://localhost:9090>
+- Grafana: <http://localhost:3002>
+
+Grafana provisions the Prometheus datasource and all seven dashboards from Git.
+Anonymous local viewer access is enabled; the documented admin credentials are
+local-development defaults only. Alert rules are local demonstrations visible
+in Prometheus and have no delivery integration.
+
+```mermaid
+flowchart LR
+    A[Generator / Processor / Outbox] --> P[Prometheus]
+    K[Kafka exporter] --> P
+    D[PostgreSQL exporter] --> P
+    R[Redis exporter] --> P
+    P --> G[Provisioned Grafana]
+```
+
+### Dashboard screenshots
+
+Portfolio screenshots can be added here after running the provisioned stack;
+dashboard JSON remains the source of truth.
 
 ## Requirements
 

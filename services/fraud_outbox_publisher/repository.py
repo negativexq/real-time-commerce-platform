@@ -25,6 +25,7 @@ class OutboxRecord:
 class OutboxRepository:
     def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
         self.connection = connection
+        self.recovered_claims = 0
 
     def claim(self, config: FraudConfig) -> tuple[OutboxRecord, ...]:
         token = uuid4()
@@ -39,6 +40,7 @@ class OutboxRepository:
                 """,
                 (config.fraud_outbox_claim_ttl_seconds,),
             )
+            self.recovered_claims = cursor.rowcount
             cursor.execute(
                 """
                 SELECT outbox_id, event_id, topic, message_key, headers_json,
@@ -80,6 +82,32 @@ class OutboxRepository:
             )
             for row in rows
         )
+
+    def status_snapshot(self) -> tuple[dict[str, int], float]:
+        """Return bounded status counts and oldest pending age."""
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT status, count(*) FROM fraud_outbox
+                WHERE status IN ('PENDING', 'PUBLISHING', 'FAILED')
+                GROUP BY status
+                """
+            )
+            counts = {
+                str(status).lower(): cast(int, count)
+                for status, count in cursor.fetchall()
+            }
+            cursor.execute(
+                """
+                SELECT COALESCE(EXTRACT(EPOCH FROM
+                    (CURRENT_TIMESTAMP - MIN(created_at))), 0)
+                FROM fraud_outbox WHERE status = 'PENDING'
+                """
+            )
+            row = cursor.fetchone()
+            age = float(cast(int | float, row[0])) if row else 0.0
+        self.connection.commit()
+        return counts, age
 
     def published(self, record: OutboxRecord) -> None:
         with self.connection.transaction(), self.connection.cursor() as cursor:

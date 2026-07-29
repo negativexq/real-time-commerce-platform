@@ -92,6 +92,9 @@ class UnitOfWorkFactory:
     ) -> PersistenceResult:
         started = perf_counter()
         fraud_decision: str | None = None
+        fraud_event_type: str | None = None
+        fraud_severity: str | None = None
+        fraud_score: int | None = None
         matched_rule_ids: tuple[str, ...] = ()
         try:
             with (
@@ -115,6 +118,9 @@ class UnitOfWorkFactory:
                     fraud_context = self.fraud_context.build(connection, event)
                     evaluation = self.fraud_engine.evaluate(fraud_context)
                     fraud_decision = evaluation.decision.value
+                    fraud_event_type = event.event_type.value
+                    fraud_severity = evaluation.severity.value
+                    fraud_score = evaluation.total_score
                     matched_rule_ids = tuple(
                         result.rule_id for result in evaluation.matched_rules
                     )
@@ -123,12 +129,17 @@ class UnitOfWorkFactory:
                         rows[table] = rows.get(table, 0) + count
             rows["processed_events"] = 1
             return PersistenceResult(
-                False,
-                tuple(sorted(name for name, count in rows.items() if count)),
-                rows,
-                (perf_counter() - started) * 1_000,
-                fraud_decision,
-                matched_rule_ids,
+                already_persisted=False,
+                affected_tables=tuple(
+                    sorted(name for name, count in rows.items() if count)
+                ),
+                rows_written=rows,
+                duration_ms=(perf_counter() - started) * 1_000,
+                fraud_event_type=fraud_event_type,
+                fraud_severity=fraud_severity,
+                fraud_score=fraud_score,
+                fraud_decision=fraud_decision,
+                matched_rule_ids=matched_rule_ids,
             )
         except AlreadyPersistedEvent:
             return PersistenceResult(True, (), {}, (perf_counter() - started) * 1_000)

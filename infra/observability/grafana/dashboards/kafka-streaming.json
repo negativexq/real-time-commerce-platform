@@ -1,0 +1,19 @@
+{
+  "uid": "commerce-kafka-streaming", "title": "Kafka Streaming", "description": "Committed consumer-group lag and Kafka stream activity from kafka-exporter.", "schemaVersion": 41, "version": 1, "refresh": "10s", "time": {"from": "now-1h", "to": "now"}, "tags": ["commerce", "kafka"],
+  "templating": {"list": [
+    {"name": "topic", "type": "custom", "query": "commerce.events,commerce.events.dlq,commerce.fraud-alerts", "current": {"text": "commerce.events", "value": "commerce.events"}},
+    {"name": "consumer_group", "type": "query", "datasource": {"type": "prometheus", "uid": "commerce-prometheus"}, "query": {"query": "label_values(kafka_consumergroup_lag, consumergroup)"}, "includeAll": true, "current": {"text": "All", "value": "$__all"}},
+    {"name": "partition", "type": "query", "datasource": {"type": "prometheus", "uid": "commerce-prometheus"}, "query": {"query": "label_values(kafka_consumergroup_lag{topic=\"$topic\"}, partition)"}, "includeAll": true, "current": {"text": "All", "value": "$__all"}}
+  ]},
+  "panels": [
+    {"id": 1, "title": "Consumer lag total", "type": "stat", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "sum(kafka_consumergroup_lag{topic=\"$topic\",consumergroup=~\"$consumer_group\"})"}]},
+    {"id": 2, "title": "Consumer lag by partition", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}, "targets": [{"expr": "kafka_consumergroup_lag{topic=\"$topic\",consumergroup=~\"$consumer_group\",partition=~\"$partition\"}", "legendFormat": "partition {{partition}}"}]},
+    {"id": 3, "title": "Maximum partition lag", "type": "stat", "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0}, "targets": [{"expr": "max(kafka_consumergroup_lag{topic=\"$topic\",consumergroup=~\"$consumer_group\"})"}]},
+    {"id": 4, "title": "Topic message count", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "targets": [{"expr": "sum(kafka_topic_partition_current_offset{topic=\"$topic\"})", "legendFormat": "$topic"}]},
+    {"id": 5, "title": "Partition count", "type": "stat", "gridPos": {"h": 8, "w": 4, "x": 8, "y": 8}, "targets": [{"expr": "kafka_topic_partitions{topic=\"$topic\"}"}]},
+    {"id": 6, "title": "Processor received and offset commit rate", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 12, "y": 8}, "targets": [{"expr": "sum(rate(commerce_processor_events_received_total{topic=\"$topic\"}[5m]))", "legendFormat": "received"}, {"expr": "sum(rate(commerce_processor_offset_commits_total{result=\"success\"}[5m]))", "legendFormat": "commits"}]},
+    {"id": 7, "title": "Rebalance events", "type": "timeseries", "gridPos": {"h": 8, "w": 4, "x": 20, "y": 8}, "targets": [{"expr": "sum by (action) (rate(commerce_processor_rebalances_total[5m]))", "legendFormat": "{{action}}"}]},
+    {"id": 8, "title": "Kafka exporter health", "type": "stat", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 16}, "targets": [{"expr": "up{job=\"kafka-exporter\"}"}]},
+    {"id": 9, "title": "DLQ and fraud alert publish rate", "type": "timeseries", "gridPos": {"h": 5, "w": 18, "x": 6, "y": 16}, "targets": [{"expr": "sum(rate(commerce_processor_dlq_published_total[5m]))", "legendFormat": "DLQ"}, {"expr": "sum(rate(commerce_outbox_publications_total{result=\"published\"}[5m]))", "legendFormat": "fraud alerts"}]}
+  ]
+}

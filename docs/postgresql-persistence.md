@@ -165,9 +165,10 @@ tables, and never deletes migration history.
 ## Current limitations
 
 Transactions are synchronous and partition ordering remains serial. There are
-no retry topics, Kafka transactions, distributed transactions, metrics, or
-dashboards. Fraud history queries are bounded and see only data available at
-processing time.
+no retry topics, Kafka transactions, or distributed transactions. Sprint 9
+adds transaction/pool metrics and PostgreSQL exporter dashboards without
+moving the transaction boundary; see [Observability](observability.md). Fraud
+history queries remain bounded and see only data available at processing time.
 
 ## Sprint 8 fraud transaction
 

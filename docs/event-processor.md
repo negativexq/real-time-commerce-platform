@@ -157,8 +157,9 @@ windows are:
 - After DLQ delivery but before source commit: deterministic identity is reused,
   but Kafka can still contain a duplicate DLQ record.
 
-There are no Kafka transactions, retry topics, upcasters, metrics server, or
-parallel processing in Sprint 8.
+There are no Kafka transactions, retry topics, upcasters, or parallel
+processing. Sprint 9 adds non-critical Prometheus instrumentation without
+changing this processing order; see [Observability](observability.md).
 
 ## Configuration and operation
 

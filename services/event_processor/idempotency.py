@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from time import perf_counter
 from typing import Protocol
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from redis.exceptions import RedisError
 from services.event_processor.config import ProcessorConfig
 from services.event_processor.errors import RetryableProcessingError
 from services.event_processor.models import ConsumedMessage
+from shared.observability.metrics import ApplicationMetrics
 
 RESERVE_SCRIPT = """
 local current = redis.call('GET', KEYS[1])
@@ -68,7 +70,10 @@ class RedisIdempotencyStore:
     """Token-guarded Redis leases; event payloads are never stored."""
 
     def __init__(
-        self, config: ProcessorConfig, client: RedisClient | None = None
+        self,
+        config: ProcessorConfig,
+        client: RedisClient | None = None,
+        metrics: ApplicationMetrics | None = None,
     ) -> None:
         self._config = config
         self._client = client or Redis.from_url(
@@ -77,6 +82,7 @@ class RedisIdempotencyStore:
             socket_connect_timeout=(config.processor_redis_connect_timeout_seconds),
             decode_responses=True,
         )
+        self._metrics = metrics
 
     def key_for(self, event_id: UUID) -> str:
         return f"{self._config.processor_idempotency_key_prefix}:{event_id}"
@@ -94,6 +100,7 @@ class RedisIdempotencyStore:
         message: ConsumedMessage,
         first_seen_at: datetime,
     ) -> Reservation:
+        started = perf_counter()
         value = json.dumps(
             {
                 "status": "processing",
@@ -116,6 +123,7 @@ class RedisIdempotencyStore:
                 self._config.processor_idempotency_processing_ttl_seconds,
             )
         except RedisError as exc:
+            self._observe("reserve", "unavailable", started)
             raise RetryableProcessingError("Redis reservation failed") from exc
         if not isinstance(raw, (list, tuple)) or len(raw) != 2:
             raise RetryableProcessingError("Redis reservation returned invalid data")
@@ -124,6 +132,12 @@ class RedisIdempotencyStore:
         existing = (
             json.loads(existing_raw) if state is not ReservationState.RESERVED else None
         )
+        result = {
+            ReservationState.RESERVED: "reserved",
+            ReservationState.COMPLETED: "duplicate_completed",
+            ReservationState.PROCESSING: "duplicate_processing",
+        }[state]
+        self._observe("reserve", result, started)
         return Reservation(
             state,
             token if state is ReservationState.RESERVED else None,
@@ -131,6 +145,7 @@ class RedisIdempotencyStore:
         )
 
     def complete(self, event_id: UUID, token: str, completed_at: datetime) -> bool:
+        started = perf_counter()
         value = json.dumps(
             {
                 "status": "completed",
@@ -150,15 +165,36 @@ class RedisIdempotencyStore:
                 self._config.processor_idempotency_completed_ttl_seconds,
             )
         except RedisError as exc:
+            self._observe("complete", "unavailable", started)
             raise RetryableProcessingError("Redis completion failed") from exc
-        return bool(result)
+        completed = bool(result)
+        self._observe(
+            "complete", "completed" if completed else "token_mismatch", started
+        )
+        return completed
 
     def release(self, event_id: UUID, token: str) -> bool:
+        started = perf_counter()
         try:
             result = self._client.eval(RELEASE_SCRIPT, 1, self.key_for(event_id), token)
         except RedisError as exc:
+            self._observe("reconcile", "unavailable", started)
             raise RetryableProcessingError("Redis release failed") from exc
-        return bool(result)
+        released = bool(result)
+        self._observe(
+            "reconcile", "released" if released else "token_mismatch", started
+        )
+        return released
+
+    def _observe(self, operation: str, result: str, started: float) -> None:
+        if self._metrics is None:
+            return
+        duration = perf_counter() - started
+        self._metrics.idempotency_operations.labels(operation, result).inc()
+        self._metrics.idempotency_duration.labels(operation, result).observe(duration)
+        self._metrics.processor_redis_duration.labels(operation, result).observe(
+            duration
+        )
 
     def close(self) -> None:
         self._client.close()

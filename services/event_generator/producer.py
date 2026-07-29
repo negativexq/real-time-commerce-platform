@@ -1,6 +1,7 @@
 """Kafka producer boundary, metadata, callbacks, and bounded flushing."""
 
 from collections.abc import Callable
+from time import perf_counter
 from typing import Protocol
 
 from confluent_kafka import Producer  # type: ignore[import-untyped]
@@ -9,6 +10,7 @@ from services.event_generator.config import GeneratorConfig
 from services.event_generator.logging import get_logger
 from services.event_generator.messages import KafkaHeaders, PublishableMessage
 from shared.kafka_metadata import event_message_headers, event_message_key
+from shared.observability.metrics import ApplicationMetrics
 from shared.schemas import EventEnvelope, canonical_json
 from shared.schemas.base import ContractModel
 
@@ -65,12 +67,14 @@ class KafkaEventProducer:
         self,
         config: GeneratorConfig,
         client: ProducerClient | None = None,
+        metrics: ApplicationMetrics | None = None,
     ) -> None:
         self._config = config
         self._client = client or Producer(self.kafka_config(config))
         self._delivery_failures = 0
         self._published = 0
         self._logger = get_logger()
+        self._metrics = metrics
 
     @staticmethod
     def kafka_config(config: GeneratorConfig) -> dict[str, object]:
@@ -110,6 +114,7 @@ class KafkaEventProducer:
     def publish_message(self, message: PublishableMessage) -> None:
         """Queue a prepared valid or deliberately anomalous record."""
         callback = self._delivery_callback(message)
+        started = perf_counter()
         for attempt in range(6):
             try:
                 self._client.produce(
@@ -120,6 +125,10 @@ class KafkaEventProducer:
                     on_delivery=callback,
                 )
                 self._published += 1
+                if self._metrics is not None:
+                    self._metrics.generator_publish_duration.labels("queued").observe(
+                        perf_counter() - started
+                    )
                 self._client.poll(0)
                 return
             except BufferError:
@@ -165,7 +174,16 @@ class KafkaEventProducer:
                     topic=self._config.kafka_events_topic,
                     error=str(error),
                 )
+                if self._metrics is not None:
+                    self._metrics.generator_events_published.labels(
+                        event.event_type or "unknown", "failed"
+                    ).inc()
                 return
+            if self._metrics is not None:
+                self._metrics.generator_events_published.labels(
+                    event.event_type or "unknown", "published"
+                ).inc()
+                self._metrics.success()
             self._logger.info(
                 "event_delivered",
                 event_id=str(event.event_id) if event.event_id else None,

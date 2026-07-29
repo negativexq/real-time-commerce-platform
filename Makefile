@@ -19,7 +19,13 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke \
 	fraud-outbox-build fraud-outbox-up fraud-outbox-down fraud-outbox-logs \
 	fraud-outbox-status fraud-outbox-smoke fraud-outbox-recovery-smoke \
-	fraud-counts fraud-clear-test-data
+	fraud-counts fraud-clear-test-data \
+	observability-config-check observability-up observability-down \
+	observability-restart observability-status observability-logs \
+	prometheus-config-check prometheus-targets prometheus-rules-check \
+	prometheus-query-smoke metrics-endpoints metrics-smoke grafana-health \
+	grafana-dashboards-check observability-smoke observability-traffic \
+	observability-reset-test-state
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -304,6 +310,97 @@ fraud-clear-test-data:
 		WITH test_events AS (SELECT event_id FROM processed_events \
 		WHERE source LIKE '"'"'fraud-smoke:%'"'"') DELETE FROM fraud_evaluations \
 		WHERE source_event_id IN (SELECT event_id FROM test_events);"'
+
+prometheus-config-check:
+	docker compose --profile observability run --rm --no-deps \
+		--entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+
+prometheus-rules-check:
+	docker compose --profile observability run --rm --no-deps \
+		--entrypoint promtool prometheus check rules \
+		/etc/prometheus/rules/recording.yml \
+		/etc/prometheus/rules/demo-alerts.yml
+
+observability-config-check: compose-config prometheus-config-check prometheus-rules-check
+	$(PYTHON) -m json.tool infra/observability/grafana/dashboards/platform-overview.json >/dev/null
+	@for dashboard in infra/observability/grafana/dashboards/*.json; do \
+		$(PYTHON) -m json.tool "$$dashboard" >/dev/null || exit 1; \
+	done
+	@grep -q 'uid: commerce-prometheus' \
+		infra/observability/grafana/provisioning/datasources/prometheus.yml
+	@grep -q '/var/lib/grafana/dashboards' \
+		infra/observability/grafana/provisioning/dashboards/dashboards.yml
+
+observability-up:
+	docker compose --profile observability up -d \
+		kafka-exporter postgres-exporter redis-exporter prometheus grafana
+
+observability-down:
+	docker compose --profile observability stop \
+		grafana prometheus kafka-exporter postgres-exporter redis-exporter
+
+observability-restart: observability-down observability-up
+
+observability-status:
+	docker compose --profile observability ps \
+		kafka-exporter postgres-exporter redis-exporter prometheus grafana
+
+observability-logs:
+	docker compose --profile observability logs -f \
+		kafka-exporter postgres-exporter redis-exporter prometheus grafana
+
+prometheus-targets:
+	@curl -fsS "http://127.0.0.1:$${PROMETHEUS_PORT:-9090}/api/v1/targets" | \
+		$(PYTHON) -c 'import json,sys; d=json.load(sys.stdin); t=d["data"]["activeTargets"]; print(*[(x["labels"].get("job"),x["health"]) for x in t],sep="\n"); raise SystemExit(any(x["health"]!="up" for x in t if x["labels"].get("job") in {"prometheus","kafka-exporter","postgres-exporter","redis-exporter"}))'
+
+prometheus-query-smoke:
+	@curl -fsS --get "http://127.0.0.1:$${PROMETHEUS_PORT:-9090}/api/v1/query" \
+		--data-urlencode 'query=sum(up)' | $(PYTHON) -m json.tool
+
+metrics-endpoints:
+	docker compose --profile processor exec -T event-processor \
+		python -c 'import urllib.request; body=urllib.request.urlopen("http://localhost:9101/metrics").read(); assert b"commerce_processor_events_received_total" in body'
+	docker compose --profile fraud exec -T fraud-outbox-publisher \
+		python -c 'import urllib.request; body=urllib.request.urlopen("http://localhost:9103/metrics").read(); assert b"commerce_outbox_publications_total" in body'
+
+metrics-smoke: observability-traffic
+	@sleep 12
+	@curl -fsS --get "http://127.0.0.1:$${PROMETHEUS_PORT:-9090}/api/v1/query" \
+		--data-urlencode 'query=sum(commerce_processor_events_received_total)' | \
+		$(PYTHON) -c 'import json,sys; d=json.load(sys.stdin); assert d["status"]=="success"'
+	@! rg -n 'customer_id|event_id|order_id|payment_id|correlation_id|device_id|email_hash|ip_address' \
+		shared/observability infra/observability/grafana
+
+grafana-health:
+	curl -fsS "http://127.0.0.1:$${GRAFANA_PORT:-3002}/api/health"
+
+grafana-dashboards-check:
+	@curl -fsS -u "$${GRAFANA_ADMIN_USER:-admin}:$${GRAFANA_ADMIN_PASSWORD:-commerce_local_dev}" \
+		"http://127.0.0.1:$${GRAFANA_PORT:-3002}/api/search?type=dash-db" | \
+		$(PYTHON) -c 'import json,sys; d=json.load(sys.stdin); u={x["uid"] for x in d}; e={"commerce-platform-overview","commerce-kafka-streaming","commerce-processor","commerce-persistence","commerce-fraud","commerce-outbox","commerce-infrastructure"}; print(*sorted(u),sep="\n"); assert e <= u'
+
+observability-traffic:
+	$(MAKE) generator-normal
+	$(MAKE) generator-takeover
+	$(MAKE) generator-anomalies
+
+observability-smoke: observability-config-check
+	docker compose --profile processor --profile fraud --profile observability \
+		up -d --build event-processor fraud-outbox-publisher prometheus grafana
+	$(MAKE) observability-traffic
+	@sleep 15
+	$(MAKE) prometheus-targets
+	$(MAKE) prometheus-query-smoke
+	$(MAKE) grafana-health
+	$(MAKE) grafana-dashboards-check
+
+observability-reset-test-state:
+	@test -n "$(OBSERVABILITY_TEST_RUN_ID)" || \
+		(echo "OBSERVABILITY_TEST_RUN_ID is required" >&2; exit 2)
+	$(MAKE) db-reset-test-data TEST_RUN_ID="$(OBSERVABILITY_TEST_RUN_ID)"
+	@docker compose exec -T redis sh -c \
+		'redis-cli --scan --pattern "commerce:processor:observability:$(OBSERVABILITY_TEST_RUN_ID):*" | xargs -r redis-cli DEL >/dev/null'
+	@printf '%s\n' 'Removed only explicitly scoped observability test state.'
 
 processor-idempotency-status:
 	docker compose exec -T redis redis-cli --scan \

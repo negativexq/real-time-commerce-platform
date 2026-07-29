@@ -172,3 +172,7 @@ processing-time availability for late events, no currency conversion, no case
 workflow, and at-least-once derived delivery. A future ML model can implement
 the same rule-like evaluation boundary and produce explainable results without
 changing the source transaction or outbox contract.
+
+Sprint 9 exports bounded rule, decision, score-histogram, alert, and outbox
+metrics. Persona is deliberately absent from every fraud metric label. See
+[Prometheus and Grafana observability](observability.md).

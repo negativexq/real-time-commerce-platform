@@ -1,0 +1,59 @@
+groups:
+  - name: commerce-local-demo-alerts
+    rules:
+      - alert: ProcessorDown
+        expr: up{job="event-processor"} == 0
+        for: 1m
+        labels: {severity: critical, scope: local_demo}
+        annotations:
+          summary: Event processor metrics target is down
+          description: The local processor target has been unavailable for one minute.
+      - alert: HighConsumerLag
+        expr: commerce:kafka_consumer_lag:sum > 100
+        for: 2m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: Local consumer lag is high
+          description: Exported committed-offset lag exceeds the demonstration threshold.
+      - alert: HighDLQRate
+        expr: sum(rate(commerce_processor_dlq_published_total[5m])) > 0.1
+        for: 1m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: DLQ publication rate is elevated
+          description: The local processor is publishing dead letters above the demo threshold.
+      - alert: DatabaseUnavailable
+        expr: up{job="postgres-exporter"} == 0 or commerce_database_healthy == 0
+        for: 1m
+        labels: {severity: critical, scope: local_demo}
+        annotations:
+          summary: PostgreSQL observability reports unavailable
+          description: The exporter or application database health metric is unavailable.
+      - alert: RedisUnavailable
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels: {severity: critical, scope: local_demo}
+        annotations:
+          summary: Redis exporter is unavailable
+          description: Prometheus cannot scrape the local Redis exporter.
+      - alert: FraudOutboxBacklog
+        expr: commerce:outbox_pending:sum > 20 or commerce:outbox_oldest_pending_age_seconds:max > 120
+        for: 2m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: Fraud alert outbox backlog is growing
+          description: Pending rows or oldest pending age exceed local demo limits.
+      - alert: OutboxPublicationFailures
+        expr: sum(rate(commerce_outbox_publications_total{result=~"failed|kafka_error|database_error"}[5m])) > 0
+        for: 1m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: Fraud outbox publication failures detected
+          description: The local publisher has recent failed delivery attempts.
+      - alert: HighProcessingLatency
+        expr: commerce:processor_latency_seconds:p95 > 2
+        for: 2m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: Processor p95 latency is high
+          description: Five-minute p95 processing latency exceeds the demo threshold.
