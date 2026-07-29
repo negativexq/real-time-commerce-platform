@@ -1,0 +1,23 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000006",
+  "event_type": "order_created",
+  "event_version": 1,
+  "event_time": "2026-01-15T10:05:00Z",
+  "produced_at": "2026-01-15T10:05:01Z",
+  "source": "fixture",
+  "correlation_id": "00000000-0000-4000-8000-000000000100",
+  "payload": {
+    "order_id": "00000000-0000-4000-8000-000000000301",
+    "customer_id": "00000000-0000-4000-8000-000000000101",
+    "session_id": "00000000-0000-4000-8000-000000000201",
+    "cart_id": "00000000-0000-4000-8000-000000000401",
+    "item_count": 2,
+    "subtotal": "129.90",
+    "discount_amount": "10.00",
+    "total_amount": "119.90",
+    "currency": "TRY",
+    "shipping_country_code": "TR",
+    "billing_country_code": "TR",
+    "created_at": "2026-01-15T10:05:00Z"
+  }
+}

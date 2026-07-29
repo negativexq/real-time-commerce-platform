@@ -1,0 +1,21 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000007",
+  "event_type": "payment_completed",
+  "event_version": 1,
+  "event_time": "2026-01-15T10:06:00Z",
+  "produced_at": "2026-01-15T10:06:01Z",
+  "source": "fixture",
+  "correlation_id": "00000000-0000-4000-8000-000000000100",
+  "payload": {
+    "payment_id": "00000000-0000-4000-8000-000000000501",
+    "order_id": "00000000-0000-4000-8000-000000000301",
+    "customer_id": "00000000-0000-4000-8000-000000000101",
+    "amount": "119.90",
+    "currency": "TRY",
+    "payment_method": "credit_card",
+    "device_id": "00000000-0000-4000-8000-000000000601",
+    "ip_address": "2001:db8::1",
+    "country_code": "TR",
+    "completed_at": "2026-01-15T10:06:00Z"
+  }
+}

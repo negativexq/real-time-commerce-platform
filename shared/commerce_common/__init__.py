@@ -1,11 +1,26 @@
-"""Common utilities shared by commerce platform services."""
+"""Common types and utilities shared by commerce platform services."""
 
-from datetime import UTC, datetime
+from shared.commerce_common.clock import UtcDateTime, utc_now
+from shared.commerce_common.enums import (
+    Currency,
+    CustomerPersona,
+    DeviceType,
+    EventType,
+    FraudDecision,
+    PaymentFailureReason,
+    PaymentMethod,
+    SessionChannel,
+)
 
-
-def utc_now() -> datetime:
-    """Return the current time as a timezone-aware UTC datetime."""
-    return datetime.now(UTC)
-
-
-__all__ = ["utc_now"]
+__all__ = [
+    "Currency",
+    "CustomerPersona",
+    "DeviceType",
+    "EventType",
+    "FraudDecision",
+    "PaymentFailureReason",
+    "PaymentMethod",
+    "SessionChannel",
+    "UtcDateTime",
+    "utc_now",
+]

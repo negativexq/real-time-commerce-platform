@@ -6,9 +6,13 @@ Silicon development machine.
 
 ## Current status
 
-Sprint 2 provides local Kafka, PostgreSQL, and Redis infrastructure. No
-application services, event generators, event processors, fraud consumers, or
-business logic exist yet.
+Sprint 3 adds strict, versioned shared event contracts and canonical JSON
+serialization on top of the existing Kafka, PostgreSQL, and Redis
+infrastructure. No application producer, consumer, event generator, processor,
+fraud consumer, or business runtime exists yet.
+
+The envelope, payloads, registry, versioning policy, and partition-key guidance
+are documented in [Event contracts](docs/event-contracts.md).
 
 ## Requirements
 
@@ -244,13 +248,14 @@ Redis memory are conservatively limited for a 16 GB M2 MacBook Air.
 
 ```text
 database/init/  PostgreSQL first-run initialization SQL
+docs/           Contract and architecture documentation
 infrastructure/ Kafka infrastructure scripts
 scripts/        Container-backed smoke tests
-shared/         Shared Python code and future event schemas
+shared/         Shared Python code and versioned event schemas
 tests/          Cross-service test suites
 ```
 
 ## Roadmap
 
 Later sprints may introduce Python event generators and consumers, fraud
-processing, Prometheus, and Grafana. They are outside Sprint 2.
+processing, Prometheus, and Grafana. They are outside Sprint 3.

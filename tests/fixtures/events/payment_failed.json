@@ -1,0 +1,22 @@
+{
+  "event_id": "00000000-0000-4000-8000-000000000008",
+  "event_type": "payment_failed",
+  "event_version": 1,
+  "event_time": "2026-01-15T10:07:00Z",
+  "produced_at": "2026-01-15T10:07:01Z",
+  "source": "fixture",
+  "correlation_id": "00000000-0000-4000-8000-000000000100",
+  "payload": {
+    "payment_id": "00000000-0000-4000-8000-000000000502",
+    "order_id": "00000000-0000-4000-8000-000000000301",
+    "customer_id": "00000000-0000-4000-8000-000000000101",
+    "amount": "119.90",
+    "currency": "TRY",
+    "payment_method": "credit_card",
+    "failure_reason": "declined",
+    "device_id": "00000000-0000-4000-8000-000000000601",
+    "ip_address": "192.0.2.10",
+    "country_code": "TR",
+    "failed_at": "2026-01-15T10:07:00Z"
+  }
+}
