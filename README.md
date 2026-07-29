@@ -1,34 +1,34 @@
 # Real-Time Commerce Platform
 
-A lightweight, event-driven commerce platform intended to demonstrate
-realistic customer journeys and reliable event processing on a local Apple
-Silicon development machine.
+A local, event-driven commerce system that generates stateful customer
+journeys, processes them through Kafka, persists business outcomes, evaluates
+fraud rules, and exposes the result through an interactive operations console.
 
-## Current status
+[Quick Start](#sprint-10-demo-quick-start) ·
+[Architecture](#architecture) ·
+[Explore](#explore-the-project) ·
+[API](#api) ·
+[Testing](#testing) ·
+[Troubleshooting](#troubleshooting)
 
-Sprints 0 through 9 are completed. Sprint 10 is current and adds an interactive
-local Demo Control Center with fixed scenarios, managed runs, SSE progress,
-run-specific PostgreSQL outcomes, platform health, and Grafana navigation.
+## Overview
 
-Sprint 3 shared event contracts and canonical serialization are completed and
-remain the generator's only schema source.
+This project models a commerce event pipeline in which registrations, browsing,
+carts, orders, payments, and refunds arrive asynchronously. It focuses on the
+failure modes that make streaming systems difficult: duplicate delivery,
+invalid records, dependency ordering, consumer retries, durable state changes,
+fraud decisions, and reliable publication of derived alerts.
 
-The envelope, payloads, registry, versioning policy, and partition-key guidance
-are documented in [Event contracts](docs/event-contracts.md).
-Generator operation and boundaries are documented in
-[Event generator](docs/event-generator.md).
-Persona and anomaly semantics are documented in
-[Stateful personas and controlled anomalies](docs/personas-and-anomalies.md).
-Processor behavior and failure semantics are documented in
-[Kafka event processor](docs/event-processor.md).
-The schema, migrations, transaction boundary, and recovery behavior are
-documented in [PostgreSQL persistence](docs/postgresql-persistence.md).
-The rule registry, scoring, persistence, and crash windows are documented in
-[Rule-based fraud engine](docs/fraud-engine.md).
-Metrics, health semantics, exporters, rules, dashboards, and smoke workflows
-are documented in [Prometheus and Grafana observability](docs/observability.md).
-The scenario catalog, run model, API, SSE, and cleanup boundary are documented
-in [Interactive Demo Control Center](docs/demo-control-center.md).
+It was built as a compact reference implementation for engineers learning
+event-driven design and for reviewers who want to inspect those guarantees in a
+runnable system. The stack is intentionally local and resource-conscious; it
+demonstrates production-oriented boundaries without claiming production
+availability or exactly-once processing.
+
+The current implementation includes the Sprint 10 Demo Control Center:
+allow-listed scenarios, bounded run control, live Server-Sent Events (SSE),
+run-specific outcomes, platform health, Prometheus metrics, and provisioned
+Grafana dashboards.
 
 ## Sprint 10 demo quick start
 
@@ -147,430 +147,368 @@ takeover acceptance workflow documented in
 [Interactive Demo Control Center](docs/demo-control-center.md); never reset the
 primary consumer group offsets.
 
-Screenshot placeholders:
+## Architecture
 
-- `docs/images/demo-platform-overview.png`
-- `docs/images/demo-live-run.png`
-- `docs/images/demo-fraud.png`
-
-## Sprint 9 observability quick start
-
-The default infrastructure startup is unchanged:
-
-```bash
-docker compose up -d
-```
-
-Start monitoring explicitly, or run it with the processor and fraud publisher:
-
-```bash
-docker compose --profile observability up -d
-docker compose --profile processor --profile fraud --profile observability \
-  up -d --build
-```
-
-- Prometheus: <http://localhost:9090>
-- Grafana: <http://localhost:3002>
-
-Grafana provisions the Prometheus datasource and all seven dashboards from Git.
-Anonymous local viewer access is enabled; the documented admin credentials are
-local-development defaults only. Alert rules are local demonstrations visible
-in Prometheus and have no delivery integration.
+The platform runs as a set of Docker Compose services on one local network.
+Kafka uses a single KRaft broker/controller for a lightweight development
+topology. PostgreSQL is the durable system of record; Redis holds only
+reconstructible operational state.
 
 ```mermaid
 flowchart LR
-    A[Generator / Processor / Outbox] --> P[Prometheus]
-    K[Kafka exporter] --> P
-    D[PostgreSQL exporter] --> P
-    R[Redis exporter] --> P
-    P --> G[Provisioned Grafana]
+    B[Browser] --> W[Demo Control Web]
+    W --> A[Demo Control API]
+    A --> G[Scenario Runner<br/>shared generator]
+    G -->|commerce.events| K[Kafka KRaft]
+    K --> P[Event Processor]
+    P -->|leases and deduplication| R[(Redis)]
+    P -->|events, business state,<br/>fraud decisions, outbox| DB[(PostgreSQL)]
+    P -->|invalid records| D[commerce.events.dlq]
+    DB --> O[Fraud Outbox Publisher]
+    O -->|commerce.fraud-alerts| K
+    X[Exporters and app metrics] --> M[Prometheus]
+    P --> X
+    K --> X
+    DB --> X
+    R --> X
+    O --> X
+    A --> X
+    M --> GF[Grafana]
+    DB --> A
+    M --> A
 ```
 
-### Dashboard screenshots
+### Components
 
-Portfolio screenshots can be added here after running the provisioned stack;
-dashboard JSON remains the source of truth.
+| Component | Responsibility |
+| --- | --- |
+| Event generator | Builds deterministic, stateful customer journeys from shared Pydantic contracts and publishes keyed events. |
+| Kafka | Carries commerce events, dead letters, and derived fraud alerts; topics are created explicitly in KRaft mode. |
+| Event processor | Validates envelopes and headers, retries bounded transient failures, enforces idempotency, persists business effects, and evaluates fraud rules. |
+| PostgreSQL | Stores processed events, commerce read models, fraud evaluations and alerts, outbox rows, DLQ records, and demo-run manifests. |
+| Redis | Coordinates event-ID processing leases and completion markers and holds temporary fraud/velocity state. |
+| Fraud outbox publisher | Claims committed outbox rows and publishes alerts to `commerce.fraud-alerts` with at-least-once delivery. |
+| Demo Control API | Runs fixed, bounded scenarios; exposes run results, health, fraud, DLQ, dashboard metadata, and SSE progress. |
+| Demo Control Web | Provides the Next.js operations console for scenarios, runs, fraud, DLQ, infrastructure, and dashboards. |
+| Prometheus and exporters | Collect application, Kafka, PostgreSQL, and Redis metrics and evaluate recording and demo alert rules. |
+| Grafana | Provisions seven dashboards and the Prometheus datasource directly from the repository. |
 
-## Requirements
+### Event flow
 
-- Python 3.12 or newer
-- GNU Make
-- Docker Desktop with Docker Compose
+1. A user starts an allow-listed scenario through the web application.
+2. The API uses the existing generator interfaces to publish versioned events
+   to `commerce.events`; related events retain consistent business identifiers.
+3. The processor validates each record, reserves its global `event_id` in
+   Redis, and applies one PostgreSQL transaction.
+4. Successful database work is followed by Redis completion and then a manual
+   Kafka offset commit. Duplicate event IDs do not repeat durable effects.
+5. Invalid or exhausted records are confirmed on `commerce.events.dlq` before
+   their source offsets are committed.
+6. Eligible events are scored by deterministic fraud rules. REVIEW/BLOCK
+   alerts and their outbox rows commit atomically with the source event.
+7. The outbox publisher sends committed alerts to `commerce.fraud-alerts`.
+8. The API combines run-specific PostgreSQL results with platform-wide
+   Prometheus metrics for the dashboard.
 
-## Setup
+> Delivery is **at least once**. The design uses Redis-assisted and
+> PostgreSQL-enforced idempotency; it does not claim exactly-once processing or
+> global Kafka ordering.
 
-Create and activate a virtual environment, then install the development tools:
+### Docker Compose profiles
+
+| Profile | Services enabled |
+| --- | --- |
+| Default | `kafka`, `kafka-init`, `kafka-ui`, `postgres`, `redis` |
+| `generator` | `event-generator` |
+| `processor` | `event-processor`, `postgres-migrate` |
+| `fraud` | `fraud-outbox-publisher`, `postgres-migrate` |
+| `observability` | Kafka/PostgreSQL/Redis exporters, `prometheus`, `grafana` |
+| `demo` | `demo-control-api`, `demo-control-web`, `postgres-migrate` |
+| `demo-verification` | Temporary isolated `demo-verification-processor` |
+
+The Quick Start's `make demo-up` enables the processor, fraud, observability,
+and demo profiles together. The generator profile remains available for
+standalone generator workflows.
+
+## Repository Structure
+
+| Path | Purpose |
+| --- | --- |
+| `.github/` | GitHub Actions CI configuration. |
+| `apps/` | Next.js Demo Control Web application. |
+| `database/` | First-run SQL and ordered, checksum-verified migrations. |
+| `docs/` | Detailed contracts, service behavior, operations, and architecture notes. |
+| `infra/` | Prometheus rules/configuration and provisioned Grafana resources. |
+| `infrastructure/` | Kafka topic initialization script. |
+| `scripts/` | Deterministic smoke, verification, and scoped cleanup utilities. |
+| `services/` | Generator, processor, outbox publisher, and Demo Control API services. |
+| `shared/` | Versioned event schemas, common domain helpers, Kafka metadata, and metrics. |
+| `tests/` | Python unit tests and event fixtures. |
+
+Root-level orchestration lives in `compose.yaml`, `Makefile`, `.env.example`,
+and `pyproject.toml`.
+
+## Technology Stack
+
+| Area | Technologies |
+| --- | --- |
+| Language | Python 3.12+, TypeScript 5 |
+| Backend | FastAPI, Pydantic v2, Uvicorn, psycopg 3, httpx, structlog |
+| Frontend | Next.js App Router, React, Tailwind CSS, Recharts |
+| Messaging | Apache Kafka 3.9 in KRaft mode, `confluent-kafka` |
+| Storage | PostgreSQL 17, Redis 7 |
+| Observability | Prometheus, Grafana, Kafka/PostgreSQL/Redis exporters, `prometheus-client` |
+| Tooling | Docker Compose, GNU Make, Ruff, mypy, pytest, Vitest |
+
+Dependencies are pinned in `pyproject.toml`, `apps/demo_control_web/package.json`,
+and `compose.yaml`. The selected container images support ARM64 and AMD64.
+
+## Design Patterns
+
+| Pattern | How it is used |
+| --- | --- |
+| Event-driven architecture | Stateful commerce journeys communicate through explicit Kafka topics rather than direct service calls. |
+| Versioned contracts | A shared envelope and payload registry provide one validation and serialization boundary for producers and consumers. |
+| Consumer groups | The processor scales through Kafka partition assignment while committing offsets manually after terminal handling. |
+| Idempotent consumer | Redis leases coordinate active work; PostgreSQL uniqueness prevents repeated durable business effects for the same event. |
+| Unit of Work | Each valid source event and its business/fraud effects commit in one explicit PostgreSQL transaction. |
+| Bounded retry | Only classified transient failures retry, using capped backoff; terminal failures follow the DLQ path. |
+| Dead Letter Queue | Invalid or exhausted records are published to `commerce.events.dlq` and recorded for bounded inspection. |
+| Transactional outbox | Fraud alerts and outbox rows commit together, then a separate publisher delivers the Kafka alert. |
+| Read models | PostgreSQL business tables and demo manifests support queries without replaying the event stream. |
+| Observability | Bounded-label metrics, health probes, recording rules, and provisioned dashboards expose behavior and failure state. |
+
+The project does not implement event sourcing or claim CQRS as a system-wide
+architecture: PostgreSQL remains the durable business record.
+
+## Explore the Project
+
+The Demo Dashboard is the fastest way to explore the system:
+
+- **Overview** — current run scope, throughput, lag, latency, fraud decisions,
+  recent alerts, and service health.
+- **Scenarios** — eight fixed scenarios covering normal traffic, suspicious
+  payments, account takeover, bot checkout, refund abuse, duplicates, malformed
+  events, and mixed traffic.
+- **Runs** — live SSE progress, run history, exact outcomes, stop, and safe
+  retry controls.
+- **Fraud** — recent evaluations, explainable alerts, scores, severities, and
+  outbox state.
+- **DLQ** — sanitized validation/processing failures and Kafka source metadata.
+- **Infrastructure** — dependency health derived from real checks.
+- **Dashboards** — links to the seven provisioned Grafana dashboards.
+
+For implementation details, see:
+
+- [Event contracts](docs/event-contracts.md)
+- [Event generator](docs/event-generator.md)
+- [Personas and anomalies](docs/personas-and-anomalies.md)
+- [Event processor](docs/event-processor.md)
+- [PostgreSQL persistence](docs/postgresql-persistence.md)
+- [Fraud engine and outbox](docs/fraud-engine.md)
+- [Prometheus and Grafana](docs/observability.md)
+- [Demo Control Center](docs/demo-control-center.md)
+
+## Observability
+
+Prometheus scrapes the processor, generator, outbox publisher, Demo Control
+API, and infrastructure exporters every 10 seconds. Metrics use bounded labels;
+run IDs and business identifiers are deliberately excluded.
+
+The demo surfaces:
+
+- received and processed event rates;
+- processing latency histograms and p95 latency;
+- Kafka consumer-group lag;
+- validation failures, retries, duplicates, and DLQ publications;
+- PostgreSQL and Redis operation outcomes;
+- APPROVE, REVIEW, and BLOCK decision rates;
+- fraud alerts and outbox pending/publication state;
+- application health and exporter target health.
+
+Grafana provisions Platform Overview, Kafka Streaming, Processor, Persistence,
+Fraud, Outbox, and Infrastructure dashboards from `infra/observability/`.
+During a demo, use the web Overview for concise run context and Grafana for
+platform-wide time series. Run-specific counts come from PostgreSQL, not
+Prometheus.
+
+Useful checks:
+
+```bash
+make prometheus-targets
+make prometheus-query-smoke
+make grafana-health
+make grafana-dashboards-check
+```
+
+## API
+
+FastAPI publishes interactive Swagger/OpenAPI documentation at
+<http://localhost:8082/docs>. The stable API is under `/api/v1`; the table
+below describes route groups rather than duplicating the generated schema.
+
+| Routes | Purpose |
+| --- | --- |
+| `GET /health`, `GET /ready` | Process liveness and PostgreSQL-backed readiness. |
+| `GET /scenarios`, `GET /scenarios/{scenario_type}` | Inspect the fixed scenario catalog and bounded options. |
+| `POST /runs`, `GET /runs`, `GET /runs/{run_id}` | Start a scenario and inspect paginated run history or one run. |
+| `POST /runs/{run_id}/stop`, `POST /runs/{run_id}/retry` | Gracefully stop active work or safely create a retry run. |
+| `GET /runs/{run_id}/summary`, `/timeline`, `/stream` | Read exact outcomes, a bounded timeline, or live SSE progress. |
+| `GET /overview/fraud-summary` | Select one active/latest run and return a consistent fraud summary for Overview. |
+| `GET /platform/health`, `/metrics/summary`, `/topics`, `/services` | Read cached health and restricted platform metadata/metrics. |
+| `GET /fraud/alerts`, `/fraud/evaluations`, `/fraud/alerts/{alert_id}` | Inspect bounded, sanitized fraud results. |
+| `GET /dlq`, `GET /dlq/{event_id}` | Inspect bounded DLQ metadata and error details. |
+| `GET /dashboards` | Discover provisioned Grafana dashboards and URLs. |
+| `DELETE /runs/{run_id}/test-data` | Remove only terminal, run-scoped demo data. |
+
+Prefix each route above with `/api/v1`. Prometheus scrapes the API's separate
+`/metrics` endpoint. The API intentionally exposes neither arbitrary SQL nor
+arbitrary PromQL.
+
+## Testing
+
+### Backend
+
+Create a Python 3.12 virtual environment and install the pinned application plus
+development dependencies:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
+make check
 ```
 
-Copy the safe local development defaults:
+`make check` runs Ruff linting, Ruff format validation, strict mypy, and pytest.
+Individual checks are also available:
 
 ```bash
-cp .env.example .env
-```
-
-Never store production or real credentials in this repository.
-
-## Sprint 8 architecture
-
-```text
-Host / Compose clients
-    │
-    ├── localhost:29092 / kafka:9092 ── Kafka KRaft broker
-    │                                      ├── kafka-init
-    │                                      └── Kafka UI on localhost:8080
-    │
-    ├── generator profile ─────────────── event-generator
-    │                                      ├── in-memory customer state
-    │                                      ├── persona strategy registry
-    │                                      └── publishes commerce.events
-    ├── processor profile ─────────────── event-processor
-    │                                      ├── validates shared contracts
-    │                                      ├── Redis idempotency leases
-    │                                      ├── one PostgreSQL transaction/event
-    │                                      ├── typed business repositories
-    │                                      ├── deterministic fraud rules
-    │                                      ├── atomic fraud alert outbox
-    │                                      └── commerce.events.dlq
-    ├── fraud profile ─────────────────── fraud-outbox-publisher
-    │                                      └── commerce.fraud-alerts
-    │
-    ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
-    │                                      └── durable named volume
-    │
-    └── localhost:6379 / redis:6379 ───── Redis operational state
-                                           └── append-only named volume
-```
-
-All published ports bind to `127.0.0.1`. Services communicate through the
-existing Compose network.
-
-## Event generator quick start
-
-The default stack stays infrastructure-only. Build and publish a deterministic
-five-journey sample:
-
-```bash
-make up
-make generator-build
-make generator-sample
-```
-
-Run continuously, inspect status/logs, or stop only the generator:
-
-```bash
-make generator-up
-make generator-status
-make generator-logs
-make generator-down
-```
-
-Open Kafka UI at <http://localhost:8080>, select the local cluster, open
-`commerce.events`, and use the Messages tab to inspect generated events.
-
-## Event processor quick start
-
-The processor is profile-gated and does not start with the default stack:
-
-```bash
-make processor-build
-make processor-up
-make processor-status
-make processor-logs
-```
-
-Publish and process bounded valid data, demonstrate completed duplicate
-suppression, or route malformed records to the DLQ:
-
-```bash
-make processor-sample
-make processor-smoke
-make processor-duplicate-smoke
-make processor-dlq-smoke
-make processor-retry-smoke
-```
-
-A valid record is parsed through the shared registry, atomically reserved by
-`event_id`, committed to PostgreSQL as a ledger plus business effects, marked
-completed in Redis, and then committed in Kafka. PostgreSQL detects identical
-redelivery independently and repairs Redis completion without repeating effects.
-An invalid record is committed only after its deterministic DLQ record has a
-confirmed Kafka delivery. This is at-least-once processing, not exactly once.
-
-Run deterministic persona and anomaly demonstrations:
-
-```bash
-make generator-normal
-make generator-suspicious
-make generator-bot
-make generator-takeover
-make generator-anomalies
-```
-
-Run the synthetic fraud pipeline:
-
-```bash
-make fraud-config-check
-make fraud-rules
-docker compose --profile processor --profile fraud up -d --build \
-  event-processor fraud-outbox-publisher
-make fraud-smoke
-```
-
-For example, stable normal activity should generally score APPROVE, several
-change/velocity signals may score REVIEW, and established-history takeover
-behavior should normally score BLOCK. This is synthetic rule-based scoring for
-a portfolio system, not a production fraud decision system.
-
-## Kafka
-
-Kafka runs as one combined broker/controller node in KRaft mode, which stores
-cluster metadata without ZooKeeper. This resource-conscious topology is for
-local development, not production high availability.
-
-- Host clients: `localhost:29092`
-- Compose clients: `kafka:9092`
-- Kafka UI: <http://localhost:8080>
-
-The unexposed KRaft controller listener uses port 9093 inside Compose.
-Automatic topic creation is disabled.
-
-| Topic | Partitions | Replicas | Cleanup | Purpose |
-| --- | ---: | ---: | --- | --- |
-| `commerce.events` | 3 | 1 | delete | Future commerce event stream |
-| `commerce.events.dlq` | 1 | 1 | delete | Processor invalid/exhausted dead letters |
-| `commerce.fraud.alerts` | 3 | 1 | delete | Future explainable fraud alerts |
-| `commerce.fraud-alerts` | 3 | 1 | delete | Sprint 8 derived fraud alerts |
-
-Ordering exists only within a partition, not globally.
-
-## PostgreSQL
-
-PostgreSQL is the durable system of record. The event processor persists every
-valid new event and its business effects in one explicit transaction before
-Redis completion and Kafka offset commit.
-
-- Host connection: `localhost:5432`
-- Compose connection: `postgres:5432`
-- Encoding: UTF-8
-- Database timezone: UTC
-
-Core Sprint 7 and Sprint 8 tables:
-
-| Table | Purpose |
-| --- | --- |
-| `processed_events` | Idempotently records processed event envelopes |
-| `customers`, `sessions` | Durable customer and session parents |
-| `product_views` | Immutable event-level views |
-| `carts`, `cart_items` | Latest cart state and exact items |
-| `orders`, `payments`, `refunds` | Exact commerce outcomes |
-| `fraud_alerts` | Stores explainable fraud decisions and scores |
-| `fraud_evaluations` | One deterministic decision per eligible source event |
-| `fraud_outbox` | Retained at-least-once derived alert publication state |
-| `dead_letter_events` | Stores failed records and transport context |
-
-The schema includes indexes for common event, decision, correlation, and time
-lookups. Check constraints enforce positive event versions, fraud scores from
-0 through 100, and decisions of `APPROVE`, `REVIEW`, or `BLOCK`.
-
-Initialization SQL in `database/init/` runs only for an empty volume. Ordered
-SQL migrations evolve existing volumes with checksums, advisory locking, and
-transactional application.
-
-Apply and inspect migrations, then safely inspect estimated row counts:
-
-```bash
-make db-migrate
-make db-migration-status
-make db-schema-check
-make db-counts
-```
-
-## Redis
-
-Redis is only for temporary operational state such as duplicate detection,
-recent customer activity, failed-payment counters, device activity, and fraud
-blacklist lookups. Important records must not exist only in Redis; future
-applications must tolerate expiration and eviction and reconstruct state from
-durable sources.
-
-- Host connection: `localhost:6379`
-- Compose connection: `redis:6379`
-- Data limit: 256 MiB
-- Container memory limit: 384 MiB
-- Persistence: append-only file with `appendfsync everysec`
-- Eviction policy: `allkeys-lru`
-
-`allkeys-lru` evicts the least recently used keys when Redis reaches its data
-limit. This is appropriate because every Redis key is temporary and
-reconstructible. Append-only persistence improves local restart continuity but
-does not make Redis the system of record.
-
-## Environment variables
-
-`.env.example` supplies safe local defaults:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `KAFKA_HOST_PORT` | `29092` | Kafka host listener |
-| `KAFKA_UI_PORT` | `8080` | Kafka UI |
-| `POSTGRES_HOST_PORT` | `5432` | PostgreSQL host listener |
-| `POSTGRES_DB` | `commerce` | Local database |
-| `POSTGRES_USER` | `commerce` | Local database user |
-| `POSTGRES_PASSWORD` | `commerce_local_dev` | Local-only password |
-| `REDIS_HOST_PORT` | `6379` | Redis host listener |
-
-## Start and stop
-
-```bash
+make lint
+make format-check
+make type-check
+make test
 make compose-config
-make up
-make ps
 ```
 
-`make up` starts the full current stack and waits on readiness-aware
-dependencies where required. Stop all containers while preserving every named
-volume:
+### Frontend
 
 ```bash
-make down
+cd apps/demo_control_web
+npm ci
+npm test
+npm run typecheck
+npm run build
 ```
 
-`make clean` has the same non-destructive volume behavior.
+The package currently has no working standalone lint or format check:
+`npm run lint` still references the `next lint` command removed by the installed
+Next.js version. TypeScript checking, Vitest, and the production build are the
+verified frontend quality gates until that script is replaced.
 
-## Smoke tests and inspection
+### Runtime smoke tests
 
-No locally installed Kafka, PostgreSQL, or Redis CLI is required:
+Smoke tests use bounded inputs and repository-managed containers:
 
 ```bash
-make kafka-topics
-make kafka-describe
-make kafka-smoke
-make postgres-tables
-make storage-status
 make storage-smoke
-make persistence-smoke
-make persistence-duplicate-smoke
-make persistence-recovery-smoke
-make persistence-dependency-smoke
-make persistence-refund-smoke
+make kafka-smoke
+make processor-smoke
+make fraud-outbox-smoke
+make observability-smoke
+make demo-ui-smoke
 ```
 
-The storage smoke test checks both health endpoints and all required tables. It
-inserts, reads, and deletes a temporary PostgreSQL row using generated UUIDs
-and UTC-aware timestamps, then sets, reads, and deletes a temporary Redis key
-with a TTL.
+`make demo-smoke` exercises the main allow-listed demo scenarios. On a retained
+Kafka volume with significant processor lag, use the isolated acceptance
+workflow in [Demo Control Center](docs/demo-control-center.md) instead of
+resetting the primary consumer-group offsets.
 
-Interactive tools:
+## Data Safety
 
-```bash
-make postgres-shell
-make redis-cli
-```
-
-## Persistent volumes
+Named volumes retain Kafka, PostgreSQL, Redis, Prometheus, and Grafana state:
 
 | Volume | Contents |
 | --- | --- |
 | `real-time-commerce-platform-kafka-data` | Kafka metadata and messages |
-| `real-time-commerce-platform-postgres-data` | Durable PostgreSQL data |
-| `real-time-commerce-platform-redis-data` | Redis append-only data |
+| `real-time-commerce-platform-postgres-data` | Durable business and demo-run data |
+| `real-time-commerce-platform-redis-data` | Redis append-only operational state |
+| `real-time-commerce-platform-prometheus-data` | Prometheus time series |
+| `real-time-commerce-platform-grafana-data` | Grafana local state |
 
-`make down` and `make clean` preserve all three volumes.
-`make clean-volumes` prints a destructive warning and deletes all three.
-
-## Development commands
-
-```bash
-make lint             # Run Ruff linting
-make format           # Format Python files with Ruff
-make format-check     # Verify formatting
-make type-check       # Run mypy
-make test             # Run pytest
-make check            # Run all Python checks
-make compose-config   # Validate Compose configuration
-make up               # Start the full stack
-make down             # Stop containers and preserve volumes
-make logs             # Follow Kafka service logs
-make ps               # Show Compose services
-make kafka-topics     # List Kafka topics
-make kafka-describe   # Describe Kafka topics
-make kafka-smoke      # Run Kafka publish/consume smoke test
-make postgres-shell   # Open psql
-make postgres-tables  # List PostgreSQL tables
-make redis-cli        # Open redis-cli
-make storage-smoke    # Test PostgreSQL and Redis
-make storage-status   # Show storage service status
-make storage-logs     # Follow PostgreSQL and Redis logs
-make generator-build  # Build the event-generator image
-make generator-up     # Start continuous generation
-make generator-down   # Remove only the generator service
-make generator-logs   # Follow structured generator logs
-make generator-run    # Run continuous generation interactively
-make generator-sample # Publish five deterministic journeys
-make generator-status # Show generator profile status
-make generator-smoke  # Run bounded producer end-to-end validation
-make generator-personas # Show personas and configured weights
-make generator-normal # Publish a deterministic normal sample
-make generator-suspicious # Publish suspicious synthetic behavior
-make generator-bot # Publish a bounded bot sample
-make generator-takeover # Demonstrate prior history then takeover
-make generator-anomalies # Publish all controlled anomaly types
-make generator-persona-smoke # Validate persona/state patterns
-make generator-anomaly-smoke # Validate raw anomaly records
-make processor-build  # Build the event-processor image
-make processor-up     # Start continuous processing
-make processor-down   # Remove only the processor
-make processor-run    # Run interactively
-make processor-smoke  # Validate normal bounded processing
-make processor-duplicate-smoke # Prove completed duplicate suppression
-make processor-dlq-smoke # Validate malformed-record DLQ handling
-make processor-retry-smoke # Validate bounded retry then success
-make clean            # Stop containers and preserve volumes
-make clean-volumes    # Delete all persisted local data
-```
+`make clean` preserves these volumes. `make clean-volumes` deletes all five and
+should only be used for an intentional local reset. Run cleanup is scoped by
+run manifest/test scope; it never truncates tables, deletes topics, or flushes
+Redis.
 
 ## Troubleshooting
 
+### Docker services are still starting
+
 ```bash
-docker compose ps -a
-docker compose logs kafka kafka-init kafka-ui
-docker compose logs postgres
-docker compose logs redis
-make storage-status
-make postgres-tables
-make compose-config
+make demo-status
+docker compose --profile processor --profile fraud --profile observability \
+  --profile demo logs --tail=100
 ```
 
-If a host port is occupied, override its corresponding variable in `.env`.
-PostgreSQL initialization scripts only run against an empty volume; use
-`make clean-volumes` only when intentionally discarding all Kafka, PostgreSQL,
-and Redis data.
+Wait for long-running services to report `Up` and for health-checked services
+to report `healthy`. First-time image builds take longer.
 
-## Apple Silicon
+### A host port is already in use
 
-The pinned Kafka, Kafka UI, PostgreSQL, and Redis images publish Linux ARM64
-variants and run natively on Apple Silicon. Kafka’s heap, Kafka UI’s heap, and
-Redis memory are conservatively limited for a 16 GB M2 MacBook Air.
+All published interfaces bind to `127.0.0.1`. Stop the conflicting process, or
+copy `.env.example` to `.env` and change the corresponding host-port variable.
+If changing a public web/API URL, update its matching `DEMO_WEB_PUBLIC_*`
+setting as well.
 
-## Repository layout
+### Dashboard shows “Waiting for traffic”
 
-```text
-database/init/       PostgreSQL first-run initialization SQL
-database/migrations/ Ordered, checksum-verified schema migrations
-docs/           Contract and architecture documentation
-infrastructure/ Kafka infrastructure scripts
-scripts/        Container-backed smoke tests
-shared/         Shared Python code and versioned event schemas
-tests/          Cross-service test suites
+This is normal before metrics have samples. Start **Normal customer** from the
+Scenarios page, wait for one 10-second Prometheus scrape, then refresh:
+
+```bash
+make demo-run-normal
 ```
 
-## Roadmap
+### Metrics are unavailable
 
-Later sprints may introduce Prometheus, Grafana, or ML-assisted evaluation.
-They are outside Sprint 8.
+Check Prometheus readiness and scrape targets:
+
+```bash
+curl -fsS http://localhost:9090/-/ready
+make prometheus-targets
+make metrics-endpoints
+```
+
+If Prometheus is healthy but an application target is down, inspect the
+relevant service with `make demo-status` and the profile logs above.
+
+### Rebuild the demo stack
+
+```bash
+make demo-build
+make demo-up
+make demo-api-health
+make demo-web-health
+```
+
+This rebuild preserves named volumes. Avoid `make clean-volumes` unless data
+loss is intentional.
+
+## Future Improvements
+
+Potential extensions consistent with the current boundaries:
+
+- a multi-broker Kafka topology for replication and failover exercises;
+- authentication and role-based controls for the Demo Control API and Web;
+- OpenTelemetry traces across generation, processing, persistence, and outbox;
+- additional fixed fraud scenarios and explainability views;
+- production-oriented deployment manifests, including Kubernetes;
+- broader integration and browser accessibility coverage in CI.
+
+These are roadmap ideas, not implemented features.
+
+## License
+
+`pyproject.toml` currently declares the project as **Proprietary**, and the
+repository does not contain a license file. The source is available for review,
+but no open-source reuse license is granted.
