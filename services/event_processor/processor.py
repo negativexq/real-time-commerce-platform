@@ -10,6 +10,8 @@ from uuid import UUID, uuid4
 from services.event_processor.config import ProcessorConfig
 from services.event_processor.dlq import DlqPublisher, build_dlq_envelope
 from services.event_processor.errors import (
+    FraudContextDependencyError,
+    FraudEvaluationIntegrityError,
     MissingBusinessDependencyError,
     PermanentDatabaseIntegrityError,
     PermanentProcessingError,
@@ -155,6 +157,8 @@ class MessageProcessor:
             )
         except PermanentProcessingError as exc:
             self._summary.processing_failures += 1
+            if isinstance(exc, FraudEvaluationIntegrityError):
+                self._summary.fraud_integrity_failures += 1
             if isinstance(exc, PermanentDatabaseIntegrityError):
                 self._summary.integrity_failures += 1
                 self._summary.database_errors += 1
@@ -175,6 +179,8 @@ class MessageProcessor:
             self._summary.retry_exhausted += 1
             if isinstance(exc, MissingBusinessDependencyError):
                 self._summary.missing_dependency_errors += 1
+            if isinstance(exc, FraudContextDependencyError):
+                self._summary.fraud_context_failures += 1
             if isinstance(exc, RetryableDatabaseError):
                 self._summary.database_errors += 1
             self._safe_release(event.event_id, token)
@@ -275,6 +281,22 @@ class MessageProcessor:
         else:
             self._summary.database_transactions_committed += 1
             self._summary.rows_written_by_table.update(result.rows_written)
+            self._summary.fraud_evaluations += result.rows_written.get(
+                "fraud_evaluations", 0
+            )
+            self._summary.fraud_alerts_created += result.rows_written.get(
+                "fraud_alerts", 0
+            )
+            self._summary.fraud_outbox_rows_created += result.rows_written.get(
+                "fraud_outbox", 0
+            )
+            if result.fraud_decision == "APPROVE":
+                self._summary.approve_decisions += 1
+            elif result.fraud_decision == "REVIEW":
+                self._summary.review_decisions += 1
+            elif result.fraud_decision == "BLOCK":
+                self._summary.block_decisions += 1
+            self._summary.matched_rules.update(result.matched_rule_ids)
         if result.duration_ms >= self._config.processor_db_log_slow_query_ms:
             self._summary.slow_database_operations += 1
 

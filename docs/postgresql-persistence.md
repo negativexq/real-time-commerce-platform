@@ -165,8 +165,16 @@ tables, and never deletes migration history.
 ## Current limitations
 
 Transactions are synchronous and partition ordering remains serial. There are
-no retry topics, Kafka transactions, distributed transactions, fraud scoring,
-metrics, or dashboards. Valid incoming `fraud_alert_created` events can use
-the existing alert table, but Sprint 7 neither scores activity nor generates
-alerts. A later fraud engine can consume the durable commerce state through a
-separate boundary.
+no retry topics, Kafka transactions, distributed transactions, metrics, or
+dashboards. Fraud history queries are bounded and see only data available at
+processing time.
+
+## Sprint 8 fraud transaction
+
+Migration 003 preserves existing rows while evolving `fraud_alerts` and adding
+`fraud_evaluations` and `fraud_outbox`. Every eligible source transaction now
+persists its business effect and unique deterministic evaluation together.
+REVIEW/BLOCK also persist the OPEN alert and canonical outbox row atomically;
+rollback removes all three fraud effects. Outbox Kafka publication is a later,
+independent at-least-once process and never occurs inside the source database
+transaction. Published rows remain queryable.

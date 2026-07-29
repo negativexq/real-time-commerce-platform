@@ -194,6 +194,13 @@ def _cleanup(database: Database, source: str) -> None:
         )
         for statement in (
             """
+            DELETE FROM fraud_outbox
+            WHERE aggregate_id IN (
+                SELECT alert_id FROM fraud_alerts
+                WHERE source_event_id IN (SELECT event_id FROM smoke_ids)
+            )
+            """,
+            """
             DELETE FROM refunds
             WHERE event_id IN (SELECT event_id FROM smoke_ids)
             """,
@@ -203,7 +210,11 @@ def _cleanup(database: Database, source: str) -> None:
             """,
             """
             DELETE FROM fraud_alerts
-            WHERE event_id IN (SELECT event_id FROM smoke_ids)
+            WHERE source_event_id IN (SELECT event_id FROM smoke_ids)
+            """,
+            """
+            DELETE FROM fraud_evaluations
+            WHERE source_event_id IN (SELECT event_id FROM smoke_ids)
             """,
             """
             DELETE FROM orders

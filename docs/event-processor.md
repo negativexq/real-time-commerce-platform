@@ -4,8 +4,8 @@
 
 Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
 validation, Redis leases, retries, DLQ, and manual offsets while replacing the
-no-op audit boundary with transactional PostgreSQL repositories. It does not
-perform fraud scoring.
+no-op audit boundary with transactional PostgreSQL repositories. Sprint 8 adds
+the bounded rule-based fraud stage and alert outbox.
 
 ## Processing flows
 
@@ -157,8 +157,8 @@ windows are:
 - After DLQ delivery but before source commit: deterministic identity is reused,
   but Kafka can still contain a duplicate DLQ record.
 
-There are no Kafka transactions, retry topics, upcasters, fraud decisions,
-metrics server, or parallel processing in Sprint 7.
+There are no Kafka transactions, retry topics, upcasters, metrics server, or
+parallel processing in Sprint 8.
 
 ## Configuration and operation
 
@@ -216,3 +216,17 @@ unresolved records.
 Full architecture and recovery details are in
 [PostgreSQL persistence](postgresql-persistence.md). Future work may add a
 fraud processor without changing the transaction/offset ordering.
+## Sprint 8 fraud evaluation
+
+After an eligible business write, but before the source transaction commits,
+the processor builds bounded PostgreSQL context, runs the deterministic fraud
+registry, and persists one evaluation. REVIEW/BLOCK additionally create an
+OPEN alert and canonical outbox row in the same transaction. APPROVE creates
+neither alert nor outbox.
+
+The database still commits before Redis completion and source offset commit.
+The separate fraud outbox publisher runs later and independently. Therefore an
+alert Kafka outage does not roll back an already completed source event.
+At-least-once outbox delivery can duplicate the deterministic alert event after
+Kafka success and a database-status crash; downstream consumers deduplicate by
+event ID. See [Rule-based fraud engine](fraud-engine.md).

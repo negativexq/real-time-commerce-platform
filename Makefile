@@ -13,7 +13,13 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	db-migrate db-migration-status db-schema-check db-tables db-counts \
 	db-reset-test-data persistence-sample persistence-smoke \
 	persistence-duplicate-smoke persistence-recovery-smoke \
-	persistence-dependency-smoke persistence-refund-smoke
+	persistence-dependency-smoke persistence-refund-smoke \
+	fraud-rules fraud-config-check fraud-db-status fraud-sample-normal \
+	fraud-sample-suspicious fraud-sample-bot fraud-sample-takeover fraud-smoke \
+	fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke \
+	fraud-outbox-build fraud-outbox-up fraud-outbox-down fraud-outbox-logs \
+	fraud-outbox-status fraud-outbox-smoke fraud-outbox-recovery-smoke \
+	fraud-counts fraud-clear-test-data
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -232,6 +238,72 @@ persistence-dependency-smoke:
 persistence-refund-smoke:
 	docker compose --profile processor run --rm \
 		--entrypoint python event-processor /app/scripts/persistence-smoke.py refund
+
+fraud-rules:
+	$(PYTHON) scripts/fraud-admin.py rules
+
+fraud-config-check:
+	$(PYTHON) scripts/fraud-admin.py config
+
+fraud-db-status fraud-counts:
+	docker compose exec -T postgres sh -c \
+		'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c \
+		"SELECT (SELECT COUNT(*) FROM fraud_evaluations) AS evaluations, \
+		(SELECT COUNT(*) FROM fraud_alerts WHERE status = '"'"'OPEN'"'"') AS open_alerts, \
+		(SELECT COUNT(*) FROM fraud_outbox WHERE status = '"'"'PENDING'"'"') AS pending, \
+		(SELECT COUNT(*) FROM fraud_outbox WHERE status = '"'"'PUBLISHED'"'"') AS published;"'
+
+fraud-sample-normal:
+	$(MAKE) generator-normal
+
+fraud-sample-suspicious:
+	$(MAKE) generator-suspicious
+
+fraud-sample-bot:
+	$(MAKE) generator-bot
+
+fraud-sample-takeover:
+	$(MAKE) generator-takeover
+
+fraud-smoke fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke:
+	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py
+
+fraud-outbox-build:
+	docker compose --profile fraud build fraud-outbox-publisher
+
+fraud-outbox-up:
+	docker compose --profile fraud up -d --build fraud-outbox-publisher
+
+fraud-outbox-down:
+	docker compose --profile fraud rm -sf fraud-outbox-publisher
+
+fraud-outbox-logs:
+	docker compose --profile fraud logs -f fraud-outbox-publisher
+
+fraud-outbox-status:
+	docker compose --profile fraud ps fraud-outbox-publisher
+
+fraud-outbox-smoke:
+	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py \
+		-k alert_event_is_deterministic
+
+fraud-outbox-recovery-smoke:
+	$(PYTHON) -m pytest tests/unit/test_fraud_outbox.py
+
+fraud-clear-test-data:
+	docker compose exec -T postgres sh -c \
+		'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c \
+		"WITH test_events AS (SELECT event_id FROM processed_events \
+		WHERE source LIKE '"'"'fraud-smoke:%'"'"') \
+		DELETE FROM fraud_outbox WHERE aggregate_id IN \
+		(SELECT alert_id FROM fraud_alerts WHERE source_event_id IN \
+		(SELECT event_id FROM test_events)); \
+		WITH test_events AS (SELECT event_id FROM processed_events \
+		WHERE source LIKE '"'"'fraud-smoke:%'"'"') DELETE FROM fraud_alerts \
+		WHERE source_event_id IN (SELECT event_id FROM test_events); \
+		WITH test_events AS (SELECT event_id FROM processed_events \
+		WHERE source LIKE '"'"'fraud-smoke:%'"'"') DELETE FROM fraud_evaluations \
+		WHERE source_event_id IN (SELECT event_id FROM test_events);"'
 
 processor-idempotency-status:
 	docker compose exec -T redis redis-cli --scan \

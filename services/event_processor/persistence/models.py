@@ -11,3 +11,5 @@ class PersistenceResult:
     affected_tables: tuple[str, ...] = ()
     rows_written: dict[str, int] = field(default_factory=dict)
     duration_ms: float = 0
+    fraud_decision: str | None = None
+    matched_rule_ids: tuple[str, ...] = ()

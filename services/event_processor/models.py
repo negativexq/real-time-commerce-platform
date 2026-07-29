@@ -110,6 +110,15 @@ class RunSummary:
     integrity_failures: int = 0
     rows_written_by_table: Counter[str] = field(default_factory=Counter)
     slow_database_operations: int = 0
+    fraud_evaluations: int = 0
+    approve_decisions: int = 0
+    review_decisions: int = 0
+    block_decisions: int = 0
+    matched_rules: Counter[str] = field(default_factory=Counter)
+    fraud_context_failures: int = 0
+    fraud_integrity_failures: int = 0
+    fraud_alerts_created: int = 0
+    fraud_outbox_rows_created: int = 0
 
     def record_latency(self, milliseconds: float) -> None:
         self.latency_total_ms += milliseconds
@@ -159,4 +168,13 @@ class RunSummary:
             "integrity_failures": self.integrity_failures,
             "rows_written_by_table": dict(sorted(self.rows_written_by_table.items())),
             "slow_database_operations": self.slow_database_operations,
+            "fraud_evaluations": self.fraud_evaluations,
+            "approve_decisions": self.approve_decisions,
+            "review_decisions": self.review_decisions,
+            "block_decisions": self.block_decisions,
+            "matched_rules": dict(sorted(self.matched_rules.items())),
+            "fraud_context_failures": self.fraud_context_failures,
+            "fraud_integrity_failures": self.fraud_integrity_failures,
+            "fraud_alerts_created": self.fraud_alerts_created,
+            "fraud_outbox_rows_created": self.fraud_outbox_rows_created,
         }

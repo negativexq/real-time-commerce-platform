@@ -149,7 +149,7 @@ def migration_status(
 
 
 def schema_check(dsn: str, required_version: int) -> None:
-    """Verify the required version and Sprint 7 application tables."""
+    """Verify the required version and current application tables."""
     required = {
         "processed_events",
         "customers",
@@ -161,6 +161,9 @@ def schema_check(dsn: str, required_version: int) -> None:
         "payments",
         "refunds",
         "schema_migrations",
+        "fraud_evaluations",
+        "fraud_outbox",
+        "fraud_alerts",
     }
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")

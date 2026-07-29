@@ -6,10 +6,9 @@ Silicon development machine.
 
 ## Current status
 
-Sprints 0 through 6 are completed. Sprint 7 is current and adds transactional
-PostgreSQL persistence, typed repositories, versioned migrations, durable
-event idempotency, and exact monetary/refund checks to the Kafka processor.
-Fraud scoring is not implemented.
+Sprints 0 through 7 are completed. Sprint 8 is current and adds deterministic
+rule-based fraud evaluations, APPROVE/REVIEW/BLOCK decisions, atomic fraud
+alerts, and an at-least-once transactional alert outbox.
 
 Sprint 3 shared event contracts and canonical serialization are completed and
 remain the generator's only schema source.
@@ -24,6 +23,8 @@ Processor behavior and failure semantics are documented in
 [Kafka event processor](docs/event-processor.md).
 The schema, migrations, transaction boundary, and recovery behavior are
 documented in [PostgreSQL persistence](docs/postgresql-persistence.md).
+The rule registry, scoring, persistence, and crash windows are documented in
+[Rule-based fraud engine](docs/fraud-engine.md).
 
 ## Requirements
 
@@ -50,7 +51,7 @@ cp .env.example .env
 
 Never store production or real credentials in this repository.
 
-## Sprint 7 architecture
+## Sprint 8 architecture
 
 ```text
 Host / Compose clients
@@ -68,7 +69,11 @@ Host / Compose clients
     │                                      ├── Redis idempotency leases
     │                                      ├── one PostgreSQL transaction/event
     │                                      ├── typed business repositories
+    │                                      ├── deterministic fraud rules
+    │                                      ├── atomic fraud alert outbox
     │                                      └── commerce.events.dlq
+    ├── fraud profile ─────────────────── fraud-outbox-publisher
+    │                                      └── commerce.fraud-alerts
     │
     ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
     │                                      └── durable named volume
@@ -142,8 +147,20 @@ make generator-takeover
 make generator-anomalies
 ```
 
-Suspicious and account-takeover patterns are synthetic behavior, not fraud
-classification. The persistence processor does not implement a fraud engine.
+Run the synthetic fraud pipeline:
+
+```bash
+make fraud-config-check
+make fraud-rules
+docker compose --profile processor --profile fraud up -d --build \
+  event-processor fraud-outbox-publisher
+make fraud-smoke
+```
+
+For example, stable normal activity should generally score APPROVE, several
+change/velocity signals may score REVIEW, and established-history takeover
+behavior should normally score BLOCK. This is synthetic rule-based scoring for
+a portfolio system, not a production fraud decision system.
 
 ## Kafka
 
@@ -163,6 +180,7 @@ Automatic topic creation is disabled.
 | `commerce.events` | 3 | 1 | delete | Future commerce event stream |
 | `commerce.events.dlq` | 1 | 1 | delete | Processor invalid/exhausted dead letters |
 | `commerce.fraud.alerts` | 3 | 1 | delete | Future explainable fraud alerts |
+| `commerce.fraud-alerts` | 3 | 1 | delete | Sprint 8 derived fraud alerts |
 
 Ordering exists only within a partition, not globally.
 
@@ -177,7 +195,7 @@ Redis completion and Kafka offset commit.
 - Encoding: UTF-8
 - Database timezone: UTC
 
-Core Sprint 7 tables:
+Core Sprint 7 and Sprint 8 tables:
 
 | Table | Purpose |
 | --- | --- |
@@ -187,6 +205,8 @@ Core Sprint 7 tables:
 | `carts`, `cart_items` | Latest cart state and exact items |
 | `orders`, `payments`, `refunds` | Exact commerce outcomes |
 | `fraud_alerts` | Stores explainable fraud decisions and scores |
+| `fraud_evaluations` | One deterministic decision per eligible source event |
+| `fraud_outbox` | Retained at-least-once derived alert publication state |
 | `dead_letter_events` | Stores failed records and transport context |
 
 The schema includes indexes for common event, decision, correlation, and time
@@ -387,5 +407,5 @@ tests/          Cross-service test suites
 
 ## Roadmap
 
-Later sprints may introduce fraud classification, Prometheus, and Grafana.
-They are outside Sprint 7.
+Later sprints may introduce Prometheus, Grafana, or ML-assisted evaluation.
+They are outside Sprint 8.

@@ -8,7 +8,15 @@ WHERE source = 'persistence-smoke:' || :'run_id';
 
 DELETE FROM refunds WHERE event_id IN (SELECT event_id FROM test_event_ids);
 DELETE FROM payments WHERE event_id IN (SELECT event_id FROM test_event_ids);
-DELETE FROM fraud_alerts WHERE event_id IN (SELECT event_id FROM test_event_ids);
+DELETE FROM fraud_outbox
+WHERE aggregate_id IN (
+    SELECT alert_id FROM fraud_alerts
+    WHERE source_event_id IN (SELECT event_id FROM test_event_ids)
+);
+DELETE FROM fraud_alerts
+WHERE source_event_id IN (SELECT event_id FROM test_event_ids);
+DELETE FROM fraud_evaluations
+WHERE source_event_id IN (SELECT event_id FROM test_event_ids);
 DELETE FROM orders WHERE created_event_id IN (SELECT event_id FROM test_event_ids);
 DELETE FROM carts WHERE created_event_id IN (SELECT event_id FROM test_event_ids);
 DELETE FROM product_views WHERE event_id IN (SELECT event_id FROM test_event_ids);

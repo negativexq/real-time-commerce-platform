@@ -62,10 +62,12 @@ create_topic "commerce.events" 3
 # an existing topic; --if-not-exists preserves any current topic configuration.
 create_topic "commerce.events.dlq" 1 604800000
 create_topic "commerce.fraud.alerts" 3
+create_topic "commerce.fraud-alerts" 3
 
 verify_topic "commerce.events"
 verify_topic "commerce.events.dlq"
 verify_topic "commerce.fraud.alerts"
+verify_topic "commerce.fraud-alerts"
 
 echo "Final topic list:"
 "${kafka_topics}" --bootstrap-server "${bootstrap_server}" --list

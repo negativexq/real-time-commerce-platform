@@ -39,3 +39,23 @@ class AlreadyPersistedEvent(ProcessorError):
 
 class StartupDatabaseError(FatalInfrastructureError):
     """PostgreSQL or the required schema is unavailable at startup."""
+
+
+class FraudContextDependencyError(MissingBusinessDependencyError):
+    """Required persisted fraud history is temporarily unavailable."""
+
+
+class FraudRuleConfigurationError(FatalInfrastructureError):
+    """Fraud rules or thresholds are invalid at startup."""
+
+
+class FraudEvaluationIntegrityError(PermanentProcessingError):
+    """A deterministic fraud evaluation conflicts with durable state."""
+
+
+class FraudOutboxRetryableError(RetryableProcessingError):
+    """A transient outbox database or Kafka operation failed."""
+
+
+class FraudOutboxPermanentError(PermanentProcessingError):
+    """A stored outbox event is irrecoverably invalid."""
