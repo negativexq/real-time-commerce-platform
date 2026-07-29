@@ -22,6 +22,7 @@ type Metrics = {
   status: string;
   values: {
     processed_rate?: number | null;
+    average_latency_seconds?: number | null;
     consumer_lag?: number | null;
     outbox_pending?: number | null;
   };
@@ -40,7 +41,17 @@ type FraudAlert = {
   reason_codes: string[];
   created_at: string;
 };
-type FraudEvaluation = {decision: "APPROVE" | "REVIEW" | "BLOCK"};
+export type OverviewFraudSummary = {
+  run_id: string | null;
+  scenario_type: string | null;
+  run_status: string | null;
+  scope: "ACTIVE_RUN" | "LATEST_COMPLETED_RUN" | null;
+  approve_count: number;
+  review_count: number;
+  block_count: number;
+  fraud_alert_count: number;
+  total_decisions: number;
+};
 type DlqRecord = {id: number};
 type Page<T> = {items: T[]; total?: number};
 type ThroughputPoint = {time: string; value: number};
@@ -73,12 +84,43 @@ const SERVICE_ALIASES: Record<string, string> = {
   "Outbox Publisher": "Fraud Outbox Publisher",
 };
 
-function displayNumber(value: number | null | undefined, digits = 0) {
+export function displayNumber(value: number | null | undefined, digits = 0) {
   if (value == null || !Number.isFinite(value)) return "N/A";
   return value.toLocaleString(undefined, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+export function latencyMilliseconds(value: number | null | undefined) {
+  return value == null ? null : value * 1000;
+}
+
+export function fraudScopeLabel(scope: OverviewFraudSummary["scope"]) {
+  if (scope === "ACTIVE_RUN") return "Active run";
+  if (scope === "LATEST_COMPLETED_RUN") return "Latest completed run";
+  return null;
+}
+
+export function decisionCounts(summary: OverviewFraudSummary | null) {
+  return {
+    APPROVE: summary?.approve_count ?? 0,
+    REVIEW: summary?.review_count ?? 0,
+    BLOCK: summary?.block_count ?? 0,
+  };
+}
+
+export function FraudScope({
+  scope,
+}: {
+  scope: OverviewFraudSummary["scope"];
+}) {
+  const label = fraudScopeLabel(scope);
+  return label ? <small className="scope-label">{label}</small> : null;
+}
+
+export function ZeroDecisionState() {
+  return <div className="decision-empty">No decisions for selected run</div>;
 }
 
 function formatDuration(run: Run) {
@@ -132,7 +174,8 @@ export default function OverviewDashboard() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [alerts, setAlerts] = useState<FraudAlert[]>([]);
-  const [evaluations, setEvaluations] = useState<FraudEvaluation[]>([]);
+  const [fraudSummary, setFraudSummary] =
+    useState<OverviewFraudSummary | null>(null);
   const [dlq, setDlq] = useState<DlqRecord[]>([]);
   const [throughput, setThroughput] = useState<ThroughputPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -140,20 +183,20 @@ export default function OverviewDashboard() {
 
   const refresh = useCallback(async () => {
     try {
-      const [runPage, metricSummary, platformHealth, alertPage, evaluationPage, dlqPage] =
+      const [runPage, metricSummary, platformHealth, alertPage, selectedFraud, dlqPage] =
         await Promise.all([
           api<Page<Run>>("/api/v1/runs?page_size=100"),
           api<Metrics>("/api/v1/platform/metrics/summary"),
           api<Health>("/api/v1/platform/health"),
           api<Page<FraudAlert>>("/api/v1/fraud/alerts?page_size=100"),
-          api<Page<FraudEvaluation>>("/api/v1/fraud/evaluations?page_size=100"),
+          api<OverviewFraudSummary>("/api/v1/overview/fraud-summary"),
           api<Page<DlqRecord>>("/api/v1/dlq?page_size=100"),
         ]);
       setRuns(runPage.items);
       setMetrics(metricSummary);
       setHealth(platformHealth);
       setAlerts(alertPage.items);
-      setEvaluations(evaluationPage.items);
+      setFraudSummary(selectedFraud);
       setDlq(dlqPage.items);
       setUpdatedAt(new Date());
       setError(null);
@@ -188,17 +231,14 @@ export default function OverviewDashboard() {
   );
   const recentRuns = useMemo(() => runs.slice(0, 6), [runs]);
   const decisionData = useMemo(() => {
-    const counts = {APPROVE: 0, REVIEW: 0, BLOCK: 0};
-    for (const evaluation of evaluations) counts[evaluation.decision] += 1;
+    const counts = decisionCounts(fraudSummary);
     return Object.entries(counts).map(([name, value]) => ({
       name: name as keyof typeof DECISION_COLORS,
       value,
     }));
-  }, [evaluations]);
-  const totalDecisions = useMemo(
-    () => decisionData.reduce((sum, item) => sum + item.value, 0),
-    [decisionData],
-  );
+  }, [fraudSummary]);
+  const totalDecisions = fraudSummary?.total_decisions ?? 0;
+  const selectedFraudScope = fraudScopeLabel(fraudSummary?.scope ?? null);
   const serviceCards = useMemo(
     () =>
       SERVICE_NAMES.map((name) => {
@@ -237,14 +277,28 @@ export default function OverviewDashboard() {
       title: "Consumer Lag",
       value: displayNumber(metrics?.values.consumer_lag),
     },
-    {icon: "◆", title: "Fraud Alerts", value: displayNumber(alerts.length)},
+    {
+      icon: "◆",
+      title: "Fraud Alerts",
+      value: fraudSummary?.run_id
+        ? displayNumber(fraudSummary.fraud_alert_count)
+        : "N/A",
+      context: selectedFraudScope,
+    },
     {icon: "!", title: "DLQ Events", value: displayNumber(dlq.length)},
     {
       icon: "□",
       title: "Outbox Pending",
       value: displayNumber(metrics?.values.outbox_pending),
     },
-    {icon: "◷", title: "Average Latency", value: "N/A"},
+    {
+      icon: "◷",
+      title: "Average Latency",
+      value:
+        metrics?.values.average_latency_seconds == null
+          ? "N/A"
+          : `${displayNumber(latencyMilliseconds(metrics.values.average_latency_seconds), 2)} ms`,
+    },
     {
       icon: "✓",
       title: "Healthy Services",
@@ -279,6 +333,9 @@ export default function OverviewDashboard() {
             <div>
               <span>{kpi.title}</span>
               <strong>{kpi.value}</strong>
+              {"context" in kpi && kpi.context && (
+                <small className="kpi-context">{kpi.context}</small>
+              )}
             </div>
           </article>
         ))}
@@ -302,7 +359,12 @@ export default function OverviewDashboard() {
             aria-label="Processed events per second over recent refreshes"
           >
             {throughput.length === 0 ? (
-              <div className="chart-empty">N/A</div>
+              <div className="chart-empty">
+                {metrics?.status === "degraded" ||
+                metrics?.values.processed_rate == null
+                  ? "Metrics unavailable"
+                  : "Waiting for traffic"}
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={throughput} margin={{top: 8, right: 6, left: -26, bottom: 0}}>
@@ -327,6 +389,7 @@ export default function OverviewDashboard() {
             <div>
               <span className="eyebrow">FRAUD ENGINE</span>
               <h3>Decision Distribution</h3>
+              <FraudScope scope={fraudSummary?.scope ?? null} />
             </div>
           </div>
           <div
@@ -335,18 +398,22 @@ export default function OverviewDashboard() {
             aria-label={`Fraud decisions: ${totalDecisions} total`}
           >
             <div className="donut-wrap">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={decisionData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={78} paddingAngle={2} stroke="none">
-                    {decisionData.map((item) => (
-                      <Cell key={item.name} fill={DECISION_COLORS[item.name]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{background: "#0d141d", border: "1px solid #263343", borderRadius: 8}} />
-                </PieChart>
-              </ResponsiveContainer>
+              {totalDecisions > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={decisionData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={78} paddingAngle={2} stroke="none">
+                      {decisionData.map((item) => (
+                        <Cell key={item.name} fill={DECISION_COLORS[item.name]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{background: "#0d141d", border: "1px solid #263343", borderRadius: 8}} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <ZeroDecisionState />
+              )}
               <div className="donut-center">
-                <strong>{totalDecisions || "N/A"}</strong>
+                <strong>{fraudSummary?.run_id ? totalDecisions : "N/A"}</strong>
                 <span>Total Decisions</span>
               </div>
             </div>

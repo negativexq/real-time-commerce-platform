@@ -22,6 +22,7 @@ from services.demo_control_api.metrics import (
     REQUESTS,
     SSE_CONNECTIONS,
 )
+from services.demo_control_api.models.overview import OverviewFraudSummary
 from services.demo_control_api.models.runs import (
     TERMINAL_STATUSES,
     DemoRun,
@@ -38,6 +39,7 @@ from services.demo_control_api.repositories.demo_runs import (
     InvalidTransitionError,
 )
 from services.demo_control_api.services.dashboard_catalog import dashboard_catalog
+from services.demo_control_api.services.overview import build_fraud_summary
 from services.demo_control_api.services.platform_health import PlatformHealth
 from services.demo_control_api.services.prometheus_client import (
     RestrictedPrometheusClient,
@@ -244,6 +246,18 @@ async def platform_health() -> dict[str, Any]:
 @app.get("/api/v1/platform/metrics/summary")
 async def metrics_summary() -> dict[str, Any]:
     return await prometheus.summary()
+
+
+@app.get(
+    "/api/v1/overview/fraud-summary",
+    response_model=OverviewFraudSummary,
+)
+def overview_fraud_summary() -> OverviewFraudSummary:
+    selected = repository.overview_run()
+    if selected is None:
+        return build_fraud_summary(None)
+    run, scope = selected
+    return build_fraud_summary(run, scope)
 
 
 @app.get("/api/v1/platform/topics")

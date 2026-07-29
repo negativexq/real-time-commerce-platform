@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import psycopg
 from psycopg.rows import dict_row
 
+from services.demo_control_api.models.overview import OverviewScope
 from services.demo_control_api.models.runs import (
     TERMINAL_STATUSES,
     DemoRun,
@@ -89,6 +90,41 @@ class DemoRunRepository:
                 page_size=page_size,
                 total=total,
             )
+
+    def overview_run(self) -> tuple[DemoRun, OverviewScope] | None:
+        """Prefer the newest active run, otherwise the newest completed run."""
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM demo_runs
+                WHERE status IN (
+                  'PENDING', 'STARTING', 'RUNNING', 'STOP_REQUESTED', 'COMPLETED'
+                )
+                ORDER BY
+                  CASE WHEN status IN (
+                    'PENDING', 'STARTING', 'RUNNING', 'STOP_REQUESTED'
+                  ) THEN 0 ELSE 1 END,
+                  created_at DESC,
+                  run_id
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        run = self.refresh(row["run_id"])
+        scope: OverviewScope = (
+            "ACTIVE_RUN"
+            if run.status
+            in {
+                RunStatus.PENDING,
+                RunStatus.STARTING,
+                RunStatus.RUNNING,
+                RunStatus.STOP_REQUESTED,
+            }
+            else "LATEST_COMPLETED_RUN"
+        )
+        return run, scope
 
     def transition(
         self,
