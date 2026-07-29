@@ -15,3 +15,5 @@ infrastructure
 tests
 scripts/*
 !scripts/generator-smoke.py
+!scripts/generator-persona-smoke.py
+!scripts/generator-anomaly-smoke.py

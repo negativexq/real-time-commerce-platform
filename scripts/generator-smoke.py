@@ -44,6 +44,8 @@ def main() -> int:
             "generator_refund_probability": 0.0,
             "generator_seed": 4242,
             "generator_journeys": 2,
+            "generator_stateful_mode": False,
+            "generator_anomalies_enabled": False,
         }
     )
     configure_logging(config.generator_log_level)

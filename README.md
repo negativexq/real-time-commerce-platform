@@ -6,8 +6,9 @@ Silicon development machine.
 
 ## Current status
 
-Sprint 4 adds the first runnable application service: a basic seeded event
-generator that publishes coherent, contract-valid customer journeys to Kafka.
+Sprint 4 (the basic producer) is completed. Sprint 5 is current and adds
+stateful, persona-driven multi-journey behavior plus disabled-by-default,
+controlled raw Kafka anomalies.
 No Kafka consumer, persistence processor, Redis application logic, or fraud
 service exists yet.
 
@@ -18,6 +19,8 @@ The envelope, payloads, registry, versioning policy, and partition-key guidance
 are documented in [Event contracts](docs/event-contracts.md).
 Generator operation and boundaries are documented in
 [Event generator](docs/event-generator.md).
+Persona and anomaly semantics are documented in
+[Stateful personas and controlled anomalies](docs/personas-and-anomalies.md).
 
 ## Requirements
 
@@ -44,7 +47,7 @@ cp .env.example .env
 
 Never store production or real credentials in this repository.
 
-## Sprint 4 architecture
+## Sprint 5 architecture
 
 ```text
 Host / Compose clients
@@ -54,6 +57,8 @@ Host / Compose clients
     │                                      └── Kafka UI on localhost:8080
     │
     ├── generator profile ─────────────── event-generator
+    │                                      ├── in-memory customer state
+    │                                      ├── persona strategy registry
     │                                      └── publishes commerce.events
     │
     ├── localhost:5432 / postgres:5432 ─ PostgreSQL system of record
@@ -88,6 +93,19 @@ make generator-down
 
 Open Kafka UI at <http://localhost:8080>, select the local cluster, open
 `commerce.events`, and use the Messages tab to inspect generated events.
+
+Run deterministic persona and anomaly demonstrations:
+
+```bash
+make generator-normal
+make generator-suspicious
+make generator-bot
+make generator-takeover
+make generator-anomalies
+```
+
+Suspicious and account-takeover patterns are synthetic behavior, not fraud
+classification. No consumer, persistence processor, or fraud engine exists yet.
 
 ## Kafka
 
@@ -256,6 +274,14 @@ make generator-run    # Run continuous generation interactively
 make generator-sample # Publish five deterministic journeys
 make generator-status # Show generator profile status
 make generator-smoke  # Run bounded producer end-to-end validation
+make generator-personas # Show personas and configured weights
+make generator-normal # Publish a deterministic normal sample
+make generator-suspicious # Publish suspicious synthetic behavior
+make generator-bot # Publish a bounded bot sample
+make generator-takeover # Demonstrate prior history then takeover
+make generator-anomalies # Publish all controlled anomaly types
+make generator-persona-smoke # Validate persona/state patterns
+make generator-anomaly-smoke # Validate raw anomaly records
 make clean            # Stop containers and preserve volumes
 make clean-volumes    # Delete all persisted local data
 ```
@@ -296,5 +322,5 @@ tests/          Cross-service test suites
 
 ## Roadmap
 
-Later sprints may introduce advanced generation behavior, Kafka consumers,
-fraud processing, Prometheus, and Grafana. They are outside Sprint 4.
+Later sprints may introduce Kafka consumers, persistence and DLQ processors,
+fraud classification, Prometheus, and Grafana. They are outside Sprint 5.

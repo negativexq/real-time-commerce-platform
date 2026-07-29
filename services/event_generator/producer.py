@@ -8,10 +8,9 @@ from confluent_kafka import Producer  # type: ignore[import-untyped]
 
 from services.event_generator.config import GeneratorConfig
 from services.event_generator.logging import get_logger
+from services.event_generator.messages import KafkaHeaders, PublishableMessage
 from shared.schemas import EventEnvelope, canonical_json
 from shared.schemas.base import ContractModel
-
-KafkaHeaders = list[tuple[str, bytes]]
 
 
 class DeliveryMessage(Protocol):
@@ -107,14 +106,27 @@ class KafkaEventProducer:
 
     def publish(self, event: EventEnvelope[ContractModel]) -> None:
         """Queue one event, polling boundedly if the local queue is full."""
-        callback = self._delivery_callback(event)
+        self.publish_message(
+            PublishableMessage(
+                canonical_json(event).encode(),
+                message_key(event),
+                message_headers(event),
+                event.event_id,
+                event.event_type.value,
+                event.correlation_id,
+            )
+        )
+
+    def publish_message(self, message: PublishableMessage) -> None:
+        """Queue a prepared valid or deliberately anomalous record."""
+        callback = self._delivery_callback(message)
         for attempt in range(6):
             try:
                 self._client.produce(
                     self._config.kafka_events_topic,
-                    key=message_key(event),
-                    value=canonical_json(event).encode(),
-                    headers=message_headers(event),
+                    key=message.key,
+                    value=message.value,
+                    headers=message.headers,
                     on_delivery=callback,
                 )
                 self._published += 1
@@ -149,25 +161,27 @@ class KafkaEventProducer:
 
     def _delivery_callback(
         self,
-        event: EventEnvelope[ContractModel],
+        event: PublishableMessage,
     ) -> DeliveryCallback:
         def callback(error: object | None, message: DeliveryMessage) -> None:
             if error is not None:
                 self._delivery_failures += 1
                 self._logger.error(
                     "event_delivery_failed",
-                    event_id=str(event.event_id),
-                    event_type=event.event_type.value,
+                    event_id=str(event.event_id) if event.event_id else None,
+                    event_type=event.event_type,
                     correlation_id=str(event.correlation_id),
+                    anomaly_type=event.anomaly_type,
                     topic=self._config.kafka_events_topic,
                     error=str(error),
                 )
                 return
             self._logger.info(
                 "event_delivered",
-                event_id=str(event.event_id),
-                event_type=event.event_type.value,
+                event_id=str(event.event_id) if event.event_id else None,
+                event_type=event.event_type,
                 correlation_id=str(event.correlation_id),
+                anomaly_type=event.anomaly_type,
                 topic=message.topic(),
                 partition=message.partition(),
                 offset=message.offset(),

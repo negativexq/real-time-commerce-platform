@@ -2,13 +2,18 @@
 
 ## Purpose and boundaries
 
-Sprint 4 introduces the first runnable application service. The event generator
+Sprint 4 introduced the first runnable application service. Sprint 5 extends
+it with process-local state, registered persona strategies, logical timing,
+bounded payment retries, and optional raw-message anomalies. The event generator
 creates coherent synthetic customer journeys with the shared Sprint 3
 Pydantic contracts and publishes canonical JSON to `commerce.events`.
 
 It does not consume events, persist application data, use Redis, evaluate
-fraud, produce `fraud_alert_created`, inject malformed/duplicate/late events,
-or implement advanced persona behavior.
+fraud, or produce `fraud_alert_created`. Suspicious patterns are synthetic
+inputs for future systems, not classifications.
+
+Detailed persona, state, retry, and anomaly semantics are documented in
+[Stateful personas and controlled anomalies](personas-and-anomalies.md).
 
 ## Architecture
 
@@ -20,6 +25,11 @@ state, Kafka transport, structured logging, and application lifecycle:
 - `journey.py` constructs typed event sequences without Kafka calls.
 - `producer.py` owns Kafka metadata, callbacks, polling, and bounded flush.
 - `main.py` handles CLI overrides, signals, pacing, and shutdown.
+- `personas/` owns behavior profiles through one complete registry.
+- `state.py` owns the bounded process-local customer pool.
+- `anomalies.py` owns post-contract raw mutation and publish ordering.
+- `messages.py` defines the typed producer input.
+- `summary.py` records deterministic in-memory run totals.
 
 The shared registry and payload models remain the only event schema source.
 
@@ -105,7 +115,7 @@ Headers contain only:
 | `KAFKA_DELIVERY_TIMEOUT_MS` | `30000` |
 | `KAFKA_REQUEST_TIMEOUT_MS` | `10000` |
 | `GENERATOR_RATE_PER_SECOND` | `1.0` |
-| `GENERATOR_MAX_PRODUCT_VIEWS` | `3` |
+| `GENERATOR_MAX_PRODUCT_VIEWS` | `20` (persona profiles apply lower bounds) |
 | `GENERATOR_ADD_TO_CART_PROBABILITY` | `0.55` |
 | `GENERATOR_CHECKOUT_PROBABILITY` | `0.70` |
 | `GENERATOR_PAYMENT_SUCCESS_PROBABILITY` | `0.85` |
@@ -124,6 +134,8 @@ python -m services.event_generator.main --seed 42 --journeys 10
 python -m services.event_generator.main --rate 2.5 --log-level DEBUG
 ```
 
+Stateful mode is enabled by default and may return to existing customers;
+registration is emitted once per customer. Anomalies are disabled by default.
 An integer seed stabilizes random choices and UUIDs. Unit tests additionally
 inject a stepping clock, making complete typed journeys identical across runs.
 Production timestamps remain real UTC time.
@@ -170,6 +182,5 @@ Infrastructure and topics remain intact.
 
 ## Deferred work
 
-Sprint 5 and later own advanced personas, bots/account takeover, malformed or
-duplicate injection, timing disorder, consumers/processors, persistence,
-Redis operational state, fraud/DLQ logic, and observability.
+Consumers/processors, persistence, Redis application state, fraud/DLQ logic,
+and observability remain deferred.

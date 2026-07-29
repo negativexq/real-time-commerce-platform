@@ -4,7 +4,9 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	kafka-topics kafka-describe kafka-smoke postgres-shell postgres-tables redis-cli \
 	storage-smoke storage-status storage-logs generator-build generator-up \
 	generator-down generator-logs generator-run generator-sample generator-status \
-	generator-smoke clean clean-volumes
+	generator-smoke generator-personas generator-normal generator-suspicious \
+	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
+	generator-anomaly-smoke clean clean-volumes
 
 lint:
 	$(PYTHON) -m ruff check .
@@ -96,6 +98,47 @@ generator-status:
 generator-smoke:
 	docker compose --profile generator run --rm \
 		--entrypoint python event-generator /app/scripts/generator-smoke.py
+
+generator-personas:
+	@printf '%s\n' \
+		'Supported personas: normal, indecisive, discount_hunter, suspicious, bot, account_takeover' \
+		'Configured weights: $(or $(GENERATOR_PERSONA_WEIGHTS),normal=0.50,indecisive=0.15,discount_hunter=0.15,suspicious=0.10,bot=0.05,account_takeover=0.05)'
+
+generator-normal:
+	docker compose --profile generator run --rm event-generator \
+		--journeys 5 --persona normal --seed 42
+
+generator-suspicious:
+	docker compose --profile generator run --rm event-generator \
+		--journeys 5 --persona suspicious --seed 43
+
+generator-bot:
+	docker compose --profile generator run --rm event-generator \
+		--journeys 2 --persona bot --seed 44
+
+generator-takeover:
+	docker compose --profile generator run --rm event-generator \
+		--journeys 2 --persona account_takeover --seed 45
+
+generator-anomalies:
+	docker compose --profile generator run --rm \
+		-e GENERATOR_DUPLICATE_EVENT_PROBABILITY=1 \
+		-e GENERATOR_MALFORMED_JSON_PROBABILITY=1 \
+		-e GENERATOR_MISSING_FIELD_PROBABILITY=1 \
+		-e GENERATOR_UNKNOWN_EVENT_TYPE_PROBABILITY=1 \
+		-e GENERATOR_LATE_EVENT_PROBABILITY=1 \
+		-e GENERATOR_OUT_OF_ORDER_PROBABILITY=1 \
+		-e GENERATOR_PAYLOAD_MISMATCH_PROBABILITY=1 \
+		-e GENERATOR_MAX_ANOMALIES_PER_JOURNEY=7 \
+		event-generator --journeys 1 --persona normal --anomalies --seed 5150
+
+generator-persona-smoke:
+	docker compose --profile generator run --rm \
+		--entrypoint python event-generator /app/scripts/generator-persona-smoke.py
+
+generator-anomaly-smoke:
+	docker compose --profile generator run --rm \
+		--entrypoint python event-generator /app/scripts/generator-anomaly-smoke.py
 
 clean:
 	docker compose down

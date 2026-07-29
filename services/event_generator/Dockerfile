@@ -23,7 +23,7 @@ RUN python -m pip install --no-cache-dir /wheels/* \
     && rm -rf /wheels
 
 WORKDIR /app
-COPY --chown=generator:generator scripts/generator-smoke.py ./scripts/generator-smoke.py
+COPY --chown=generator:generator scripts/generator-*.py ./scripts/
 
 USER generator
 

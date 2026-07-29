@@ -10,6 +10,7 @@ from threading import Event
 from time import perf_counter
 from types import FrameType
 
+from services.event_generator.anomalies import AnomalyInjector
 from services.event_generator.config import GeneratorConfig
 from services.event_generator.generator import (
     SeededUuidFactory,
@@ -19,6 +20,8 @@ from services.event_generator.generator import (
 from services.event_generator.journey import JourneyBuilder, SystemClock
 from services.event_generator.logging import configure_logging, get_logger
 from services.event_generator.producer import KafkaEventProducer
+from services.event_generator.summary import RunSummary
+from shared.commerce_common.enums import CustomerPersona
 
 
 class ShutdownController:
@@ -55,6 +58,15 @@ def parse_config(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     )
+    parser.add_argument(
+        "--persona", choices=[persona.value for persona in CustomerPersona]
+    )
+    parser.add_argument("--persona-mix")
+    parser.add_argument(
+        "--stateful", action=argparse.BooleanOptionalAction, default=None
+    )
+    parser.add_argument("--anomalies", action="store_true", default=None)
+    parser.add_argument("--customers", type=int)
     parsed = parser.parse_args(arguments)
     overrides = {
         name: value
@@ -63,6 +75,11 @@ def parse_config(
             "generator_rate_per_second": parsed.rate,
             "generator_seed": parsed.seed,
             "generator_log_level": parsed.log_level,
+            "generator_persona": parsed.persona,
+            "generator_persona_weights": parsed.persona_mix,
+            "generator_stateful_mode": parsed.stateful,
+            "generator_anomalies_enabled": parsed.anomalies,
+            "generator_customer_pool_size": parsed.customers,
         }.items()
         if value is not None
     }
@@ -96,6 +113,8 @@ def run_generation(
     target = config.generator_journeys
     generated = 0
     interval = min(1.0 / config.generator_rate_per_second, 60.0)
+    injector = AnomalyInjector(config, random.Random(config.generator_seed))
+    summary = RunSummary()
 
     logger.info(
         "generator_started",
@@ -105,15 +124,44 @@ def run_generation(
         rate=config.generator_rate_per_second,
         seed_configured=config.generator_seed is not None,
         client_id=config.kafka_client_id,
+        stateful=config.generator_stateful_mode,
+        anomalies_enabled=config.generator_anomalies_enabled,
+        persona=config.generator_persona,
     )
 
     while not shutdown.requested and (target is None or generated < target):
         started = perf_counter()
         journey = builder.build()
-        for event in journey.events:
-            producer.publish(event)
+        messages = injector.prepare(journey.events)
+        for position, message in enumerate(messages):
+            producer.publish_message(message)
+            if message.anomaly_type is not None:
+                logger.warning(
+                    "synthetic_anomaly_published",
+                    anomaly_type=message.anomaly_type.value,
+                    original_event_id=(
+                        str(message.event_id) if message.event_id is not None else None
+                    ),
+                    event_type=message.event_type,
+                    correlation_id=(
+                        str(message.correlation_id)
+                        if message.correlation_id is not None
+                        else None
+                    ),
+                    topic=config.kafka_events_topic,
+                    key=message.key.decode(),
+                    sequence_position=position,
+                )
         producer.poll(0)
         generated += 1
+        summary.record_journey(
+            journey,
+            [
+                message.anomaly_type
+                for message in messages
+                if message.anomaly_type is not None
+            ],
+        )
         logger.info(
             "journey_generated",
             correlation_id=str(journey.correlation_id),
@@ -121,13 +169,24 @@ def run_generation(
             event_count=len(journey.events),
             terminal_event_type=journey.terminal_event_type.value,
             generation_duration_ms=round((perf_counter() - started) * 1_000, 3),
+            persona=journey.persona.value,
+            returning_customer=journey.returning_customer,
+            customer_lifetime_journeys=journey.customer_lifetime_journeys,
+            logical_journey_duration_ms=journey.logical_journey_duration_ms,
+            payment_attempt_count=journey.payment_attempt_count,
+            anomaly_count=sum(message.anomaly_type is not None for message in messages),
         )
         if target is None or generated < target:
             shutdown.wait(interval)
 
-    logger.info("generator_stopping", journeys_generated=generated)
+    logger.info("generator_stopping", **summary.as_log())
     producer.flush()
-    logger.info("generator_stopped", journeys_generated=generated, undelivered=0)
+    logger.info(
+        "generator_stopped",
+        **summary.as_log(),
+        delivery_failures=producer.delivery_failures,
+        undelivered_messages=0,
+    )
     return 0
 
 

@@ -44,9 +44,6 @@ strict = true
 pretty = true
 show_error_codes = true
 warn_unreachable = true
-exclude = [
-    "^services/",
-]
 
 [tool.pytest.ini_options]
 minversion = "8.3"
