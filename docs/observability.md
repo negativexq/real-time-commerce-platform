@@ -1,5 +1,9 @@
 # Prometheus and Grafana observability
 
+Sprint 9 is complete. Sprint 10 adds predefined platform summary queries and a
+Demo Control API scrape target. Browsers cannot submit PromQL, and run IDs are
+never metric labels.
+
 ## Architecture and metric policy
 
 Sprint 9 adds visibility without moving a processing boundary. Metrics are

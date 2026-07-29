@@ -12,7 +12,7 @@ def test_database_defaults_are_bounded() -> None:
     assert config.processor_db_pool_min_size == 1
     assert config.processor_db_pool_max_size == 4
     assert config.processor_db_statement_timeout_ms == 5_000
-    assert config.processor_required_schema_version == 3
+    assert config.processor_required_schema_version == 4
     assert config.processor_persist_raw_event_json
 
 

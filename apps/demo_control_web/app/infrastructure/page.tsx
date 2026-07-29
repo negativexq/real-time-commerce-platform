@@ -1,0 +1,2 @@
+import {api} from "../../lib/api";import {Badge} from "../../components/ui";
+export default async function Infra(){const data=await api<any>("/api/v1/platform/health");return <section className="card wide"><h2>Dependency health</h2><div className="cards">{data.services.map((s:any)=><article className="mini" key={s.name}><div className="run-head"><strong>{s.name}</strong><Badge value={s.state}/></div></article>)}</div><p><small>Health is briefly cached and based on protocol checks or Prometheus targets—not container existence.</small></p></section>}

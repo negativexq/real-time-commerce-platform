@@ -55,7 +55,7 @@ class ProcessorConfig(BaseModel):
     processor_db_healthcheck_interval_seconds: float = Field(default=30.0, gt=0)
     processor_db_startup_attempts: int = Field(default=5, gt=0, le=100)
     processor_db_startup_backoff_seconds: float = Field(default=1.0, ge=0, le=60)
-    processor_required_schema_version: int = Field(default=3, gt=0)
+    processor_required_schema_version: int = Field(default=4, gt=0)
     processor_persist_raw_event_json: bool = True
     processor_db_log_slow_query_ms: int = Field(default=250, gt=0)
     processor_max_messages: int | None = Field(default=None, gt=0)

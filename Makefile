@@ -419,3 +419,80 @@ clean-volumes:
 	@printf '%s\n' \
 		'WARNING: deleting all persisted Kafka, PostgreSQL, and Redis data.'
 	docker compose down --volumes
+
+# Sprint 10 interactive demo control center. All scenario targets use the API.
+DEMO_PROFILES = --profile processor --profile fraud --profile observability --profile demo
+DEMO_RUN_ID ?=
+
+demo-build:
+	docker compose $(DEMO_PROFILES) build demo-control-api demo-control-web
+
+demo-up:
+	docker compose $(DEMO_PROFILES) up -d --build
+
+demo-down:
+	docker compose $(DEMO_PROFILES) stop demo-control-web demo-control-api
+
+demo-restart:
+	docker compose $(DEMO_PROFILES) restart demo-control-api demo-control-web
+
+demo-status:
+	docker compose $(DEMO_PROFILES) ps
+
+demo-logs:
+	docker compose $(DEMO_PROFILES) logs -f demo-control-api demo-control-web
+
+demo-api-health:
+	curl -fsS http://127.0.0.1:$${DEMO_API_HOST_PORT:-8082}/api/v1/health
+
+demo-web-health:
+	curl -fsS http://127.0.0.1:$${DEMO_WEB_HOST_PORT:-3003}/
+
+demo-config-check:
+	docker compose $(DEMO_PROFILES) config --quiet
+
+demo-db-status:
+	$(MAKE) db-migration-status
+
+demo-scenarios:
+	curl -fsS http://127.0.0.1:$${DEMO_API_HOST_PORT:-8082}/api/v1/scenarios
+
+demo-run-normal:
+	$(PYTHON) scripts/demo-run.py normal_customer
+demo-run-suspicious:
+	$(PYTHON) scripts/demo-run.py suspicious_payment
+demo-run-takeover:
+	$(PYTHON) scripts/demo-run.py account_takeover
+demo-run-bot:
+	$(PYTHON) scripts/demo-run.py bot_checkout
+demo-run-refund:
+	$(PYTHON) scripts/demo-run.py refund_abuse
+demo-run-duplicate:
+	$(PYTHON) scripts/demo-run.py duplicate_delivery
+demo-run-malformed:
+	$(PYTHON) scripts/demo-run.py malformed_event
+demo-run-mixed:
+	$(PYTHON) scripts/demo-run.py mixed_traffic
+
+demo-run-status:
+	@test -n "$(DEMO_RUN_ID)" || (echo "DEMO_RUN_ID is required" >&2; exit 2)
+	curl -fsS "http://127.0.0.1:$${DEMO_API_HOST_PORT:-8082}/api/v1/runs/$(DEMO_RUN_ID)/summary"
+
+demo-stop:
+	@test -n "$(DEMO_RUN_ID)" || (echo "DEMO_RUN_ID is required" >&2; exit 2)
+	curl -fsS -X POST "http://127.0.0.1:$${DEMO_API_HOST_PORT:-8082}/api/v1/runs/$(DEMO_RUN_ID)/stop"
+
+demo-ui-smoke:
+	$(PYTHON) scripts/demo-ui-smoke.py
+
+demo-clean-test-run:
+	@test -n "$(DEMO_RUN_ID)" || (echo "DEMO_RUN_ID is required" >&2; exit 2)
+	curl -fsS -X DELETE "http://127.0.0.1:$${DEMO_API_HOST_PORT:-8082}/api/v1/runs/$(DEMO_RUN_ID)/test-data"
+
+demo-smoke: demo-api-health demo-web-health demo-scenarios demo-run-normal demo-run-takeover demo-run-duplicate demo-run-malformed demo-ui-smoke
+
+demo-full: demo-up
+	$(MAKE) demo-api-health
+	$(MAKE) demo-web-health
+	$(MAKE) demo-run-mixed
+	@printf '%s\n' 'Full demo stack remains running.'

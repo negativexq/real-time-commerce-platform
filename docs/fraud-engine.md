@@ -1,5 +1,9 @@
 # Rule-based fraud engine
 
+Sprint 10 adds sanitized, read-only fraud views and fixed demo scenarios. It
+does not add rules or change thresholds; run attribution joins the event
+manifest to existing evaluations, alerts, and outbox rows.
+
 Sprint 8 adds deterministic, explainable synthetic fraud scoring to the local
 portfolio platform. It is not a production fraud decision system and must not
 be used to block real payments. It performs no machine learning, geolocation,

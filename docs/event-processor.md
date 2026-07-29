@@ -5,7 +5,8 @@
 Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
 validation, Redis leases, retries, DLQ, and manual offsets while replacing the
 no-op audit boundary with transactional PostgreSQL repositories. Sprint 8 adds
-the bounded rule-based fraud stage and alert outbox.
+the bounded rule-based fraud stage and alert outbox. Sprint 10 drives fixed
+scenarios through this existing path without changing processing guarantees.
 
 ## Processing flows
 

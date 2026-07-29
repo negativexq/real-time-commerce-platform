@@ -6,10 +6,9 @@ Silicon development machine.
 
 ## Current status
 
-Sprints 0 through 8 are completed. Sprint 9 is current and adds bounded
-application-native Prometheus metrics, infrastructure exporters, recording and
-local demonstration alert rules, and automatically provisioned Grafana
-dashboards.
+Sprints 0 through 9 are completed. Sprint 10 is current and adds an interactive
+local Demo Control Center with fixed scenarios, managed runs, SSE progress,
+run-specific PostgreSQL outcomes, platform health, and Grafana navigation.
 
 Sprint 3 shared event contracts and canonical serialization are completed and
 remain the generator's only schema source.
@@ -28,6 +27,31 @@ The rule registry, scoring, persistence, and crash windows are documented in
 [Rule-based fraud engine](docs/fraud-engine.md).
 Metrics, health semantics, exporters, rules, dashboards, and smoke workflows
 are documented in [Prometheus and Grafana observability](docs/observability.md).
+The scenario catalog, run model, API, SSE, and cleanup boundary are documented
+in [Interactive Demo Control Center](docs/demo-control-center.md).
+
+## Sprint 10 demo quick start
+
+```bash
+make demo-config-check
+make demo-up
+```
+
+- Demo UI: <http://localhost:3003>
+- Demo API docs: <http://localhost:8082/docs>
+- Grafana: <http://localhost:3002>
+- Prometheus: <http://localhost:9090>
+- Kafka UI: <http://localhost:8080>
+
+Five-minute walkthrough: check infrastructure health, run `normal_customer`,
+run `account_takeover`, inspect duplicate and malformed scenarios, then open
+the Fraud and Processor Grafana dashboards.
+
+Screenshot placeholders:
+
+- `docs/images/demo-platform-overview.png`
+- `docs/images/demo-live-run.png`
+- `docs/images/demo-fraud.png`
 
 ## Sprint 9 observability quick start
 

@@ -8,6 +8,8 @@
 .ruff_cache
 build
 dist
+**/node_modules
+**/.next
 *.egg-info
 database
 !database/

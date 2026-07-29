@@ -12,18 +12,22 @@ license = { text = "Proprietary" }
 authors = [{ name = "Real-Time Commerce Platform Contributors" }]
 dependencies = [
     "confluent-kafka==2.11.1",
-    "pydantic>=2.11,<3",
+    "fastapi==0.116.1",
+    "httpx==0.28.1",
+    "pydantic==2.11.7",
     "psycopg[binary]==3.2.9",
     "psycopg-pool==3.2.6",
     "prometheus-client==0.22.1",
     "redis==6.2.0",
     "structlog==25.4.0",
+    "uvicorn==0.35.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "mypy>=1.13,<2",
     "pytest>=8.3,<9",
+    "pytest-asyncio==1.1.0",
     "ruff>=0.8,<1",
 ]
 
@@ -36,6 +40,11 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "SIM", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"services/demo_control_api/main.py" = ["E501"]
+"services/demo_control_api/repositories/demo_runs.py" = ["E501"]
+"services/demo_control_api/services/prometheus_client.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

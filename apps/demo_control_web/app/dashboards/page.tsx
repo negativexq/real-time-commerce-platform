@@ -1,0 +1,2 @@
+import {api} from "../../lib/api";
+export default async function Dashboards(){const data=await api<any[]>("/api/v1/dashboards");return <section className="card wide"><h2>Provisioned Grafana dashboards</h2><div className="cards">{data.map(d=><article className="mini" key={d.uid}><small>{d.category.toUpperCase()}</small><h3>{d.title}</h3><p>{d.description}</p><a href={d.url} target="_blank">Open dashboard ↗</a></article>)}</div></section>}
