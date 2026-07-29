@@ -1,5 +1,9 @@
-import Link from "next/link"; import {api} from "../lib/api"; import type {Run} from "../lib/types"; import {Badge,Card,Metric} from "../components/ui";
-import {apiDocsUrl} from "../lib/urls";
-export function QuickStart(){return <section className="card wide"><h2>Quick start</h2><div className="quick"><Link href="/scenarios">Launch a scenario →</Link><a href="http://localhost:3002" target="_blank">Open Grafana ↗</a><a href="http://localhost:8080" target="_blank">Open Kafka UI ↗</a><a href={apiDocsUrl} target="_blank" rel="noreferrer">Open API Docs ↗</a></div></section>}
-export default async function Home(){let runs:{items:Run[]}={items:[]};let metrics:any={values:{}};let health:any={overall:"UNKNOWN",services:[]};try{[runs,metrics,health]=await Promise.all([api<{items:Run[]}>("/api/v1/runs?page_size=5"),api<any>("/api/v1/platform/metrics/summary"),api<any>("/api/v1/platform/health")])}catch{}
-return <div className="grid"><Card title="Platform status"><div className="run-head"><Badge value={health.overall}/><span>{health.services.length} monitored services</span></div></Card><Card title="Streaming signals"><div className="metrics"><Metric label="Processed / sec" value={metrics.values?.processed_rate?.toFixed?.(2)}/><Metric label="Consumer lag" value={metrics.values?.consumer_lag}/><Metric label="p95 latency" value={metrics.values?.p95_latency?.toFixed?.(3)} unit="s"/><Metric label="DLQ / sec" value={metrics.values?.dlq_rate?.toFixed?.(2)}/></div></Card><QuickStart/><section className="card wide"><h2>Recent runs</h2><table><thead><tr><th>Scenario</th><th>Status</th><th>Generated</th><th>Processed</th><th>Created</th></tr></thead><tbody>{runs.items.map(r=><tr key={r.run_id}><td><Link href={`/runs/${r.run_id}`}>{r.scenario_type}</Link></td><td><Badge value={r.status}/></td><td>{r.generated_event_count}</td><td>{r.processed_event_count}</td><td>{new Date(r.created_at).toLocaleString()}</td></tr>)}</tbody></table></section></div>}
+import OverviewDashboard, {
+  QuickActions as QuickStart,
+} from "../components/overview-dashboard";
+
+export {QuickStart};
+
+export default function Home() {
+  return <OverviewDashboard />;
+}

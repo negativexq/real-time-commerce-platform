@@ -272,6 +272,7 @@ def fraud_alerts(page_size: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     return {
         "items": db_list(
             """SELECT alert_id, source_event_id, score, decision, severity, status, reason_codes, created_at,
+      (SELECT run_id FROM demo_run_event_manifest WHERE event_id=fraud_alerts.source_event_id ORDER BY created_at DESC LIMIT 1) run_id,
       (SELECT status FROM fraud_outbox WHERE aggregate_id=fraud_alerts.alert_id LIMIT 1) outbox_status
       FROM fraud_alerts ORDER BY created_at DESC LIMIT %s""",
             (page_size,),
