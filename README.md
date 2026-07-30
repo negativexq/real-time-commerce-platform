@@ -523,6 +523,5 @@ These are roadmap ideas, not implemented features.
 
 ## License
 
-`pyproject.toml` currently declares the project as **Proprietary**, and the
-repository does not contain a license file. The source is available for review,
-but no open-source reuse license is granted.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file
+for details.
