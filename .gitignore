@@ -34,3 +34,5 @@ dist/
 
 # Local tooling
 .cache/
+# AI agent instructions
+AGENTS.md
