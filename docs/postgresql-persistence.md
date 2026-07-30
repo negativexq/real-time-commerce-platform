@@ -19,14 +19,21 @@ sequenceDiagram
     participant R as Redis
     participant P as Processor
     participant D as PostgreSQL
-    K->>P: validated source record
-    P->>R: reserve event_id with token
-    R-->>P: reserved
-    P->>D: BEGIN; ledger + business writes
-    D-->>P: COMMIT
-    P->>R: token-checked completed
-    R-->>P: completed
-    P->>K: commit source offset + 1
+
+    K->>P: Consume validated source record
+    P->>R: Reserve event_id using processing token
+    R-->>P: Reservation acquired
+
+    P->>D: Begin transaction
+    P->>D: Insert ledger record
+    P->>D: Apply business writes
+    P->>D: Commit transaction
+    D-->>P: Transaction committed
+
+    P->>R: Mark completed if token matches
+    R-->>P: Event marked completed
+
+    P->>K: Commit next source offset
 ```
 
 No Kafka, Redis, or other external operation occurs inside the database
