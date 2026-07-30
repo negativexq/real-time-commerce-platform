@@ -1,4 +1,5 @@
 # Real-Time Commerce Platform
+Production-oriented event-driven commerce platform built with Kafka, Redis, PostgreSQL, Docker, Prometheus and Grafana.
 
 A local, event-driven commerce system that generates stateful customer
 journeys, processes them through Kafka, persists business outcomes, evaluates
