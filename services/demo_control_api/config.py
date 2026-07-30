@@ -30,6 +30,11 @@ class DemoConfig(BaseModel):
     prometheus_url: str = "http://prometheus:9090"
     grafana_url: str = "http://localhost:3002"
     kafka_ui_url: str = "http://localhost:8080"
+    generator_health_url: str = "http://event-generator:9102/health"
+    processor_health_url: str = "http://event-processor:9101/health"
+    outbox_health_url: str = "http://fraud-outbox-publisher:9103/health"
+    grafana_health_url: str = "http://grafana:3000/api/health"
+    kafka_ui_health_url: str = "http://kafka-ui:8080"
 
     @field_validator("demo_api_token")
     @classmethod

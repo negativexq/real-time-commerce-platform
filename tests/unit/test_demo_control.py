@@ -1,5 +1,7 @@
 """Sprint 10 bounded domain tests without live dependencies."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 from pydantic import ValidationError
 
@@ -7,6 +9,7 @@ from services.demo_control_api.config import DemoConfig
 from services.demo_control_api.models.runs import RunStatus, transition_allowed
 from services.demo_control_api.models.scenarios import RunCreate, ScenarioType
 from services.demo_control_api.services.dashboard_catalog import dashboard_catalog
+from services.demo_control_api.services.platform_health import PlatformHealth
 from services.demo_control_api.services.prometheus_client import QUERIES
 from services.demo_control_api.services.scenario_catalog import SCENARIOS
 
@@ -77,3 +80,36 @@ def test_configuration_rejects_short_enabled_token_material() -> None:
 def test_prometheus_and_dashboard_inputs_are_fixed() -> None:
     assert "run_id" not in " ".join(QUERIES.values())
     assert len(dashboard_catalog("http://grafana:3000")) == 7
+
+
+@pytest.mark.asyncio
+async def test_unmonitored_services_do_not_degrade_platform() -> None:
+    health = PlatformHealth(DemoConfig.model_validate({}))
+    health._check = AsyncMock(  # type: ignore[method-assign]
+        return_value=[
+            {"name": "Event Processor", "state": "HEALTHY"},
+            {"name": "Generator", "state": "NOT_MONITORED"},
+            {"name": "Fraud Engine", "state": "UNKNOWN"},
+        ]
+    )
+    assert (await health.get())["overall"] == "HEALTHY"
+
+
+@pytest.mark.asyncio
+async def test_unhealthy_monitored_service_degrades_platform() -> None:
+    health = PlatformHealth(DemoConfig.model_validate({}))
+    health._check = AsyncMock(  # type: ignore[method-assign]
+        return_value=[
+            {"name": "Event Processor", "state": "HEALTHY"},
+            {"name": "Fraud Outbox Publisher", "state": "UNHEALTHY"},
+            {"name": "Fraud Engine", "state": "NOT_MONITORED"},
+        ]
+    )
+    assert (await health.get())["overall"] == "DEGRADED"
+
+
+def test_internal_service_health_urls_use_container_ports() -> None:
+    config = DemoConfig.model_validate({})
+    assert config.processor_health_url == "http://event-processor:9101/health"
+    assert config.outbox_health_url == "http://fraud-outbox-publisher:9103/health"
+    assert config.grafana_health_url == "http://grafana:3000/api/health"

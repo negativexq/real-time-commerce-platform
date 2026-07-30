@@ -110,6 +110,12 @@ export function decisionCounts(summary: OverviewFraudSummary | null) {
   };
 }
 
+export function healthStateLabel(state: HealthState) {
+  if (state === "NOT_MONITORED") return "Not monitored";
+  if (state === "UNHEALTHY") return "Unavailable";
+  return state.charAt(0) + state.slice(1).toLowerCase();
+}
+
 export function FraudScope({
   scope,
 }: {
@@ -263,10 +269,18 @@ export default function OverviewDashboard() {
       }),
     [health],
   );
-  const healthyServices = useMemo(
-    () => health?.services.filter((service) => service.state === "HEALTHY").length,
-    [health],
-  );
+  const healthyServices = useMemo(() => {
+    if (!health) return null;
+    const monitored = health.services.filter(
+      (service) =>
+        service.state !== "UNKNOWN" && service.state !== "NOT_MONITORED",
+    );
+    return {
+      healthy: monitored.filter((service) => service.state === "HEALTHY")
+        .length,
+      total: monitored.length,
+    };
+  }, [health]);
 
   const openRun = (runId: string) => router.push(`/runs/${runId}`);
   const rowKeyDown = (runId: string) => (event: React.KeyboardEvent) => {
@@ -316,7 +330,7 @@ export default function OverviewDashboard() {
       value:
         healthyServices == null
           ? "N/A"
-          : `${healthyServices}/${health?.services.length ?? 0}`,
+          : `${healthyServices.healthy}/${healthyServices.total}`,
     },
   ];
 
@@ -523,7 +537,7 @@ export default function OverviewDashboard() {
           {serviceCards.map((service) => (
             <article className="health-service" key={service.name}>
               <span className={`status-dot ${service.state.toLowerCase()}`} />
-              <div><strong>{service.name}</strong><small>{service.state === "UNHEALTHY" ? "Unavailable" : service.state.charAt(0) + service.state.slice(1).toLowerCase()}</small></div>
+              <div><strong>{service.name}</strong><small>{healthStateLabel(service.state)}</small></div>
             </article>
           ))}
         </div>

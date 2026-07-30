@@ -10,12 +10,12 @@ from shared.observability import ApplicationMetrics, MetricsServer
 def main() -> int:
     config = OutboxConfig.from_environment()
     metrics = ApplicationMetrics(config.metrics.service_name, config.metrics.namespace)
-    server = MetricsServer(config.metrics, metrics.registry)
+    service = OutboxService(config, metrics)
+    server = MetricsServer(config.metrics, metrics.registry, lambda: service.healthy)
     try:
         server.start()
     except OSError:
         metrics.outbox_healthy.set(0)
-    service = OutboxService(config, metrics)
     signal.signal(signal.SIGTERM, lambda signum, frame: service.stop())
     signal.signal(signal.SIGINT, lambda signum, frame: service.stop())
     try:

@@ -228,7 +228,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
         metrics = ApplicationMetrics(
             metrics_config.service_name, metrics_config.namespace
         )
-        metrics_server = MetricsServer(metrics_config, metrics.registry)
+        ready_path = Path("/tmp/event-generator-ready")
+        metrics_server = MetricsServer(
+            metrics_config, metrics.registry, ready_path.exists
+        )
         try:
             metrics_server.start()
         except OSError:
@@ -242,7 +245,6 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
         signal.signal(signal.SIGINT, handle_signal)
         signal.signal(signal.SIGTERM, handle_signal)
-        ready_path = Path("/tmp/event-generator-ready")
         ready_path.touch()
         try:
             code = run_generation(

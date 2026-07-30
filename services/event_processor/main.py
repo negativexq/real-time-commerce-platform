@@ -150,7 +150,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
         metrics = ApplicationMetrics(
             metrics_config.service_name, metrics_config.namespace
         )
-        metrics_server = MetricsServer(metrics_config, metrics.registry)
+        metrics_server = MetricsServer(
+            metrics_config, metrics.registry, HEALTH_FILE.exists
+        )
         try:
             metrics_server.start()
         except OSError:

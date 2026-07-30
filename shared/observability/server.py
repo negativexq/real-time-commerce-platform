@@ -1,6 +1,7 @@
 """A bounded background Prometheus HTTP server with graceful shutdown."""
 
-from collections.abc import Iterable
+import json
+from collections.abc import Callable, Iterable
 from threading import Thread
 from typing import cast
 from wsgiref.simple_server import WSGIServer, make_server
@@ -14,9 +15,15 @@ from shared.observability.config import MetricsConfig
 class MetricsServer:
     """Serve one isolated registry without blocking an application loop."""
 
-    def __init__(self, config: MetricsConfig, registry: CollectorRegistry) -> None:
+    def __init__(
+        self,
+        config: MetricsConfig,
+        registry: CollectorRegistry,
+        health_check: Callable[[], bool] | None = None,
+    ) -> None:
         self.config = config
         self.registry = registry
+        self.health_check = health_check
         self._server: WSGIServer | None = None
         self._thread: Thread | None = None
 
@@ -32,10 +39,24 @@ class MetricsServer:
         def application(
             environ: WSGIEnvironment, start_response: StartResponse
         ) -> Iterable[bytes]:
-            if environ.get("PATH_INFO") != self.config.path:
-                start_response("404 Not Found", [("Content-Type", "text/plain")])
-                return [b"not found\n"]
-            return cast(Iterable[bytes], metrics_app(environ, start_response))
+            path = environ.get("PATH_INFO")
+            if path == self.config.path:
+                return cast(Iterable[bytes], metrics_app(environ, start_response))
+            if path == "/health" and self.health_check is not None:
+                healthy = self.health_check()
+                body = json.dumps(
+                    {"status": "healthy" if healthy else "unhealthy"}
+                ).encode()
+                start_response(
+                    "200 OK" if healthy else "503 Service Unavailable",
+                    [
+                        ("Content-Type", "application/json"),
+                        ("Content-Length", str(len(body))),
+                    ],
+                )
+                return [body]
+            start_response("404 Not Found", [("Content-Type", "text/plain")])
+            return [b"not found\n"]
 
         self._server = make_server(self.config.host, self.config.port, application)
         self._thread = Thread(

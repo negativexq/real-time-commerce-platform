@@ -32,6 +32,11 @@ class OutboxService:
         self.running = True
         self.metrics = metrics
         self._last_refresh = 0.0
+        self._healthy = True
+
+    @property
+    def healthy(self) -> bool:
+        return self.running and self._healthy
 
     def run(self) -> None:
         heartbeat = Path("/tmp/fraud-outbox-healthy")
@@ -101,6 +106,7 @@ class OutboxService:
                             )
                     self.metrics.outbox_oldest_pending_age.set(age)
                     healthy = age <= self.config.metrics.max_outbox_staleness_seconds
+                    self._healthy = healthy
                     self.metrics.outbox_healthy.set(int(healthy))
                     self.metrics.service_healthy.labels(self.metrics.service).set(
                         int(healthy)

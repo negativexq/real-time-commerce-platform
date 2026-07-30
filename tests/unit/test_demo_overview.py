@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from services.demo_control_api.models.runs import DemoRun, RunStatus
-from services.demo_control_api.models.scenarios import RunCreate, ScenarioType
+from services.demo_control_api.models.scenarios import ScenarioType
 from services.demo_control_api.services.overview import (
     build_fraud_summary,
     select_overview_run,
@@ -21,24 +21,26 @@ from services.demo_control_api.services.prometheus_client import (
 
 def run(status: RunStatus, created_at: datetime, **counts: int) -> DemoRun:
     run_id = uuid4()
-    return DemoRun(
-        run_id=run_id,
-        scenario_type=ScenarioType.TAKEOVER,
-        status=status,
-        requested_event_count=20,
-        requested_duration_seconds=None,
-        requested_events_per_second=10,
-        seed=7,
-        parameters=RunCreate(
-            scenario_type=ScenarioType.TAKEOVER,
-            event_count=20,
-            events_per_second=10,
-            seed=7,
-        ),
-        test_scope=f"demo:{run_id}",
-        created_at=created_at,
-        updated_at=created_at,
-        **counts,
+    return DemoRun.model_validate(
+        {
+            "run_id": run_id,
+            "scenario_type": ScenarioType.TAKEOVER,
+            "status": status,
+            "requested_event_count": 20,
+            "requested_duration_seconds": None,
+            "requested_events_per_second": 10,
+            "seed": 7,
+            "parameters": {
+                "scenario_type": ScenarioType.TAKEOVER,
+                "event_count": 20,
+                "events_per_second": 10,
+                "seed": 7,
+            },
+            "test_scope": f"demo:{run_id}",
+            "created_at": created_at,
+            "updated_at": created_at,
+            **counts,
+        }
     )
 
 

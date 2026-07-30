@@ -4,6 +4,7 @@ import {
   decisionCounts,
   displayNumber,
   FraudScope,
+  healthStateLabel,
   latencyMilliseconds,
   throughputEmptyMessage,
   type OverviewFraudSummary,
@@ -60,5 +61,11 @@ describe("Overview data contracts", () => {
     expect(renderToStaticMarkup(<ZeroDecisionState />)).toContain(
       "No decisions for selected run",
     );
+  });
+
+  it("labels unavailable and unmonitored services honestly", () => {
+    expect(healthStateLabel("HEALTHY")).toBe("Healthy");
+    expect(healthStateLabel("UNHEALTHY")).toBe("Unavailable");
+    expect(healthStateLabel("NOT_MONITORED")).toBe("Not monitored");
   });
 });

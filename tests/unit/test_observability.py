@@ -1,5 +1,6 @@
 """Stable metric contracts, isolated registries, endpoint, and configuration."""
 
+import urllib.error
 import urllib.request
 
 import pytest
@@ -74,5 +75,25 @@ def test_metrics_endpoint_returns_prometheus_text() -> None:
         response = urllib.request.urlopen("http://127.0.0.1:19199/metrics", timeout=2)
         assert response.headers["Content-Type"].startswith("text/plain")
         assert b"commerce_service_up" in response.read()
+    finally:
+        server.stop()
+
+
+def test_health_endpoint_uses_runtime_health_check() -> None:
+    metrics = ApplicationMetrics("test-service")
+    healthy = True
+    server = MetricsServer(config(port=19200), metrics.registry, lambda: healthy)
+    try:
+        server.start()
+    except PermissionError:
+        pytest.skip("test sandbox does not permit binding a loopback socket")
+    try:
+        response = urllib.request.urlopen("http://127.0.0.1:19200/health", timeout=2)
+        assert response.status == 200
+        assert response.read() == b'{"status": "healthy"}'
+        healthy = False
+        with pytest.raises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen("http://127.0.0.1:19200/health", timeout=2)
+        assert error.value.code == 503
     finally:
         server.stop()

@@ -132,8 +132,12 @@ views expose transport coordinates and bounded sanitized errors; raw payload
 and replay are unavailable.
 
 Health uses protocol checks (`SELECT 1`, Redis PING, Kafka metadata,
-Prometheus readiness, and Grafana health) with a brief cache. Unknown targets
-remain `UNKNOWN`; container existence is not treated as health.
+Prometheus readiness, Grafana health, and processor/outbox runtime endpoints)
+with a brief cache. The optional standalone generator is monitored only while
+its endpoint is reachable. The embedded fraud engine has no independent
+runtime signal and is explicitly `NOT_MONITORED`. `UNKNOWN` and
+`NOT_MONITORED` entries do not degrade the aggregate; an unhealthy monitored
+service does. Container existence is never treated as health.
 
 The dashboard catalog links Platform Overview, Kafka Streaming, Processor,
 Persistence, Fraud, Outbox, and Infrastructure by stable UID. Grafana remains
