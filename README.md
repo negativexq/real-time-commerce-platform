@@ -154,28 +154,42 @@ Kafka uses a single KRaft broker/controller for a lightweight development
 topology. PostgreSQL is the durable system of record; Redis holds only
 reconstructible operational state.
 
+## Architecture
+
+The platform runs as a set of Docker Compose services on a single local
+network. Kafka uses a single KRaft broker/controller for a lightweight
+development topology. PostgreSQL is the durable system of record, while Redis
+stores only reconstructible operational state.
+
 ```mermaid
 flowchart LR
     B[Browser] --> W[Demo Control Web]
     W --> A[Demo Control API]
-    A --> G[Scenario Runner<br/>shared generator]
-    G -->|commerce.events| K[Kafka KRaft]
+
+    A --> G[Scenario Runner<br/>Shared Event Generator]
+    G -->|commerce.events| K[Kafka<br/>KRaft Broker]
+
     K --> P[Event Processor]
-    P -->|leases and deduplication| R[(Redis)]
-    P -->|events, business state,<br/>fraud decisions, outbox| DB[(PostgreSQL)]
-    P -->|invalid records| D[commerce.events.dlq]
+
+    P -->|processing leases<br/>and idempotency| R[(Redis)]
+    P -->|business state,<br/>events, fraud decisions,<br/>transactional outbox| DB[(PostgreSQL)]
+    P -->|invalid or exhausted records| D[[commerce.events.dlq]]
+
     DB --> O[Fraud Outbox Publisher]
     O -->|commerce.fraud-alerts| K
-    X[Exporters and app metrics] --> M[Prometheus]
-    P --> X
+
+    P --> X[Application Metrics<br/>and Exporters]
     K --> X
     DB --> X
     R --> X
     O --> X
     A --> X
+
+    X --> M[Prometheus]
     M --> GF[Grafana]
-    DB --> A
-    M --> A
+
+    DB -->|demo state and results| A
+    M -->|metrics queries| A
 ```
 
 ### Components
