@@ -1,7 +1,7 @@
 import {renderToStaticMarkup} from "react-dom/server";
 import {describe, expect, it} from "vitest";
 import {QuickStart} from "../app/page";
-import {buildApiDocsUrl} from "../lib/urls";
+import {buildApiDocsUrl, resolveDemoApiUrl} from "../lib/urls";
 import {AppShell} from "./app-shell";
 
 describe("API Docs navigation", () => {
@@ -26,6 +26,12 @@ describe("API Docs navigation", () => {
   it("builds the docs URL from an overridden public API URL", () => {
     expect(buildApiDocsUrl("https://demo.example.test/api/")).toBe(
       "https://demo.example.test/api/docs",
+    );
+  });
+
+  it("rewrites local API hosts to the active browser hostname", () => {
+    expect(resolveDemoApiUrl("http://localhost:8082/", "127.0.0.1")).toBe(
+      "http://127.0.0.1:8082",
     );
   });
 });

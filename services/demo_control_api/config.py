@@ -19,7 +19,10 @@ class DemoConfig(BaseModel):
     demo_max_event_count: int = Field(100000, ge=1, le=100000)
     demo_max_events_per_second: int = Field(1000, ge=1, le=1000)
     demo_max_duration_seconds: int = Field(3600, ge=1, le=3600)
-    demo_allowed_origins: tuple[str, ...] = ("http://localhost:3003",)
+    demo_allowed_origins: tuple[str, ...] = (
+        "http://localhost:3003",
+        "http://127.0.0.1:3003",
+    )
     demo_api_token_enabled: bool = False
     demo_api_token: str = ""
     demo_history_page_size: int = Field(20, ge=1, le=100)
