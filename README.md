@@ -541,6 +541,23 @@ available but not run automatically:
 scripts/benchmark/run_benchmark.sh --with-outage-test
 ```
 
+### Latest observed results
+
+From run `bench-20260802T004243Z` (single MacBook Air M2, 8 CPUs, Docker
+Desktop; see `docs/performance-report.md` for full methodology and
+environment details — these numbers are local-machine observations, not a
+certified capacity claim):
+
+| Metric | Observed Result |
+| --- | ---: |
+| Average throughput | 49.84 evt/s (range 38.53–50.51, n=3) |
+| Processor latency p95 / p99 | 4.94 ms / 9.03 ms |
+| End-to-end latency p95 / p99 | 22.98 ms / 23.75 ms |
+| Maximum consumer lag (burst ramp) | 2 events |
+| Duplicate durable side effects | 0 (of 300 deliveries, 35 duplicates injected) |
+| Retry success rate | 100% |
+| Outbox publish success | 100% |
+
 See the most recent `docs/performance-report.md` for methodology,
 environment details, and current results.
 
