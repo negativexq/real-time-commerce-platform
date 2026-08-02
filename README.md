@@ -10,7 +10,8 @@ fraud rules, and exposes the result through an interactive operations console.
 [Explore](#explore-the-project) ·
 [API](#api) ·
 [Testing](#testing) ·
-[Troubleshooting](#troubleshooting)
+[Troubleshooting](#troubleshooting) ·
+[Benchmark](#performance-benchmark)
 
 ## Overview
 
@@ -508,6 +509,40 @@ make demo-web-health
 
 This rebuild preserves named volumes. Avoid `make clean-volumes` unless data
 loss is intentional.
+
+## Performance Benchmark
+
+`scripts/benchmark/` is a reproducible performance and reliability benchmark
+that drives real traffic through the running stack (primary event-processor
+consumer group, real Kafka/Postgres/Redis) and measures throughput, latency
+(processor, end-to-end, and API, reported separately), consumer lag and
+recovery, idempotency, retry/DLQ behavior, and transactional outbox
+correctness. It reuses the demo control API scenario runner and an isolated
+consumer group for the transient-retry path, so it never resets the primary
+consumer group's offsets.
+
+```bash
+scripts/benchmark/run_benchmark.sh
+```
+
+This runs the non-disruptive phases (throughput/latency, a lag burst ramp,
+idempotency, retry/DLQ, outbox) three times each by default and writes:
+
+- `docs/performance-report.md` — the generated report, with only observed
+  values (no estimates)
+- `artifacts/benchmark/<run_tag>/` — raw JSON results per phase, plus
+  `summary.json` and `verification.json`
+
+A disruptive consumer-outage sub-test (stops and restarts the
+`event-processor` container to measure lag recovery under an outage) is
+available but not run automatically:
+
+```bash
+scripts/benchmark/run_benchmark.sh --with-outage-test
+```
+
+See the most recent `docs/performance-report.md` for methodology,
+environment details, and current results.
 
 ## Future Improvements
 

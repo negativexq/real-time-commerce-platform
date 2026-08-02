@@ -1,0 +1,172 @@
+{
+  "all_samples": [
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631472.374284
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631474.6090162
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631478.7246022
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631482.788202
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631486.8359838
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631490.8799932
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631494.911576
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631498.9485052
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631503.022364
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631505.6194072
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631509.711722
+    },
+    {
+      "lag_cli": 2,
+      "lag_prometheus": 0.0,
+      "t": 1785631513.9301388
+    },
+    {
+      "lag_cli": 2,
+      "lag_prometheus": 0.0,
+      "t": 1785631518.192277
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631522.275276
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631526.395659
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631530.44329
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 1.0,
+      "t": 1785631534.5013912
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631564.2989209
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631568.3710651
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631572.526017
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631576.598634
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631580.654672
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1785631584.732935
+    },
+    {
+      "lag_cli": 1,
+      "lag_prometheus": 0.0,
+      "t": 1785631588.826015
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 2.0,
+      "t": 1785631592.890771
+    }
+  ],
+  "baseline_lag": 0,
+  "baseline_lag_prometheus": 0.0,
+  "captured_at": "2026-08-02T00:47:33.754937+00:00",
+  "disruptive": false,
+  "first_stage_rate_with_growing_lag": 50,
+  "max_lag_observed": 2,
+  "note": "first_stage_rate_with_growing_lag reports the lowest tested rate at which lag was still net-increasing through the whole stage in this run; it is an observed data point under this local configuration, not a certified maximum capacity.",
+  "stages": [
+    {
+      "event_count": 1000,
+      "lag_at_stage_start": 1,
+      "lag_first_half_avg": 0.0,
+      "lag_second_half_avg": 0.25,
+      "lag_still_growing_through_stage": true,
+      "requested_events_per_second": 50,
+      "run_id": "bf983273-c6e4-46ed-b833-eabce5a52d61",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": true
+    },
+    {
+      "event_count": 3000,
+      "lag_at_stage_start": 0,
+      "lag_first_half_avg": 1.25,
+      "lag_second_half_avg": 0.0,
+      "lag_still_growing_through_stage": false,
+      "requested_events_per_second": 150,
+      "run_id": "fed2cf16-31d7-40b2-adf8-a93349f946e7",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": true
+    },
+    {
+      "event_count": 6000,
+      "lag_at_stage_start": 0,
+      "lag_first_half_avg": 0.75,
+      "lag_second_half_avg": 0.25,
+      "lag_still_growing_through_stage": false,
+      "requested_events_per_second": 300,
+      "run_id": "dcdc1ba9-7c26-422b-ba9d-f336b0ffe7e9",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": false
+    }
+  ],
+  "sub_test": "burst"
+}
