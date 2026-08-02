@@ -20,13 +20,15 @@ import time
 from typing import Any
 
 from scripts.benchmark.artifacts import now_iso, phase_path, write_json
-from scripts.benchmark.config import derive_seed, load_config
+from scripts.benchmark.config import BenchmarkConfig, derive_seed, load_config
 from scripts.benchmark.demo_api import DemoApiClient
 from scripts.benchmark.kafka_lag import total_lag
 from scripts.benchmark.prom import PrometheusClient
 
 
-def _sample_lag(compose_project: str, group: str, prom: PrometheusClient) -> dict[str, Any]:
+def _sample_lag(
+    compose_project: str, group: str, prom: PrometheusClient
+) -> dict[str, Any]:
     cli_lag = total_lag(compose_project, group)
     prom_lag = prom.instant(f'sum(kafka_consumergroup_lag{{consumergroup="{group}"}})')
     return {"t": time.time(), "lag_cli": cli_lag, "lag_prometheus": prom_lag}
@@ -49,7 +51,12 @@ def _poll_until(
     return samples
 
 
-def run_burst(config, prom: PrometheusClient, api: DemoApiClient, stages: list[tuple[int, int]]) -> dict[str, Any]:
+def run_burst(
+    config: BenchmarkConfig,
+    prom: PrometheusClient,
+    api: DemoApiClient,
+    stages: list[tuple[int, int]],
+) -> dict[str, Any]:
     """stages: list of (events_per_second, stage_duration_seconds)."""
     group = config.primary_consumer_group
     baseline = _sample_lag(config.compose_project, group, prom)
@@ -93,7 +100,9 @@ def run_burst(config, prom: PrometheusClient, api: DemoApiClient, stages: list[t
         first_avg = _avg([s["lag_cli"] for s in first_half])
         second_avg = _avg([s["lag_cli"] for s in second_half])
         still_growing = (
-            first_avg is not None and second_avg is not None and second_avg > first_avg * 1.1
+            first_avg is not None
+            and second_avg is not None
+            and second_avg > first_avg * 1.1
         )
         stage_terminated = True
         try:
@@ -118,9 +127,15 @@ def run_burst(config, prom: PrometheusClient, api: DemoApiClient, stages: list[t
             }
         )
 
-    max_lag = max((s["lag_cli"] for s in all_samples if s["lag_cli"] is not None), default=None)
+    max_lag = max(
+        (s["lag_cli"] for s in all_samples if s["lag_cli"] is not None), default=None
+    )
     exceeded_stage = next(
-        (s["requested_events_per_second"] for s in stage_results if s["lag_still_growing_through_stage"]),
+        (
+            s["requested_events_per_second"]
+            for s in stage_results
+            if s["lag_still_growing_through_stage"]
+        ),
         None,
     )
 
@@ -143,7 +158,15 @@ def run_burst(config, prom: PrometheusClient, api: DemoApiClient, stages: list[t
     }
 
 
-def run_outage(config, prom: PrometheusClient, api: DemoApiClient, *, outage_seconds: float, burst_rate: int, burst_count: int) -> dict[str, Any]:
+def run_outage(
+    config: BenchmarkConfig,
+    prom: PrometheusClient,
+    api: DemoApiClient,
+    *,
+    outage_seconds: float,
+    burst_rate: int,
+    burst_count: int,
+) -> dict[str, Any]:
     group = config.primary_consumer_group
     baseline = _sample_lag(config.compose_project, group, prom)
 
@@ -200,13 +223,15 @@ def run_outage(config, prom: PrometheusClient, api: DemoApiClient, *, outage_sec
             break
         time.sleep(3.0)
 
-    try:
+    import contextlib
+
+    with contextlib.suppress(TimeoutError):
         api.wait_for_terminal(run_id, timeout=60)
-    except TimeoutError:
-        pass
 
     all_samples = [baseline] + outage_samples + recovery_samples
-    max_lag = max((s["lag_cli"] for s in all_samples if s["lag_cli"] is not None), default=None)
+    max_lag = max(
+        (s["lag_cli"] for s in all_samples if s["lag_cli"] is not None), default=None
+    )
     max_lag_sample = next((s for s in all_samples if s["lag_cli"] == max_lag), None)
     recovery_time_seconds = (recovered_at - restarted_at) if recovered_at else None
     drain_rate = (

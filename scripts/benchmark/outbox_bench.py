@@ -13,7 +13,7 @@ import time
 from typing import Any
 
 from scripts.benchmark.artifacts import now_iso, phase_path, write_json
-from scripts.benchmark.config import derive_seed, load_config
+from scripts.benchmark.config import BenchmarkConfig, derive_seed, load_config
 from scripts.benchmark.demo_api import DemoApiClient
 from scripts.benchmark.pg import query_all, query_one
 from scripts.benchmark.stats import percentiles
@@ -41,7 +41,15 @@ def _wait_for_drain(dsn: str, run_id: str, timeout_seconds: float) -> None:
         time.sleep(1.0)
 
 
-def run_once(config, api: DemoApiClient, *, scenario_type: str, event_count: int, events_per_second: int, seed: int) -> dict[str, Any]:
+def run_once(
+    config: BenchmarkConfig,
+    api: DemoApiClient,
+    *,
+    scenario_type: str,
+    event_count: int,
+    events_per_second: int,
+    seed: int,
+) -> dict[str, Any]:
     body = {
         "scenario_type": scenario_type,
         "event_count": event_count,
@@ -89,7 +97,9 @@ def run_once(config, api: DemoApiClient, *, scenario_type: str, event_count: int
     published_delays_ms = [
         float(row["published_at_ms"]) - float(row["created_at_ms"])
         for row in outbox_rows
-        if row["status"] == "PUBLISHED" and row["published_at_ms"] and row["created_at_ms"]
+        if row["status"] == "PUBLISHED"
+        and row["published_at_ms"]
+        and row["created_at_ms"]
     ]
     delay_stats = percentiles(published_delays_ms)
     delay_stats["sample_count"] = len(published_delays_ms)
@@ -98,7 +108,9 @@ def run_once(config, api: DemoApiClient, *, scenario_type: str, event_count: int
         row
         for row in outbox_rows
         if row["status"] in ("PENDING", "PUBLISHING")
-        and not (row["status"] == "FAILED" and row["attempts"] >= FRAUD_OUTBOX_MAX_ATTEMPTS)
+        and not (
+            row["status"] == "FAILED" and row["attempts"] >= FRAUD_OUTBOX_MAX_ATTEMPTS
+        )
     ]
     missing_outbox_rows = max(alert_count - outbox_count, 0)
     no_lost_alert = missing_outbox_rows == 0 and len(stuck_rows) == 0
@@ -112,7 +124,8 @@ def run_once(config, api: DemoApiClient, *, scenario_type: str, event_count: int
         "outbox_rows_created": outbox_count,
         "outbox_status_breakdown": status_counts,
         "outbox_published_count": status_counts.get("PUBLISHED", 0),
-        "outbox_pending_or_failed_count": outbox_count - status_counts.get("PUBLISHED", 0),
+        "outbox_pending_or_failed_count": outbox_count
+        - status_counts.get("PUBLISHED", 0),
         "publish_success_rate": (
             status_counts.get("PUBLISHED", 0) / outbox_count if outbox_count else None
         ),
@@ -140,7 +153,9 @@ def main() -> int:
     seed = (
         args.seed
         if args.seed is not None
-        else derive_seed(config.run_tag, "outbox", args.scenario_type, str(args.repeat_index))
+        else derive_seed(
+            config.run_tag, "outbox", args.scenario_type, str(args.repeat_index)
+        )
     )
     result = run_once(
         config,
@@ -153,8 +168,9 @@ def main() -> int:
     out_path = phase_path(config.phase_dir(), f"outbox_run{args.repeat_index}")
     write_json(out_path, result)
     print(f"wrote {out_path}")
+    published = result["outbox_published_count"]
     print(
-        f"alerts={result['fraud_alerts_created']} published={result['outbox_published_count']} "
+        f"alerts={result['fraud_alerts_created']} published={published} "
         f"verification={result['verification']}"
     )
     return 0 if result["verification"] == "PASS" else 1

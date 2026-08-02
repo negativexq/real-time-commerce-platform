@@ -8,7 +8,7 @@ producers.
 
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -31,12 +31,12 @@ class DemoApiClient:
     def _get(self, path: str) -> dict[str, Any]:
         response = httpx.get(f"{self.base_url}{path}", timeout=self.timeout)
         response.raise_for_status()
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         response = httpx.post(f"{self.base_url}{path}", json=body, timeout=self.timeout)
         response.raise_for_status()
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
     def create_run(self, body: dict[str, Any], max_retries: int = 5) -> str:
         # DEMO_MAX_CONCURRENT_RUNS briefly counts a just-finished run as
@@ -53,7 +53,7 @@ class DemoApiClient:
                 if exc.response.status_code != 409:
                     raise
                 last_error = exc
-                time.sleep(min(2 ** attempt, 10))
+                time.sleep(min(2**attempt, 10))
         assert last_error is not None
         raise last_error
 
@@ -75,9 +75,7 @@ class DemoApiClient:
             time.sleep(1)
         raise TimeoutError(f"run {run_id} did not reach a terminal state in time")
 
-    def run_scenario(
-        self, body: dict[str, Any], timeout: float = 300.0
-    ) -> RunResult:
+    def run_scenario(self, body: dict[str, Any], timeout: float = 300.0) -> RunResult:
         run_id = self.create_run(body)
         return self.wait_for_terminal(run_id, timeout)
 

@@ -17,7 +17,9 @@ def _median(values: list[float]) -> float | None:
     return percentile(values, 0.5)
 
 
-def _numeric_field_stats(runs: list[dict[str, Any]], path: list[str]) -> dict[str, Any] | None:
+def _numeric_field_stats(
+    runs: list[dict[str, Any]], path: list[str]
+) -> dict[str, Any] | None:
     values: list[float] = []
     for run in runs:
         node: Any = run
@@ -107,7 +109,9 @@ def collect(run_tag: str) -> dict[str, Any]:
             },
             "api_latency_ms": {
                 route: {
-                    q: _numeric_field_stats(throughput_runs, ["api_latency_ms", route, q])
+                    q: _numeric_field_stats(
+                        throughput_runs, ["api_latency_ms", route, q]
+                    )
                     for q in ("p95", "p99")
                 }
                 for route in ("/api/v1/runs", "/api/v1/runs/{run_id}")
@@ -119,8 +123,12 @@ def collect(run_tag: str) -> dict[str, Any]:
         },
         "idempotency": {
             "n_runs": len(idempotency_runs),
-            "total_deliveries": _numeric_field_stats(idempotency_runs, ["total_deliveries"]),
-            "unique_event_ids": _numeric_field_stats(idempotency_runs, ["unique_event_ids"]),
+            "total_deliveries": _numeric_field_stats(
+                idempotency_runs, ["total_deliveries"]
+            ),
+            "unique_event_ids": _numeric_field_stats(
+                idempotency_runs, ["unique_event_ids"]
+            ),
             "duplicate_deliveries_implied": _numeric_field_stats(
                 idempotency_runs, ["duplicate_deliveries_implied"]
             ),
@@ -135,15 +143,21 @@ def collect(run_tag: str) -> dict[str, Any]:
             "malformed": malformed,
             "retry": {
                 "n_runs": len(retry_runs),
-                "retry_attempts_total": _numeric_field_stats(retry_runs, ["retry_attempts_total"]),
-                "retry_success_rate": _numeric_field_stats(retry_runs, ["retry_success_rate"]),
+                "retry_attempts_total": _numeric_field_stats(
+                    retry_runs, ["retry_attempts_total"]
+                ),
+                "retry_success_rate": _numeric_field_stats(
+                    retry_runs, ["retry_success_rate"]
+                ),
                 "dlq_rate": _numeric_field_stats(retry_runs, ["dlq_rate"]),
                 "raw_runs": retry_runs,
             },
         },
         "outbox": {
             "n_runs": len(outbox_runs),
-            "publish_success_rate": _numeric_field_stats(outbox_runs, ["publish_success_rate"]),
+            "publish_success_rate": _numeric_field_stats(
+                outbox_runs, ["publish_success_rate"]
+            ),
             "publish_delay_ms": {
                 q: _numeric_field_stats(outbox_runs, ["publish_delay_ms", q])
                 for q in ("p50", "p95", "p99")

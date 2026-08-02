@@ -36,7 +36,10 @@ def _fmt_stat(stat: dict[str, Any] | None, unit: str = "", digits: int = 2) -> s
 
 def _check_line(check: dict[str, Any]) -> str:
     icon = "PASS" if check["result"] == "PASS" else "**FAIL**"
-    return f"- [{icon}] `{check['check']}` — observed: `{check['observed']}` — {check['detail']}"
+    return (
+        f"- [{icon}] `{check['check']}` — observed: `{check['observed']}` — "
+        f"{check['detail']}"
+    )
 
 
 def render(run_tag: str) -> str:
@@ -83,24 +86,29 @@ def render(run_tag: str) -> str:
     lines.append("")
     lines.append("| Metric | Observed Result | Test Conditions |")
     lines.append("| --- | ---: | --- |")
+    avg_tp = _fmt_stat(throughput["average_throughput_events_per_second"], " evt/s")
     lines.append(
-        f"| Average throughput | {_fmt_stat(throughput['average_throughput_events_per_second'], ' evt/s')} "
+        f"| Average throughput | {avg_tp} "
         f"| primary pipeline, mixed_traffic scenario, {throughput['n_runs']} run(s) |"
     )
+    peak_tp = _fmt_stat(throughput["peak_throughput_events_per_second"], " evt/s")
     lines.append(
-        f"| Peak throughput | {_fmt_stat(throughput['peak_throughput_events_per_second'], ' evt/s')} "
+        f"| Peak throughput | {peak_tp} "
         "| 15s Prometheus rate window, 5s scrape-limited resolution |"
     )
+    proc_p95 = _fmt_stat(latency["processor_latency_ms"]["p95"], " ms")
     lines.append(
-        f"| Processor latency p95 | {_fmt_stat(latency['processor_latency_ms']['p95'], ' ms')} "
+        f"| Processor latency p95 | {proc_p95} "
         "| commerce_processor_event_processing_duration_seconds |"
     )
+    proc_p99 = _fmt_stat(latency["processor_latency_ms"]["p99"], " ms")
     lines.append(
-        f"| Processor latency p99 | {_fmt_stat(latency['processor_latency_ms']['p99'], ' ms')} "
+        f"| Processor latency p99 | {proc_p99} "
         "| commerce_processor_event_processing_duration_seconds |"
     )
+    e2e_p95 = _fmt_stat(latency["end_to_end_latency_ms"]["p95"], " ms")
     lines.append(
-        f"| End-to-end latency p95 | {_fmt_stat(latency['end_to_end_latency_ms']['p95'], ' ms')} "
+        f"| End-to-end latency p95 | {e2e_p95} "
         "| Kafka publish timestamp -> Postgres processed_at |"
     )
     burst = lag.get("burst") or {}
@@ -110,24 +118,28 @@ def render(run_tag: str) -> str:
         f"| Maximum consumer lag | {max_lag if max_lag is not None else NA} events "
         f"| {'outage sub-test' if outage else 'burst ramp sub-test'} |"
     )
+    lag_recovery = _fmt_num(outage.get("recovery_time_seconds")) if outage else NA
     lines.append(
-        f"| Lag recovery time | {_fmt_num(outage.get('recovery_time_seconds')) if outage else NA} sec "
-        "| outage sub-test (if performed) |"
+        f"| Lag recovery time | {lag_recovery} sec | outage sub-test (if performed) |"
     )
+    dup_effects = idempotency.get("duplicate_durable_side_effects_total", NA)
     lines.append(
-        f"| Duplicate durable side effects | {idempotency.get('duplicate_durable_side_effects_total', NA)} "
+        f"| Duplicate durable side effects | {dup_effects} "
         f"| duplicate_delivery scenario, {idempotency['n_runs']} run(s); expected 0 |"
     )
+    retry_rate = _fmt_stat(retry_dlq["retry"]["retry_success_rate"], "", 3)
     lines.append(
-        f"| Retry success rate | {_fmt_stat(retry_dlq['retry']['retry_success_rate'], '', 3)} "
+        f"| Retry success rate | {retry_rate} "
         "| isolated harness, controlled transient failures |"
     )
+    dlq_rate_val = _fmt_stat(retry_dlq["retry"]["dlq_rate"], "", 3)
     lines.append(
-        f"| DLQ rate (retry harness) | {_fmt_stat(retry_dlq['retry']['dlq_rate'], '', 3)} "
+        f"| DLQ rate (retry harness) | {dlq_rate_val} "
         "| isolated harness, controlled exhausted retries |"
     )
+    outbox_success = _fmt_stat(outbox["publish_success_rate"], "", 3)
     lines.append(
-        f"| Outbox publish success | {_fmt_stat(outbox['publish_success_rate'], '', 3)} "
+        f"| Outbox publish success | {outbox_success} "
         f"| fraud-triggering scenario, {outbox['n_runs']} run(s) |"
     )
     lines.append("")
@@ -141,10 +153,14 @@ def render(run_tag: str) -> str:
         f"{_fmt_num((docker.get('docker_vm_mem_bytes') or 0) / 1e9, 1)} GB, "
         f"{docker.get('docker_vm_os', NA)} ({docker.get('docker_vm_kernel', NA)})"
     )
-    lines.append(f"- Compose project: `{env.get('compose_project', config.compose_project)}`")
     lines.append(
-        f"- Kafka topics: `commerce.events` = {kafka_topics.get('commerce.events', NA)} partitions, "
-        f"`commerce.events.dlq` = {kafka_topics.get('commerce.events.dlq', NA)} partition(s)"
+        f"- Compose project: `{env.get('compose_project', config.compose_project)}`"
+    )
+    events_partitions = kafka_topics.get("commerce.events", NA)
+    dlq_partitions = kafka_topics.get("commerce.events.dlq", NA)
+    lines.append(
+        f"- Kafka topics: `commerce.events` = {events_partitions} partitions, "
+        f"`commerce.events.dlq` = {dlq_partitions} partition(s)"
     )
     lines.append(
         f"- Processor instances: {instance_counts.get('event-processor', NA)} "
@@ -154,11 +170,11 @@ def render(run_tag: str) -> str:
         "- Container memory limits (no CPU limits are configured in "
         "compose.yaml for any service - all containers share the Docker VM's "
         f"{docker.get('docker_vm_cpus', NA)} CPUs uncapped): "
-        + ", ".join(f"{name}={limit}" for name, limit in sorted(mem_limits.items()) if limit)
+        + ", ".join(
+            f"{name}={limit}" for name, limit in sorted(mem_limits.items()) if limit
+        )
     )
-    lines.append(
-        f"- Postgres: {postgres_cfg.get('version', NA)}"
-    )
+    lines.append(f"- Postgres: {postgres_cfg.get('version', NA)}")
     lines.append(
         f"- Redis: {redis_cfg.get('redis_version', NA)}, "
         f"maxmemory={redis_cfg.get('maxmemory', NA)} bytes, "
@@ -198,8 +214,9 @@ def render(run_tag: str) -> str:
         "scoped to exactly the events this benchmark produced."
     )
     if warmup:
+        warmup_count = warmup.get("requested_event_count", "?")
         lines.append(
-            f"- A warm-up run ({warmup.get('requested_event_count', '?')} events) was executed and "
+            f"- A warm-up run ({warmup_count} events) was executed and "
             "discarded before any measured run; its numbers are not included above."
         )
     lines.append("")
@@ -225,7 +242,10 @@ def render(run_tag: str) -> str:
         f"- Peak throughput (Prometheus 15s rate window, sampled at 5s steps): "
         f"{_fmt_stat(throughput['peak_throughput_events_per_second'], ' evt/s')}"
     )
-    lines.append(f"- Total events processed across all throughput runs: {throughput['total_events_processed']}")
+    total_processed = throughput["total_events_processed"]
+    lines.append(
+        f"- Total events processed across all throughput runs: {total_processed}"
+    )
     lines.append(
         "- Phrasing note: these are throughput values observed under this "
         "local test configuration, not a certified maximum capacity, unless "
@@ -241,16 +261,20 @@ def render(run_tag: str) -> str:
     lines.append("")
     lines.append("| Latency type | p50 | p95 | p99 | Source |")
     lines.append("| --- | ---: | ---: | ---: | --- |")
+    proc_lat = latency["processor_latency_ms"]
+    proc_p50 = _fmt_stat(proc_lat["p50"], " ms")
     lines.append(
-        f"| Processor (handler-internal) | {_fmt_stat(latency['processor_latency_ms']['p50'], ' ms')} "
-        f"| {_fmt_stat(latency['processor_latency_ms']['p95'], ' ms')} "
-        f"| {_fmt_stat(latency['processor_latency_ms']['p99'], ' ms')} "
+        f"| Processor (handler-internal) | {proc_p50} "
+        f"| {_fmt_stat(proc_lat['p95'], ' ms')} "
+        f"| {_fmt_stat(proc_lat['p99'], ' ms')} "
         "| Prometheus `commerce_processor_event_processing_duration_seconds` |"
     )
+    e2e_lat = latency["end_to_end_latency_ms"]
+    e2e_p50 = _fmt_stat(e2e_lat["p50"], " ms")
     lines.append(
-        f"| End-to-end (publish to processed) | {_fmt_stat(latency['end_to_end_latency_ms']['p50'], ' ms')} "
-        f"| {_fmt_stat(latency['end_to_end_latency_ms']['p95'], ' ms')} "
-        f"| {_fmt_stat(latency['end_to_end_latency_ms']['p99'], ' ms')} "
+        f"| End-to-end (publish to processed) | {e2e_p50} "
+        f"| {_fmt_stat(e2e_lat['p95'], ' ms')} "
+        f"| {_fmt_stat(e2e_lat['p99'], ' ms')} "
         "| Kafka broker CreateTime -> Postgres `processed_events.processed_at` |"
     )
     for route, stats in latency["api_latency_ms"].items():
@@ -264,21 +288,34 @@ def render(run_tag: str) -> str:
     lines.append("## Consumer Lag and Recovery")
     lines.append("")
     if burst:
-        lines.append(f"- Baseline lag (CLI/kafka-consumer-groups.sh): {burst.get('baseline_lag')}")
-        lines.append(f"- Baseline lag (Prometheus kafka_consumergroup_lag): {burst.get('baseline_lag_prometheus')}")
-        lines.append(f"- Max lag observed during staged burst ramp: {burst.get('max_lag_observed')}")
+        baseline_lag = burst.get("baseline_lag")
+        lines.append(f"- Baseline lag (CLI/kafka-consumer-groups.sh): {baseline_lag}")
+        baseline_lag_prom = burst.get("baseline_lag_prometheus")
+        lines.append(
+            f"- Baseline lag (Prometheus kafka_consumergroup_lag): {baseline_lag_prom}"
+        )
+        max_lag_burst = burst.get("max_lag_observed")
+        lines.append(f"- Max lag observed during staged burst ramp: {max_lag_burst}")
         lines.append("")
-        lines.append("| Stage rate (evt/s) | Duration (s) | Lag at stage start | Lag 1st half avg | Lag 2nd half avg | Still growing? | Terminated on its own? |")
+        lines.append(
+            "| Stage rate (evt/s) | Duration (s) | Lag at stage start "
+            "| Lag 1st half avg | Lag 2nd half avg | Still growing? "
+            "| Terminated on its own? |"
+        )
         lines.append("| ---: | ---: | ---: | ---: | ---: | --- | --- |")
         any_forced_stop = False
         for stage in burst.get("stages", []):
             terminated = stage.get("stage_terminated_on_its_own", True)
             if not terminated:
                 any_forced_stop = True
+            first_half = _fmt_num(stage["lag_first_half_avg"])
+            second_half = _fmt_num(stage["lag_second_half_avg"])
+            growing = stage["lag_still_growing_through_stage"]
             lines.append(
-                f"| {stage['requested_events_per_second']} | {stage['stage_duration_seconds']} "
-                f"| {stage['lag_at_stage_start']} | {_fmt_num(stage['lag_first_half_avg'])} "
-                f"| {_fmt_num(stage['lag_second_half_avg'])} | {stage['lag_still_growing_through_stage']} "
+                f"| {stage['requested_events_per_second']} "
+                f"| {stage['stage_duration_seconds']} "
+                f"| {stage['lag_at_stage_start']} | {first_half} "
+                f"| {second_half} | {growing} "
                 f"| {terminated} |"
             )
         lines.append("")
@@ -310,15 +347,20 @@ def render(run_tag: str) -> str:
         lines.append(f"- Burst sub-test: {NA}")
     lines.append("")
     if outage:
+        outage_window = _fmt_num(outage.get("outage_window_seconds"))
         lines.append(
             "- **Disruptive outage sub-test was performed**: the event-processor "
-            f"container was stopped for {_fmt_num(outage.get('outage_window_seconds'))}s "
+            f"container was stopped for {outage_window}s "
             "while a burst was published, then restarted."
         )
         lines.append(f"  - Max lag observed: {outage.get('max_lag_observed')}")
-        lines.append(f"  - Recovery time to baseline: {_fmt_num(outage.get('recovery_time_seconds'))} sec")
-        lines.append(f"  - Drain rate: {_fmt_num(outage.get('drain_rate_events_per_second'))} evt/s")
-        lines.append(f"  - Recovered within timeout: {outage.get('recovered_within_timeout')}")
+        recovery_time = _fmt_num(outage.get("recovery_time_seconds"))
+        lines.append(f"  - Recovery time to baseline: {recovery_time} sec")
+        drain_rate = _fmt_num(outage.get("drain_rate_events_per_second"))
+        lines.append(f"  - Drain rate: {drain_rate} evt/s")
+        lines.append(
+            f"  - Recovered within timeout: {outage.get('recovered_within_timeout')}"
+        )
     else:
         lines.append(
             "- Disruptive outage sub-test: **not performed** (requires explicit "
@@ -330,13 +372,16 @@ def render(run_tag: str) -> str:
     lines.append("## Idempotency Verification")
     lines.append("")
     lines.append(f"- Runs: {idempotency['n_runs']}")
-    lines.append(f"- Total deliveries: {_fmt_stat(idempotency['total_deliveries'], '', 0)}")
-    lines.append(f"- Unique event IDs: {_fmt_stat(idempotency['unique_event_ids'], '', 0)}")
-    lines.append(f"- Duplicate deliveries (implied by total - unique): {_fmt_stat(idempotency['duplicate_deliveries_implied'], '', 0)}")
     lines.append(
-        f"- **Duplicate durable side effects: {idempotency['duplicate_durable_side_effects_total']} "
-        "(expected 0)**"
+        f"- Total deliveries: {_fmt_stat(idempotency['total_deliveries'], '', 0)}"
     )
+    lines.append(
+        f"- Unique event IDs: {_fmt_stat(idempotency['unique_event_ids'], '', 0)}"
+    )
+    dup_implied = _fmt_stat(idempotency["duplicate_deliveries_implied"], "", 0)
+    lines.append(f"- Duplicate deliveries (implied by total - unique): {dup_implied}")
+    dup_total = idempotency["duplicate_durable_side_effects_total"]
+    lines.append(f"- **Duplicate durable side effects: {dup_total} (expected 0)**")
     lines.append("")
     for check in checks_by_prefix.get("idempotency", []):
         lines.append(_check_line(check))
@@ -360,8 +405,12 @@ def render(run_tag: str) -> str:
     lines.append("### Transient retry (isolated harness)")
     lines.append("")
     lines.append(f"- Runs: {retry['n_runs']}")
-    lines.append(f"- Retry attempts (total): {_fmt_stat(retry['retry_attempts_total'], '', 0)}")
-    lines.append(f"- Retry success rate: {_fmt_stat(retry['retry_success_rate'], '', 3)}")
+    lines.append(
+        f"- Retry attempts (total): {_fmt_stat(retry['retry_attempts_total'], '', 0)}"
+    )
+    lines.append(
+        f"- Retry success rate: {_fmt_stat(retry['retry_success_rate'], '', 3)}"
+    )
     lines.append(f"- DLQ rate: {_fmt_stat(retry['dlq_rate'], '', 3)}")
     lines.append("")
     for check in checks_by_prefix.get("retry_dlq", []):
@@ -371,7 +420,9 @@ def render(run_tag: str) -> str:
     lines.append("## Transactional Outbox Verification")
     lines.append("")
     lines.append(f"- Runs: {outbox['n_runs']}")
-    lines.append(f"- Publish success rate: {_fmt_stat(outbox['publish_success_rate'], '', 3)}")
+    lines.append(
+        f"- Publish success rate: {_fmt_stat(outbox['publish_success_rate'], '', 3)}"
+    )
     lines.append("- Publish delay (created_at -> published_at):")
     for q in ("p50", "p95", "p99"):
         lines.append(f"  - {q}: {_fmt_stat(outbox['publish_delay_ms'][q], ' ms')}")
@@ -390,11 +441,13 @@ def render(run_tag: str) -> str:
     lines.append(
         "- No `cpus:` limits are configured for any service in `compose.yaml` "
         "(only `mem_limit`); every container competes for the Docker "
-        f"Desktop VM's {docker.get('docker_vm_cpus', NA)} CPUs uncapped, and this benchmark itself "
+        f"Desktop VM's {docker.get('docker_vm_cpus', NA)} CPUs uncapped, and this "
+        "benchmark itself "
         "runs on the same host, competing for the same CPUs."
     )
     lines.append(
-        "- Prometheus scrape interval is 10s (see `infra/observability/prometheus/prometheus.yml`), "
+        "- Prometheus scrape interval is 10s "
+        "(see `infra/observability/prometheus/prometheus.yml`), "
         "which bounds the time resolution of peak-throughput and lag-curve readings."
     )
     lines.append(
@@ -429,7 +482,7 @@ def render(run_tag: str) -> str:
         "or Postgres bottleneck. The lag burst sub-test's default stage "
         "rates were kept at or below 300 evt/s to avoid this; a stage whose "
         "run did not self-terminate within its wait budget was explicitly "
-        "stopped (see the burst table's \"Terminated on its own?\" column) "
+        'stopped (see the burst table\'s "Terminated on its own?" column) '
         "rather than left running."
     )
     lines.append(
@@ -467,11 +520,15 @@ def render(run_tag: str) -> str:
         f".venv/bin/python -m scripts.benchmark.lag_recovery --run-tag {run_tag} burst"
     )
     lines.append(
-        f".venv/bin/python -m scripts.benchmark.lag_recovery --run-tag {run_tag} outage "
-        "--i-understand-this-stops-event-processor"
+        f".venv/bin/python -m scripts.benchmark.lag_recovery --run-tag {run_tag} "
+        "outage --i-understand-this-stops-event-processor"
     )
-    lines.append(f".venv/bin/python -m scripts.benchmark.collect_metrics --run-tag {run_tag}")
-    lines.append(f".venv/bin/python -m scripts.benchmark.verify_results --run-tag {run_tag}")
+    lines.append(
+        f".venv/bin/python -m scripts.benchmark.collect_metrics --run-tag {run_tag}"
+    )
+    lines.append(
+        f".venv/bin/python -m scripts.benchmark.verify_results --run-tag {run_tag}"
+    )
     lines.append("```")
     lines.append("")
     lines.append(f"Raw artifacts: `artifacts/benchmark/{run_tag}/`")

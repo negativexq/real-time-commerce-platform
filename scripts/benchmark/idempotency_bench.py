@@ -13,12 +13,19 @@ import sys
 from typing import Any
 
 from scripts.benchmark.artifacts import now_iso, phase_path, write_json
-from scripts.benchmark.config import derive_seed, load_config
+from scripts.benchmark.config import BenchmarkConfig, derive_seed, load_config
 from scripts.benchmark.demo_api import DemoApiClient
 from scripts.benchmark.pg import query_all, query_one
 
 
-def run_once(config, api: DemoApiClient, *, event_count: int, events_per_second: int, seed: int) -> dict[str, Any]:
+def run_once(
+    config: BenchmarkConfig,
+    api: DemoApiClient,
+    *,
+    event_count: int,
+    events_per_second: int,
+    seed: int,
+) -> dict[str, Any]:
     body = {
         "scenario_type": "duplicate_delivery",
         "event_count": event_count,
@@ -26,7 +33,9 @@ def run_once(config, api: DemoApiClient, *, event_count: int, events_per_second:
         "seed": seed,
         "notes": f"benchmark:{config.run_tag}:idempotency",
     }
-    result = api.run_scenario(body, timeout=max(120.0, event_count / max(events_per_second, 1) * 4 + 60))
+    result = api.run_scenario(
+        body, timeout=max(120.0, event_count / max(events_per_second, 1) * 4 + 60)
+    )
     run = result.summary.get("run", {})
 
     total_deliveries = int(run.get("generated_event_count", 0))
@@ -66,7 +75,8 @@ def run_once(config, api: DemoApiClient, *, event_count: int, events_per_second:
     entity_duplication = query_all(
         config.postgres_dsn,
         """
-        SELECT 'orders' AS table_name, COUNT(*) AS rows, COUNT(DISTINCT created_event_id) AS distinct_events
+        SELECT 'orders' AS table_name, COUNT(*) AS rows,
+               COUNT(DISTINCT created_event_id) AS distinct_events
         FROM orders o JOIN demo_run_event_manifest m ON m.event_id = o.created_event_id
         WHERE m.run_id = %s
         UNION ALL
@@ -81,7 +91,8 @@ def run_once(config, api: DemoApiClient, *, event_count: int, events_per_second:
         (result.run_id, result.run_id, result.run_id),
     )
     entity_duplicate_rows = sum(
-        max(int(row["rows"]) - int(row["distinct_events"]), 0) for row in entity_duplication
+        max(int(row["rows"]) - int(row["distinct_events"]), 0)
+        for row in entity_duplication
     )
 
     return {
@@ -95,7 +106,9 @@ def run_once(config, api: DemoApiClient, *, event_count: int, events_per_second:
         "duplicate_deliveries_implied": max(total_deliveries - unique_event_ids, 0),
         "processed_events_total_rows": total_rows,
         "processed_events_distinct_event_ids": distinct_event_ids,
-        "duplicate_durable_side_effects_processed_events": duplicate_durable_side_effects,
+        "duplicate_durable_side_effects_processed_events": (
+            duplicate_durable_side_effects
+        ),
         "duplicate_durable_side_effects_entity_tables": entity_duplicate_rows,
         "entity_table_breakdown": entity_duplication,
         "verification": "PASS"
@@ -131,9 +144,10 @@ def main() -> int:
     out_path = phase_path(config.phase_dir(), f"idempotency_run{args.repeat_index}")
     write_json(out_path, result)
     print(f"wrote {out_path}")
+    dup_side_effects = result["duplicate_durable_side_effects_processed_events"]
     print(
         f"deliveries={result['total_deliveries']} unique={result['unique_event_ids']} "
-        f"duplicate_side_effects={result['duplicate_durable_side_effects_processed_events']} "
+        f"duplicate_side_effects={dup_side_effects} "
         f"verification={result['verification']}"
     )
     return 0 if result["verification"] == "PASS" else 1

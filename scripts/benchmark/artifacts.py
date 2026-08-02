@@ -3,7 +3,7 @@
 import json
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 
 def write_json(path: str, payload: dict[str, Any]) -> None:
@@ -15,7 +15,7 @@ def write_json(path: str, payload: dict[str, Any]) -> None:
 
 def read_json(path: str) -> dict[str, Any]:
     with open(path) as handle:
-        return json.load(handle)
+        return cast(dict[str, Any], json.load(handle))
 
 
 def now_iso() -> str:
