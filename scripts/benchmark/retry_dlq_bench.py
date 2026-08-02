@@ -14,10 +14,10 @@
 """
 
 import argparse
-import base64
 import random
 import sys
 import time
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -45,10 +45,21 @@ REQUIRED_DLQ_FIELDS = [
     "processor_instance_id",
 ]
 
-MALFORMED_CASES = ["malformed_json", "missing_field", "unknown_event_type", "payload_mismatch"]
+MALFORMED_CASES = [
+    "malformed_json",
+    "missing_field",
+    "unknown_event_type",
+    "payload_mismatch",
+]
 
 
-def run_malformed(config: BenchmarkConfig, api: DemoApiClient, *, event_count: int, events_per_second: int) -> dict[str, Any]:
+def run_malformed(
+    config: BenchmarkConfig,
+    api: DemoApiClient,
+    *,
+    event_count: int,
+    events_per_second: int,
+) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
     for case in MALFORMED_CASES:
         dlq_start = topic_watermarks(config.kafka_bootstrap_servers, config.dlq_topic)
@@ -92,7 +103,9 @@ def run_malformed(config: BenchmarkConfig, api: DemoApiClient, *, event_count: i
                 "run_id": result.run_id,
                 "requested_event_count": event_count,
                 "dlq_records_from_kafka": len(records),
-                "dlq_records_from_postgres_time_window": int(db_dlq["rows"]) if db_dlq else None,
+                "dlq_records_from_postgres_time_window": int(db_dlq["rows"])
+                if db_dlq
+                else None,
                 "dlq_metadata_complete": metadata_ok,
                 "sample_error_categories": sorted(
                     {
@@ -121,13 +134,13 @@ def run_malformed(config: BenchmarkConfig, api: DemoApiClient, *, event_count: i
 
 
 class _RetrySmokeClock:
-    def now(self):  # noqa: ANN201
-        from datetime import UTC, datetime
-
+    def now(self) -> datetime:
         return datetime.now(UTC)
 
 
-def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: float, seed: int) -> dict[str, Any]:
+def run_retry(
+    config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: float, seed: int
+) -> dict[str, Any]:
     config.apply_process_env()
     from services.event_generator.config import GeneratorConfig
     from services.event_generator.generator import SeededUuidFactory, SyntheticGenerator
@@ -137,11 +150,13 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
     from services.event_processor.consumer import KafkaEventConsumer
     from services.event_processor.dlq import DlqPublisher
     from services.event_processor.errors import RetryableProcessingError
-    from services.event_processor.handler import AuditEventHandler, EventHandler
+    from services.event_processor.handler import EventHandler
     from services.event_processor.idempotency import RedisIdempotencyStore
     from services.event_processor.models import ProcessingOutcome, RunSummary
     from services.event_processor.processor import MessageProcessor
     from shared.commerce_common.enums import CustomerPersona, EventType
+    from shared.schemas import EventEnvelope
+    from shared.schemas.base import ContractModel
 
     identity = uuid4().hex
     group = f"commerce-benchmark-retry-{config.run_tag}-{identity[:8]}"
@@ -178,13 +193,15 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
         }
     )
     rng = random.Random(seed)
-    builder = JourneyBuilder(gen_config, SyntheticGenerator(rng, SeededUuidFactory(seed)), _RetrySmokeClock())
+    builder = JourneyBuilder(
+        gen_config, SyntheticGenerator(rng, SeededUuidFactory(seed)), _RetrySmokeClock()
+    )
     producer = KafkaEventProducer(gen_config)
 
     n_exhausted = max(int(round(batch_size * exhausted_fraction)), 1)
     n_succeed_after_retry = batch_size - n_exhausted
 
-    events = []
+    events: list[EventEnvelope[ContractModel]] = []
     while len(events) < batch_size:
         journey = builder.build()
         events.extend(journey.events)
@@ -198,24 +215,23 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
             self.failures = failures
             self.calls: dict[str, int] = {}
 
-        def handle(self, event, context) -> None:  # noqa: ANN001
+        def handle(self, event: EventEnvelope[ContractModel], context: object) -> None:
             key = str(event.event_id)
             self.calls[key] = self.calls.get(key, 0) + 1
             if self.calls[key] <= self.failures:
                 raise RetryableProcessingError("benchmark controlled retry")
 
     class AlwaysFail:
-        def handle(self, event, context) -> None:  # noqa: ANN001
+        def handle(self, event: EventEnvelope[ContractModel], context: object) -> None:
             raise RetryableProcessingError("benchmark controlled exhausted retry")
 
-    succeed_ids = {str(e.event_id) for e in events[:n_succeed_after_retry]}
     exhausted_ids = {str(e.event_id) for e in events[n_succeed_after_retry:]}
 
     succeed_handler = FailThenSucceed(2)
     fail_handler = AlwaysFail()
 
     class RoutingHandler:
-        def handle(self, event, context) -> None:  # noqa: ANN001
+        def handle(self, event: EventEnvelope[ContractModel], context: object) -> None:
             key = str(event.event_id)
             if key in exhausted_ids:
                 fail_handler.handle(event, context)
@@ -291,9 +307,10 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
     store.close()
     consumer.close()
 
-    offset_commit_matches_terminal = total_committed >= len(
-        [o for o in outcomes if o.terminal]
-    ) and total_committed <= total_log_end
+    offset_commit_matches_terminal = (
+        total_committed >= len([o for o in outcomes if o.terminal])
+        and total_committed <= total_log_end
+    )
 
     return {
         "sub_test": "retry",
@@ -302,7 +319,9 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
         "retry_exhausted": summary.retry_exhausted,
         "retry_success_count": redis_keys_completed,
         "retry_success_rate": (
-            redis_keys_completed / n_succeed_after_retry if n_succeed_after_retry else None
+            redis_keys_completed / n_succeed_after_retry
+            if n_succeed_after_retry
+            else None
         ),
         "dlq_count": summary.dlq_records,
         "dlq_rate": summary.dlq_records / batch_size if batch_size else None,
@@ -312,7 +331,9 @@ def run_retry(config: BenchmarkConfig, *, batch_size: int, exhausted_fraction: f
         "committed_offset_total": total_committed,
         "log_end_offset_total": total_log_end,
         "terminal_outcomes": len([o for o in outcomes if o.terminal]),
-        "offsets_committed_only_after_terminal_handling": offset_commit_matches_terminal,
+        "offsets_committed_only_after_terminal_handling": (
+            offset_commit_matches_terminal
+        ),
         "dlq_records_matched": len(dlq_matches),
         "dlq_metadata_complete": dlq_metadata_ok,
         "captured_at": now_iso(),

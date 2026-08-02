@@ -71,8 +71,10 @@ def read_publish_timestamps(
     remaining = {tp.partition: end_offsets[tp.partition] for tp in partitions}
     deadline = time.monotonic() + timeout_seconds
     try:
-        while remaining and time.monotonic() < deadline and len(found) < len(
-            wanted_event_ids
+        while (
+            remaining
+            and time.monotonic() < deadline
+            and len(found) < len(wanted_event_ids)
         ):
             msg = consumer.poll(1.0)
             if msg is None:
@@ -87,7 +89,9 @@ def read_publish_timestamps(
             if event_id_raw is None:
                 continue
             event_id = (
-                event_id_raw.decode() if isinstance(event_id_raw, bytes) else event_id_raw
+                event_id_raw.decode()
+                if isinstance(event_id_raw, bytes)
+                else event_id_raw
             )
             if event_id in wanted_event_ids and event_id not in found:
                 # First-write-wins: if the same event_id was genuinely

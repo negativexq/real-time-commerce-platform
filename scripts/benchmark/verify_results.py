@@ -35,7 +35,9 @@ def verify(run_tag: str) -> dict[str, Any]:
 
     idempotency_runs = summary["idempotency"]["raw_runs"]
     if idempotency_runs:
-        total_dup_side_effects = summary["idempotency"]["duplicate_durable_side_effects_total"]
+        total_dup_side_effects = summary["idempotency"][
+            "duplicate_durable_side_effects_total"
+        ]
         checks.append(
             _check(
                 "idempotency.zero_duplicate_durable_side_effects",
@@ -57,7 +59,14 @@ def verify(run_tag: str) -> dict[str, Any]:
                 )
             )
     else:
-        checks.append(_check("idempotency.zero_duplicate_durable_side_effects", False, None, "no idempotency runs found"))
+        checks.append(
+            _check(
+                "idempotency.zero_duplicate_durable_side_effects",
+                False,
+                None,
+                "no idempotency runs found",
+            )
+        )
 
     malformed = summary["retry_dlq"]["malformed"]
     if malformed:
@@ -123,8 +132,12 @@ def verify(run_tag: str) -> dict[str, Any]:
                 f"outbox.run[{run.get('run_id')}].no_committed_alert_silently_lost",
                 run.get("no_committed_alert_silently_lost", False),
                 {
-                    "missing_outbox_rows_for_alerts": run.get("missing_outbox_rows_for_alerts"),
-                    "stuck_pending_or_publishing_rows": run.get("stuck_pending_or_publishing_rows"),
+                    "missing_outbox_rows_for_alerts": run.get(
+                        "missing_outbox_rows_for_alerts"
+                    ),
+                    "stuck_pending_or_publishing_rows": run.get(
+                        "stuck_pending_or_publishing_rows"
+                    ),
                 },
                 "Every fraud_alerts row must have a corresponding fraud_outbox "
                 "row, and every outbox row must reach PUBLISHED or terminal "

@@ -37,7 +37,9 @@ def _docker_info(config: BenchmarkConfig) -> dict[str, Any]:
     version = _run(["docker", "version", "--format", "{{.Server.Version}}"])
     return {
         "docker_server_version": version or (parts[0] if parts else None),
-        "docker_vm_cpus": int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None,
+        "docker_vm_cpus": int(parts[1])
+        if len(parts) > 1 and parts[1].isdigit()
+        else None,
         "docker_vm_mem_bytes": int(parts[2])
         if len(parts) > 2 and parts[2].isdigit()
         else None,
@@ -48,7 +50,15 @@ def _docker_info(config: BenchmarkConfig) -> dict[str, Any]:
 
 def _container_mem_limits(config: BenchmarkConfig) -> dict[str, str | None]:
     raw = _run(
-        ["docker", "compose", "-p", config.compose_project, "config", "--format", "json"]
+        [
+            "docker",
+            "compose",
+            "-p",
+            config.compose_project,
+            "config",
+            "--format",
+            "json",
+        ]
     )
     limits: dict[str, str | None] = {}
     try:

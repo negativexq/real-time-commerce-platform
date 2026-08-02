@@ -14,5 +14,7 @@ def percentile(values: list[float], q: float) -> float | None:
     return ordered[low] + (ordered[high] - ordered[low]) * fraction
 
 
-def percentiles(values: list[float], qs: tuple[float, ...] = (0.5, 0.95, 0.99)) -> dict:
+def percentiles(
+    values: list[float], qs: tuple[float, ...] = (0.5, 0.95, 0.99)
+) -> dict[str, float | None]:
     return {f"p{int(q * 100)}": percentile(values, q) for q in qs}

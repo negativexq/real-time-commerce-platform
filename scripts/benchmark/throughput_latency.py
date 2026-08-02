@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any
 
 from scripts.benchmark.artifacts import now_iso, phase_path, write_json
-from scripts.benchmark.config import derive_seed, load_config
+from scripts.benchmark.config import BenchmarkConfig, derive_seed, load_config
 from scripts.benchmark.demo_api import DemoApiClient
 from scripts.benchmark.kafka_replay import read_publish_timestamps, topic_watermarks
 from scripts.benchmark.pg import query_all
@@ -38,7 +38,7 @@ def _parse_ts(value: str | None) -> datetime | None:
 
 
 def run_once(
-    config,
+    config: BenchmarkConfig,
     prom: PrometheusClient,
     api: DemoApiClient,
     *,
@@ -69,7 +69,9 @@ def run_once(
     # just before our exact watermark snapshot must not be excluded from the
     # scan window, or read_publish_timestamps would incorrectly anchor on a
     # later copy and produce a negative (impossible) latency.
-    raw_start_offsets = topic_watermarks(config.kafka_bootstrap_servers, config.events_topic)
+    raw_start_offsets = topic_watermarks(
+        config.kafka_bootstrap_servers, config.events_topic
+    )
     start_offsets = {p: max(o - 500, 0) for p, o in raw_start_offsets.items()}
     wall_start = time.monotonic()
     wall_start_unix = time.time()
@@ -167,7 +169,7 @@ def run_once(
         for row in processed_rows
         if row["event_id"] in publish_ts
     ]
-    e2e_stats = percentiles(e2e_latencies_ms)
+    e2e_stats: dict[str, Any] = dict(percentiles(e2e_latencies_ms))
     e2e_stats["sample_count"] = len(e2e_latencies_ms)
     e2e_stats["matched_of_processed"] = f"{len(e2e_latencies_ms)}/{len(processed_rows)}"
 
@@ -184,7 +186,9 @@ def run_once(
     if publish_ts and processed_rows:
         first_publish_ms = min(publish_ts.values())
         last_processed_ms = max(float(row["processed_at_ms"]) for row in processed_rows)
-        observed_window_seconds = max((last_processed_ms - first_publish_ms) / 1000.0, 0.001)
+        observed_window_seconds = max(
+            (last_processed_ms - first_publish_ms) / 1000.0, 0.001
+        )
         observed_throughput = len(processed_rows) / observed_window_seconds
 
     return {
@@ -266,7 +270,8 @@ def main() -> int:
         repeat_index=args.repeat_index,
     )
     out_path = phase_path(
-        config.phase_dir(), args.output_name or f"throughput_latency_run{args.repeat_index}"
+        config.phase_dir(),
+        args.output_name or f"throughput_latency_run{args.repeat_index}",
     )
     write_json(out_path, result)
     print(f"wrote {out_path}")
