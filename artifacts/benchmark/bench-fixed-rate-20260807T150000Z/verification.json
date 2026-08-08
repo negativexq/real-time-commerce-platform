@@ -1,0 +1,158 @@
+{
+  "all_passed": true,
+  "checks": [
+    {
+      "check": "idempotency.zero_duplicate_durable_side_effects",
+      "detail": "Sum of duplicate_durable_side_effects_processed_events + duplicate_durable_side_effects_entity_tables across all idempotency runs must be exactly 0.",
+      "observed": 0,
+      "result": "PASS"
+    },
+    {
+      "check": "idempotency.run[33ca7a0d-c074-4234-92c7-5765be7268aa].duplicates_actually_injected",
+      "detail": "The duplicate_delivery scenario must have actually produced duplicate deliveries (otherwise the test proves nothing).",
+      "observed": 34,
+      "result": "PASS"
+    },
+    {
+      "check": "idempotency.run[617057fa-864a-43b4-944c-c0f5407bf2d4].duplicates_actually_injected",
+      "detail": "The duplicate_delivery scenario must have actually produced duplicate deliveries (otherwise the test proves nothing).",
+      "observed": 36,
+      "result": "PASS"
+    },
+    {
+      "check": "idempotency.run[efac74f3-5e2b-4dff-b9f8-e41a39b42544].duplicates_actually_injected",
+      "detail": "The duplicate_delivery scenario must have actually produced duplicate deliveries (otherwise the test proves nothing).",
+      "observed": 35,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.malformed_dlq_metadata_complete",
+      "detail": "Every DLQ record produced by the malformed-event scenarios must contain all required DlqEnvelope fields.",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.malformed[malformed_json].reached_dlq",
+      "detail": "Each malformed case must actually produce at least one DLQ record.",
+      "observed": 4,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.malformed[missing_field].reached_dlq",
+      "detail": "Each malformed case must actually produce at least one DLQ record.",
+      "observed": 4,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.malformed[unknown_event_type].reached_dlq",
+      "detail": "Each malformed case must actually produce at least one DLQ record.",
+      "observed": 5,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.malformed[payload_mismatch].reached_dlq",
+      "detail": "Each malformed case must actually produce at least one DLQ record.",
+      "observed": 4,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-f3559fdf].offsets_committed_only_after_terminal",
+      "detail": "Committed offset total must never exceed the log end offset and must be consistent with the number of terminally handled records - i.e. no offset is committed ahead of terminal (success/DLQ) handling.",
+      "observed": {
+        "committed_offset_total": 117296,
+        "terminal_outcomes": 60
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-f3559fdf].dlq_metadata_complete",
+      "detail": "DLQ records produced by exhausted retries must contain all required DlqEnvelope fields.",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-f3559fdf].retry_then_success_observed",
+      "detail": "The retry sub-test must have actually observed at least one event succeed after a controlled transient failure.",
+      "observed": 48,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-e261e625].offsets_committed_only_after_terminal",
+      "detail": "Committed offset total must never exceed the log end offset and must be consistent with the number of terminally handled records - i.e. no offset is committed ahead of terminal (success/DLQ) handling.",
+      "observed": {
+        "committed_offset_total": 50334,
+        "terminal_outcomes": 60
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-e261e625].dlq_metadata_complete",
+      "detail": "DLQ records produced by exhausted retries must contain all required DlqEnvelope fields.",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-e261e625].retry_then_success_observed",
+      "detail": "The retry sub-test must have actually observed at least one event succeed after a controlled transient failure.",
+      "observed": 48,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-53150891].offsets_committed_only_after_terminal",
+      "detail": "Committed offset total must never exceed the log end offset and must be consistent with the number of terminally handled records - i.e. no offset is committed ahead of terminal (success/DLQ) handling.",
+      "observed": {
+        "committed_offset_total": 117416,
+        "terminal_outcomes": 60
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-53150891].dlq_metadata_complete",
+      "detail": "DLQ records produced by exhausted retries must contain all required DlqEnvelope fields.",
+      "observed": true,
+      "result": "PASS"
+    },
+    {
+      "check": "retry_dlq.retry[commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-53150891].retry_then_success_observed",
+      "detail": "The retry sub-test must have actually observed at least one event succeed after a controlled transient failure.",
+      "observed": 48,
+      "result": "PASS"
+    },
+    {
+      "check": "outbox.run[75583453-767e-4865-9507-7c7309401f55].no_committed_alert_silently_lost",
+      "detail": "Every fraud_alerts row must have a corresponding fraud_outbox row, and every outbox row must reach PUBLISHED or terminal FAILED by the end of the drain window.",
+      "observed": {
+        "missing_outbox_rows_for_alerts": 0,
+        "stuck_pending_or_publishing_rows": 0
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "outbox.run[e9c5a47b-6c04-4c1e-b61f-4272a3a3133a].no_committed_alert_silently_lost",
+      "detail": "Every fraud_alerts row must have a corresponding fraud_outbox row, and every outbox row must reach PUBLISHED or terminal FAILED by the end of the drain window.",
+      "observed": {
+        "missing_outbox_rows_for_alerts": 0,
+        "stuck_pending_or_publishing_rows": 0
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "outbox.run[b251aec7-3640-4459-a80a-34c7538aec5c].no_committed_alert_silently_lost",
+      "detail": "Every fraud_alerts row must have a corresponding fraud_outbox row, and every outbox row must reach PUBLISHED or terminal FAILED by the end of the drain window.",
+      "observed": {
+        "missing_outbox_rows_for_alerts": 0,
+        "stuck_pending_or_publishing_rows": 0
+      },
+      "result": "PASS"
+    },
+    {
+      "check": "consumer_lag.burst_baseline_measured",
+      "detail": "Baseline consumer lag must be a real measured value (0 or positive), not missing.",
+      "observed": 0,
+      "result": "PASS"
+    }
+  ],
+  "failed_checks": [],
+  "generated_at": "2026-08-07T11:37:44.260627+00:00",
+  "run_tag": "bench-fixed-rate-20260807T150000Z"
+}

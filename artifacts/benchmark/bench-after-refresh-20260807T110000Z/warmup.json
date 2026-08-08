@@ -1,0 +1,36 @@
+{
+  "api_latency_ms": {
+    "/api/v1/runs": {
+      "p95": 48.75,
+      "p99": 49.75
+    },
+    "/api/v1/runs/{run_id}": {
+      "p95": 22.0,
+      "p99": 24.400000000000002
+    }
+  },
+  "api_reported_duration_seconds": 6.481409,
+  "average_throughput_events_per_second": 15.614428524877184,
+  "average_throughput_method": "observed_kafka_publish_to_postgres_processed_window",
+  "captured_at": "2026-08-07T10:53:49.729473+00:00",
+  "end_to_end_latency_ms": {
+    "matched_of_processed": "100/100",
+    "p50": 23.2440185546875,
+    "p95": 25.67587890625,
+    "p99": 45.821887207031274,
+    "sample_count": 100
+  },
+  "observed_processing_window_seconds": 6.4043330078125,
+  "peak_throughput_events_per_second": 24.89502099580084,
+  "processed_event_count": 100,
+  "processor_latency_ms": {
+    "p50": 3.883928571428572,
+    "p95": 9.845454545454547,
+    "p99": 23.150000000000034
+  },
+  "requested_event_count": 100,
+  "requested_events_per_second": 20,
+  "run_id": "85125d9f-3521-49fe-9cdb-980f106402d8",
+  "seed": 974576365,
+  "status": "COMPLETED"
+}

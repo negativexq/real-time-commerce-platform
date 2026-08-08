@@ -1,6 +1,7 @@
 """Atomic fraud evaluation, alert, and outbox persistence."""
 
 import json
+from time import perf_counter
 
 import psycopg
 
@@ -8,6 +9,7 @@ from services.event_processor.errors import FraudEvaluationIntegrityError
 from services.event_processor.fraud.config import FraudConfig
 from services.event_processor.fraud.models import FraudDecision, FraudEvaluation
 from services.event_processor.fraud.publisher import build_alert_message
+from shared.observability.metrics import ApplicationMetrics
 from shared.schemas import EventEnvelope, canonical_json
 from shared.schemas.base import ContractModel
 
@@ -17,9 +19,11 @@ class FraudRepository:
         self,
         connection: psycopg.Connection[tuple[object, ...]],
         config: FraudConfig,
+        metrics: ApplicationMetrics | None = None,
     ) -> None:
         self.connection = connection
         self.config = config
+        self.metrics = metrics
 
     def persist(
         self,
@@ -125,6 +129,7 @@ class FraudRepository:
             )
             rows["fraud_alerts"] = 1
             if self.config.fraud_outbox_enabled:
+                outbox_started = perf_counter()
                 cursor.execute(
                     """
                     INSERT INTO fraud_outbox (
@@ -152,5 +157,9 @@ class FraudRepository:
                         message.payload_bytes,
                     ),
                 )
+                if self.metrics is not None:
+                    self.metrics.outbox_write_duration.observe(
+                        perf_counter() - outbox_started
+                    )
                 rows["fraud_outbox"] = 1
             return rows

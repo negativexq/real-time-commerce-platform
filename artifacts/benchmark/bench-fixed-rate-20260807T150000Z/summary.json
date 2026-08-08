@@ -1,0 +1,889 @@
+{
+  "consumer_lag": {
+    "burst": {
+      "all_samples": [
+        {
+          "lag_cli": 0,
+          "lag_prometheus": 0.0,
+          "t": 1786102423.597454
+        },
+        {
+          "lag_cli": 101,
+          "lag_prometheus": 93.0,
+          "t": 1786102433.518738
+        },
+        {
+          "lag_cli": 147,
+          "lag_prometheus": 145.0,
+          "t": 1786102442.682941
+        },
+        {
+          "lag_cli": 123,
+          "lag_prometheus": 145.0,
+          "t": 1786102450.398355
+        },
+        {
+          "lag_cli": 0,
+          "lag_prometheus": 0.0,
+          "t": 1786102456.3274062
+        },
+        {
+          "lag_cli": 0,
+          "lag_prometheus": 0.0,
+          "t": 1786102464.85583
+        },
+        {
+          "lag_cli": 591,
+          "lag_prometheus": 251.0,
+          "t": 1786102482.244168
+        },
+        {
+          "lag_cli": 1014,
+          "lag_prometheus": 1027.0,
+          "t": 1786102492.8235362
+        },
+        {
+          "lag_cli": 1378,
+          "lag_prometheus": 1389.0,
+          "t": 1786102502.309489
+        },
+        {
+          "lag_cli": 1781,
+          "lag_prometheus": 1389.0,
+          "t": 1786102510.2042592
+        },
+        {
+          "lag_cli": 570,
+          "lag_prometheus": 551.0,
+          "t": 1786102553.541505
+        },
+        {
+          "lag_cli": 1163,
+          "lag_prometheus": 551.0,
+          "t": 1786102560.570024
+        },
+        {
+          "lag_cli": 1764,
+          "lag_prometheus": 1338.0,
+          "t": 1786102567.419421
+        },
+        {
+          "lag_cli": 2302,
+          "lag_prometheus": 2157.0,
+          "t": 1786102574.191734
+        },
+        {
+          "lag_cli": 2861,
+          "lag_prometheus": 2157.0,
+          "t": 1786102581.061891
+        }
+      ],
+      "baseline_lag": 0,
+      "baseline_lag_prometheus": 0.0,
+      "captured_at": "2026-08-07T11:36:47.079994+00:00",
+      "disruptive": false,
+      "first_stage_rate_with_growing_lag": 150,
+      "max_lag_observed": 2861,
+      "note": "first_stage_rate_with_growing_lag reports the lowest tested rate at which lag was still net-increasing through the whole stage in this run; it is an observed data point under this local configuration, not a certified maximum capacity.",
+      "stages": [
+        {
+          "event_count": 1000,
+          "lag_at_stage_start": 63,
+          "lag_first_half_avg": 124.0,
+          "lag_second_half_avg": 41.0,
+          "lag_still_growing_through_stage": false,
+          "requested_events_per_second": 50,
+          "run_id": "05aa727d-71cb-446e-8039-84b2350ce342",
+          "stage_duration_seconds": 20,
+          "stage_terminated_on_its_own": true
+        },
+        {
+          "event_count": 3000,
+          "lag_at_stage_start": 290,
+          "lag_first_half_avg": 802.5,
+          "lag_second_half_avg": 1579.5,
+          "lag_still_growing_through_stage": true,
+          "requested_events_per_second": 150,
+          "run_id": "0f7e9d29-356b-4eee-9295-bbfe223ea5e5",
+          "stage_duration_seconds": 20,
+          "stage_terminated_on_its_own": true
+        },
+        {
+          "event_count": 6000,
+          "lag_at_stage_start": 256,
+          "lag_first_half_avg": 866.5,
+          "lag_second_half_avg": 2309.0,
+          "lag_still_growing_through_stage": true,
+          "requested_events_per_second": 300,
+          "run_id": "37aa7e70-5446-4d5b-8469-0ddc25f886d6",
+          "stage_duration_seconds": 20,
+          "stage_terminated_on_its_own": true
+        }
+      ],
+      "sub_test": "burst"
+    },
+    "outage": null
+  },
+  "environment": {
+    "compose_project": "real-time-commerce-platform",
+    "container_instance_counts": {
+      "demo-control-api": 1,
+      "demo-control-web": 1,
+      "event-processor": 1,
+      "fraud-outbox-publisher": 1,
+      "grafana": 1,
+      "kafka": 1,
+      "kafka-exporter": 1,
+      "kafka-ui": 1,
+      "postgres": 1,
+      "postgres-exporter": 1,
+      "prometheus": 1,
+      "redis": 1,
+      "redis-exporter": 1
+    },
+    "container_mem_limits": {
+      "kafka": null,
+      "kafka-init": null,
+      "kafka-ui": null,
+      "postgres": null,
+      "redis": "402653184"
+    },
+    "docker": {
+      "docker_server_version": "28.3.0",
+      "docker_vm_cpus": 8,
+      "docker_vm_kernel": "6.10.14-linuxkit",
+      "docker_vm_mem_bytes": 8218316800,
+      "docker_vm_os": "Docker Desktop"
+    },
+    "host": {
+      "machine": "arm64",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "processor": "arm",
+      "python_version": "3.12.13"
+    },
+    "kafka_topics": {
+      "commerce.events": 3,
+      "commerce.events.dlq": 1
+    },
+    "postgres": {
+      "version": "PostgreSQL 17.5 (Debian 17.5-1.pgdg120+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14) 12.2.0, 64-bit"
+    },
+    "redis": {
+      "maxmemory": "268435456",
+      "maxmemory_policy": "allkeys-lru",
+      "redis_version": "7.4.5"
+    }
+  },
+  "generated_at": "2026-08-07T11:37:44.216561+00:00",
+  "idempotency": {
+    "duplicate_deliveries_implied": {
+      "max": 36.0,
+      "median": 35.0,
+      "min": 34.0,
+      "n": 3,
+      "values": [
+        34.0,
+        36.0,
+        35.0
+      ]
+    },
+    "duplicate_durable_side_effects_total": 0,
+    "n_runs": 3,
+    "raw_runs": [
+      {
+        "captured_at": "2026-08-07T11:36:53.662442+00:00",
+        "duplicate_deliveries_implied": 34,
+        "duplicate_deliveries_reported_by_processor": 0,
+        "duplicate_durable_side_effects_entity_tables": 0,
+        "duplicate_durable_side_effects_processed_events": 0,
+        "entity_table_breakdown": [
+          {
+            "distinct_events": 35,
+            "rows": 35,
+            "table_name": "orders"
+          },
+          {
+            "distinct_events": 34,
+            "rows": 34,
+            "table_name": "payments"
+          },
+          {
+            "distinct_events": 35,
+            "rows": 35,
+            "table_name": "carts"
+          }
+        ],
+        "processed_events_distinct_event_ids": 266,
+        "processed_events_total_rows": 266,
+        "requested_event_count": 300,
+        "run_id": "33ca7a0d-c074-4234-92c7-5765be7268aa",
+        "seed": 1477969301,
+        "status": "COMPLETED",
+        "total_deliveries": 300,
+        "unique_event_ids": 266,
+        "verification": "PASS"
+      },
+      {
+        "captured_at": "2026-08-07T11:37:00.256553+00:00",
+        "duplicate_deliveries_implied": 36,
+        "duplicate_deliveries_reported_by_processor": 0,
+        "duplicate_durable_side_effects_entity_tables": 0,
+        "duplicate_durable_side_effects_processed_events": 0,
+        "entity_table_breakdown": [
+          {
+            "distinct_events": 36,
+            "rows": 36,
+            "table_name": "orders"
+          },
+          {
+            "distinct_events": 36,
+            "rows": 36,
+            "table_name": "payments"
+          },
+          {
+            "distinct_events": 36,
+            "rows": 36,
+            "table_name": "carts"
+          }
+        ],
+        "processed_events_distinct_event_ids": 264,
+        "processed_events_total_rows": 264,
+        "requested_event_count": 300,
+        "run_id": "617057fa-864a-43b4-944c-c0f5407bf2d4",
+        "seed": 710070068,
+        "status": "COMPLETED",
+        "total_deliveries": 300,
+        "unique_event_ids": 264,
+        "verification": "PASS"
+      },
+      {
+        "captured_at": "2026-08-07T11:37:07.782686+00:00",
+        "duplicate_deliveries_implied": 35,
+        "duplicate_deliveries_reported_by_processor": 0,
+        "duplicate_durable_side_effects_entity_tables": 0,
+        "duplicate_durable_side_effects_processed_events": 0,
+        "entity_table_breakdown": [
+          {
+            "distinct_events": 36,
+            "rows": 36,
+            "table_name": "orders"
+          },
+          {
+            "distinct_events": 35,
+            "rows": 35,
+            "table_name": "payments"
+          },
+          {
+            "distinct_events": 36,
+            "rows": 36,
+            "table_name": "carts"
+          }
+        ],
+        "processed_events_distinct_event_ids": 265,
+        "processed_events_total_rows": 265,
+        "requested_event_count": 300,
+        "run_id": "efac74f3-5e2b-4dff-b9f8-e41a39b42544",
+        "seed": 795504316,
+        "status": "COMPLETED",
+        "total_deliveries": 300,
+        "unique_event_ids": 265,
+        "verification": "PASS"
+      }
+    ],
+    "total_deliveries": {
+      "max": 300.0,
+      "median": 300.0,
+      "min": 300.0,
+      "n": 3,
+      "values": [
+        300.0,
+        300.0,
+        300.0
+      ]
+    },
+    "unique_event_ids": {
+      "max": 266.0,
+      "median": 265.0,
+      "min": 264.0,
+      "n": 3,
+      "values": [
+        266.0,
+        264.0,
+        265.0
+      ]
+    }
+  },
+  "latency": {
+    "api_latency_ms": {
+      "/api/v1/runs": {
+        "p95": {
+          "max": 242.5,
+          "median": 206.71357864213573,
+          "min": 73.81832097331821,
+          "n": 3,
+          "values": [
+            206.71357864213573,
+            73.81832097331821,
+            242.5
+          ]
+        },
+        "p99": {
+          "max": 248.5,
+          "median": 241.33311668833116,
+          "min": 74.81072097501782,
+          "n": 3,
+          "values": [
+            241.33311668833116,
+            74.81072097501782,
+            248.5
+          ]
+        }
+      },
+      "/api/v1/runs/{run_id}": {
+        "p95": {
+          "max": 180.62499999999991,
+          "median": 169.95274339243883,
+          "min": 148.74999999999986,
+          "n": 3,
+          "values": [
+            169.95274339243883,
+            148.74999999999986,
+            180.62499999999991
+          ]
+        },
+        "p99": {
+          "max": 236.12499999999997,
+          "median": 233.99275059541216,
+          "min": 49.1,
+          "n": 3,
+          "values": [
+            233.99275059541216,
+            49.1,
+            236.12499999999997
+          ]
+        }
+      }
+    },
+    "end_to_end_latency_ms": {
+      "p50": {
+        "max": 9150.678466796875,
+        "median": 462.0545654296875,
+        "min": 271.0599365234375,
+        "n": 3,
+        "values": [
+          271.0599365234375,
+          462.0545654296875,
+          9150.678466796875
+        ]
+      },
+      "p95": {
+        "max": 11381.097729492187,
+        "median": 3328.17099609375,
+        "min": 2148.0060424804688,
+        "n": 3,
+        "values": [
+          2148.0060424804688,
+          3328.17099609375,
+          11381.097729492187
+        ]
+      },
+      "p99": {
+        "max": 11408.685688476562,
+        "median": 3588.8483349609373,
+        "min": 2294.32908203125,
+        "n": 3,
+        "values": [
+          2294.32908203125,
+          3588.8483349609373,
+          11408.685688476562
+        ]
+      }
+    },
+    "processor_latency_ms": {
+      "p50": {
+        "max": 16.03868194842407,
+        "median": 9.989293361884368,
+        "min": 9.953703703703704,
+        "n": 3,
+        "values": [
+          9.989293361884368,
+          9.953703703703704,
+          16.03868194842407
+        ]
+      },
+      "p95": {
+        "max": 50.8510638297872,
+        "median": 39.80263157894736,
+        "min": 38.37155963302749,
+        "n": 3,
+        "values": [
+          38.37155963302749,
+          39.80263157894736,
+          50.8510638297872
+        ]
+      },
+      "p99": {
+        "max": 155.92000000000027,
+        "median": 80.91666666666647,
+        "min": 72.94444444444389,
+        "n": 3,
+        "values": [
+          72.94444444444389,
+          80.91666666666647,
+          155.92000000000027
+        ]
+      }
+    }
+  },
+  "outbox": {
+    "n_runs": 3,
+    "publish_delay_ms": {
+      "p50": {
+        "max": 319.1494140625,
+        "median": 294.0205078125,
+        "min": 254.6715087890625,
+        "n": 3,
+        "values": [
+          319.1494140625,
+          294.0205078125,
+          254.6715087890625
+        ]
+      },
+      "p95": {
+        "max": 479.4952392578125,
+        "median": 449.96376953124997,
+        "min": 421.6932861328125,
+        "n": 3,
+        "values": [
+          449.96376953124997,
+          421.6932861328125,
+          479.4952392578125
+        ]
+      },
+      "p99": {
+        "max": 501.2302978515625,
+        "median": 468.61521484375,
+        "min": 426.8433447265625,
+        "n": 3,
+        "values": [
+          468.61521484375,
+          426.8433447265625,
+          501.2302978515625
+        ]
+      }
+    },
+    "publish_success_rate": {
+      "max": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 3,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "raw_runs": [
+      {
+        "captured_at": "2026-08-07T11:37:33.244550+00:00",
+        "fraud_alerts_created": 14,
+        "missing_outbox_rows_for_alerts": 0,
+        "no_committed_alert_silently_lost": true,
+        "outbox_pending_or_failed_count": 0,
+        "outbox_published_count": 14,
+        "outbox_rows_created": 14,
+        "outbox_status_breakdown": {
+          "PUBLISHED": 14
+        },
+        "publish_delay_ms": {
+          "p50": 319.1494140625,
+          "p95": 449.96376953124997,
+          "p99": 468.61521484375,
+          "sample_count": 14
+        },
+        "publish_success_rate": 1.0,
+        "requested_event_count": 150,
+        "run_id": "75583453-767e-4865-9507-7c7309401f55",
+        "scenario_type": "suspicious_payment",
+        "seed": 1151136106,
+        "stuck_pending_or_publishing_rows": 0,
+        "verification": "PASS"
+      },
+      {
+        "captured_at": "2026-08-07T11:37:38.660049+00:00",
+        "fraud_alerts_created": 8,
+        "missing_outbox_rows_for_alerts": 0,
+        "no_committed_alert_silently_lost": true,
+        "outbox_pending_or_failed_count": 0,
+        "outbox_published_count": 8,
+        "outbox_rows_created": 8,
+        "outbox_status_breakdown": {
+          "PUBLISHED": 8
+        },
+        "publish_delay_ms": {
+          "p50": 294.0205078125,
+          "p95": 421.6932861328125,
+          "p99": 426.8433447265625,
+          "sample_count": 8
+        },
+        "publish_success_rate": 1.0,
+        "requested_event_count": 150,
+        "run_id": "e9c5a47b-6c04-4c1e-b61f-4272a3a3133a",
+        "scenario_type": "suspicious_payment",
+        "seed": 1000374631,
+        "stuck_pending_or_publishing_rows": 0,
+        "verification": "PASS"
+      },
+      {
+        "captured_at": "2026-08-07T11:37:44.141002+00:00",
+        "fraud_alerts_created": 16,
+        "missing_outbox_rows_for_alerts": 0,
+        "no_committed_alert_silently_lost": true,
+        "outbox_pending_or_failed_count": 0,
+        "outbox_published_count": 16,
+        "outbox_rows_created": 16,
+        "outbox_status_breakdown": {
+          "PUBLISHED": 16
+        },
+        "publish_delay_ms": {
+          "p50": 254.6715087890625,
+          "p95": 479.4952392578125,
+          "p99": 501.2302978515625,
+          "sample_count": 16
+        },
+        "publish_success_rate": 1.0,
+        "requested_event_count": 150,
+        "run_id": "b251aec7-3640-4459-a80a-34c7538aec5c",
+        "scenario_type": "suspicious_payment",
+        "seed": 1967070171,
+        "stuck_pending_or_publishing_rows": 0,
+        "verification": "PASS"
+      }
+    ]
+  },
+  "retry_dlq": {
+    "malformed": {
+      "all_metadata_complete": true,
+      "captured_at": "2026-08-07T11:37:17.159143+00:00",
+      "cases": [
+        {
+          "dlq_metadata_complete": true,
+          "dlq_records_from_kafka": 4,
+          "dlq_records_from_postgres_time_window": 0,
+          "malformed_case": "malformed_json",
+          "requested_event_count": 40,
+          "run_id": "99066dd2-ef9e-40b3-9390-f8c8b273e52e",
+          "sample_error_categories": [
+            "malformed_json"
+          ]
+        },
+        {
+          "dlq_metadata_complete": true,
+          "dlq_records_from_kafka": 4,
+          "dlq_records_from_postgres_time_window": 0,
+          "malformed_case": "missing_field",
+          "requested_event_count": 40,
+          "run_id": "610dbe15-30f6-440d-b36c-9b31c50b46a4",
+          "sample_error_categories": [
+            "contract_validation_failed"
+          ]
+        },
+        {
+          "dlq_metadata_complete": true,
+          "dlq_records_from_kafka": 5,
+          "dlq_records_from_postgres_time_window": 0,
+          "malformed_case": "unknown_event_type",
+          "requested_event_count": 40,
+          "run_id": "10ecbf93-3d3a-453e-b113-0a9e23632e49",
+          "sample_error_categories": [
+            "unknown_event_type"
+          ]
+        },
+        {
+          "dlq_metadata_complete": true,
+          "dlq_records_from_kafka": 4,
+          "dlq_records_from_postgres_time_window": 0,
+          "malformed_case": "payload_mismatch",
+          "requested_event_count": 40,
+          "run_id": "9782e42e-f1c3-4021-9a82-e3b96d8b833c",
+          "sample_error_categories": [
+            "contract_validation_failed"
+          ]
+        }
+      ],
+      "note": "dlq_records_from_postgres_time_window is consistently 0: nothing in the current codebase writes to the legacy dead_letter_events table (grep confirms only a read path in demo_control_api/main.py GET /api/v1/dlq). The event-processor's actual DLQ mechanism (services/event_processor/dlq.py) publishes exclusively to the commerce.events.dlq Kafka topic, which is the authoritative source used for dlq_records_from_kafka above.",
+      "sub_test": "malformed"
+    },
+    "retry": {
+      "dlq_rate": {
+        "max": 0.2,
+        "median": 0.2,
+        "min": 0.2,
+        "n": 3,
+        "values": [
+          0.2,
+          0.2,
+          0.2
+        ]
+      },
+      "n_runs": 3,
+      "raw_runs": [
+        {
+          "batch_size": 60,
+          "captured_at": "2026-08-07T11:37:20.325614+00:00",
+          "committed_offset_total": 117296,
+          "dlq_count": 12,
+          "dlq_metadata_complete": true,
+          "dlq_rate": 0.2,
+          "dlq_records_matched": 12,
+          "expected_exhausted_to_dlq": 12,
+          "expected_succeed_after_retry": 48,
+          "isolated_consumer_group": "commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-f3559fdf",
+          "log_end_offset_total": 168044,
+          "offsets_committed_only_after_terminal_handling": true,
+          "retry_attempts_total": 120,
+          "retry_exhausted": 12,
+          "retry_success_count": 48,
+          "retry_success_rate": 1.0,
+          "sub_test": "retry",
+          "terminal_outcomes": 60
+        },
+        {
+          "batch_size": 60,
+          "captured_at": "2026-08-07T11:37:23.262960+00:00",
+          "committed_offset_total": 50334,
+          "dlq_count": 12,
+          "dlq_metadata_complete": true,
+          "dlq_rate": 0.2,
+          "dlq_records_matched": 12,
+          "expected_exhausted_to_dlq": 12,
+          "expected_succeed_after_retry": 48,
+          "isolated_consumer_group": "commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-e261e625",
+          "log_end_offset_total": 168104,
+          "offsets_committed_only_after_terminal_handling": true,
+          "retry_attempts_total": 120,
+          "retry_exhausted": 12,
+          "retry_success_count": 48,
+          "retry_success_rate": 1.0,
+          "sub_test": "retry",
+          "terminal_outcomes": 60
+        },
+        {
+          "batch_size": 60,
+          "captured_at": "2026-08-07T11:37:26.731119+00:00",
+          "committed_offset_total": 117416,
+          "dlq_count": 12,
+          "dlq_metadata_complete": true,
+          "dlq_rate": 0.2,
+          "dlq_records_matched": 12,
+          "expected_exhausted_to_dlq": 12,
+          "expected_succeed_after_retry": 48,
+          "isolated_consumer_group": "commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-53150891",
+          "log_end_offset_total": 168164,
+          "offsets_committed_only_after_terminal_handling": true,
+          "retry_attempts_total": 120,
+          "retry_exhausted": 12,
+          "retry_success_count": 48,
+          "retry_success_rate": 1.0,
+          "sub_test": "retry",
+          "terminal_outcomes": 60
+        }
+      ],
+      "retry_attempts_total": {
+        "max": 120.0,
+        "median": 120.0,
+        "min": 120.0,
+        "n": 3,
+        "values": [
+          120.0,
+          120.0,
+          120.0
+        ]
+      },
+      "retry_success_rate": {
+        "max": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "n": 3,
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      }
+    }
+  },
+  "run_tag": "bench-fixed-rate-20260807T150000Z",
+  "throughput": {
+    "average_throughput_events_per_second": {
+      "max": 69.38368854529509,
+      "median": 56.880837090394095,
+      "min": 44.853165017159405,
+      "n": 3,
+      "values": [
+        56.880837090394095,
+        69.38368854529509,
+        44.853165017159405
+      ]
+    },
+    "n_runs": 3,
+    "peak_throughput_events_per_second": {
+      "max": 68.72749099639856,
+      "median": 68.69313068693131,
+      "min": 65.75533825583716,
+      "n": 3,
+      "values": [
+        68.72749099639856,
+        68.69313068693131,
+        65.75533825583716
+      ]
+    },
+    "raw_runs": [
+      {
+        "api_latency_ms": {
+          "/api/v1/runs": {
+            "p95": 206.71357864213573,
+            "p99": 241.33311668833116
+          },
+          "/api/v1/runs/{run_id}": {
+            "p95": 169.95274339243883,
+            "p99": 233.99275059541216
+          }
+        },
+        "api_reported_duration_seconds": 20.409178,
+        "average_throughput_events_per_second": 56.880837090394095,
+        "average_throughput_method": "observed_kafka_publish_to_postgres_processed_window",
+        "captured_at": "2026-08-07T11:32:39.752269+00:00",
+        "end_to_end_latency_ms": {
+          "matched_of_processed": "1500/1500",
+          "p50": 271.0599365234375,
+          "p95": 2148.0060424804688,
+          "p99": 2294.32908203125,
+          "sample_count": 1500
+        },
+        "observed_processing_window_seconds": 26.370919921875,
+        "peak_throughput_events_per_second": 68.72749099639856,
+        "processed_event_count": 1500,
+        "processor_latency_ms": {
+          "p50": 9.989293361884368,
+          "p95": 38.37155963302749,
+          "p99": 72.94444444444389
+        },
+        "requested_event_count": 1500,
+        "requested_events_per_second": 100,
+        "run_id": "b4f834a3-b4c6-4384-b209-d393639e463d",
+        "seed": 194934392,
+        "status": "COMPLETED"
+      },
+      {
+        "api_latency_ms": {
+          "/api/v1/runs": {
+            "p95": 73.81832097331821,
+            "p99": 74.81072097501782
+          },
+          "/api/v1/runs/{run_id}": {
+            "p95": 148.74999999999986,
+            "p99": 49.1
+          }
+        },
+        "api_reported_duration_seconds": 22.08995,
+        "average_throughput_events_per_second": 69.38368854529509,
+        "average_throughput_method": "observed_kafka_publish_to_postgres_processed_window",
+        "captured_at": "2026-08-07T11:33:03.824725+00:00",
+        "end_to_end_latency_ms": {
+          "matched_of_processed": "1500/1500",
+          "p50": 462.0545654296875,
+          "p95": 3328.17099609375,
+          "p99": 3588.8483349609373,
+          "sample_count": 1500
+        },
+        "observed_processing_window_seconds": 21.6189140625,
+        "peak_throughput_events_per_second": 68.69313068693131,
+        "processed_event_count": 1500,
+        "processor_latency_ms": {
+          "p50": 9.953703703703704,
+          "p95": 39.80263157894736,
+          "p99": 80.91666666666647
+        },
+        "requested_event_count": 1500,
+        "requested_events_per_second": 100,
+        "run_id": "57f1c314-8ef0-4d07-8bb4-59076917cdf3",
+        "seed": 1944368596,
+        "status": "COMPLETED"
+      },
+      {
+        "api_latency_ms": {
+          "/api/v1/runs": {
+            "p95": 242.5,
+            "p99": 248.5
+          },
+          "/api/v1/runs/{run_id}": {
+            "p95": 180.62499999999991,
+            "p99": 236.12499999999997
+          }
+        },
+        "api_reported_duration_seconds": 34.066462,
+        "average_throughput_events_per_second": 44.853165017159405,
+        "average_throughput_method": "observed_kafka_publish_to_postgres_processed_window",
+        "captured_at": "2026-08-07T11:33:39.805161+00:00",
+        "end_to_end_latency_ms": {
+          "matched_of_processed": "1500/1500",
+          "p50": 9150.678466796875,
+          "p95": 11381.097729492187,
+          "p99": 11408.685688476562,
+          "sample_count": 1500
+        },
+        "observed_processing_window_seconds": 33.4424560546875,
+        "peak_throughput_events_per_second": 65.75533825583716,
+        "processed_event_count": 1500,
+        "processor_latency_ms": {
+          "p50": 16.03868194842407,
+          "p95": 50.8510638297872,
+          "p99": 155.92000000000027
+        },
+        "requested_event_count": 1500,
+        "requested_events_per_second": 100,
+        "run_id": "fd50f3a0-e3a6-4939-926b-00f7a3646d59",
+        "seed": 1611752933,
+        "status": "COMPLETED"
+      }
+    ],
+    "total_events_processed": 4500
+  },
+  "warmup": {
+    "api_latency_ms": {
+      "/api/v1/runs": {
+        "p95": null,
+        "p99": null
+      },
+      "/api/v1/runs/{run_id}": {
+        "p95": null,
+        "p99": null
+      }
+    },
+    "api_reported_duration_seconds": 5.124292,
+    "average_throughput_events_per_second": 19.995985181100355,
+    "average_throughput_method": "observed_kafka_publish_to_postgres_processed_window",
+    "captured_at": "2026-08-07T11:32:17.953624+00:00",
+    "end_to_end_latency_ms": {
+      "matched_of_processed": "100/100",
+      "p50": 25.5465087890625,
+      "p95": 35.8862060546875,
+      "p99": 52.3680590820313,
+      "sample_count": 100
+    },
+    "observed_processing_window_seconds": 5.00100390625,
+    "peak_throughput_events_per_second": 0.0,
+    "processed_event_count": 100,
+    "processor_latency_ms": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "requested_event_count": 100,
+    "requested_events_per_second": 20,
+    "run_id": "7cf95c38-f2f0-42b2-a56c-47c44e6676db",
+    "seed": 194934392,
+    "status": "COMPLETED"
+  }
+}

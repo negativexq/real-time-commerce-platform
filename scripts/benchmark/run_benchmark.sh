@@ -46,7 +46,7 @@ COMPOSE_PROJECT="${BENCH_COMPOSE_PROJECT:-real-time-commerce-platform}"
 required_services=(kafka postgres redis event-processor fraud-outbox-publisher demo-control-api prometheus)
 running=$(docker compose -p "$COMPOSE_PROJECT" ps --format '{{.Service}} {{.State}}' 2>/dev/null || true)
 for svc in "${required_services[@]}"; do
-  if ! echo "$running" | grep -q "^${svc} running"; then
+  if ! echo "$running" | grep "^${svc} running" > /dev/null; then
     echo "FATAL: required service '$svc' is not running under compose project '$COMPOSE_PROJECT'." >&2
     echo "$running" >&2
     exit 1

@@ -147,8 +147,8 @@ class FraudContextBuilder:
             )
             cursor.execute(
                 """
-                SELECT status, amount, currency, device_id, country, attempted_at,
-                       failure_reason
+                SELECT status, amount, currency, device_id, country,
+                       attempted_at, failure_reason
                 FROM payments
                 WHERE customer_id = %s AND attempted_at <= %s
                   AND attempted_at >= %s

@@ -103,6 +103,14 @@ class ApplicationMetrics:
             "Record receipt through terminal handling.",
             ("event_type", "result"),
         )
+        self.processor_poll_to_handler_duration = histogram(
+            "processor_poll_to_handler_duration_seconds",
+            "Kafka poll through dispatch into the processor handler.",
+        )
+        self.processor_loop_gap_duration = histogram(
+            "processor_loop_gap_duration_seconds",
+            "Time from one terminal process return to the next Kafka poll.",
+        )
         self.processor_validation_duration = histogram(
             "processor_validation_duration_seconds", "Contract validation latency."
         )
@@ -189,6 +197,25 @@ class ApplicationMetrics:
             "Database operation latency.",
             ("operation", "table", "result"),
         )
+        self.database_sql_duration = histogram(
+            "database_sql_duration_seconds",
+            "Individual SQL round-trip latency by bounded operation.",
+            ("operation", "statement_kind"),
+        )
+        self.database_sql_statement_count = counter(
+            "database_sql_statement_count",
+            "Individual SQL statements by bounded operation.",
+            ("operation", "statement_kind"),
+        )
+        self.database_stage_duration = histogram(
+            "database_stage_duration_seconds",
+            "Measured transaction stage latency.",
+            ("stage",),
+        )
+        self.database_connection_release_duration = histogram(
+            "database_connection_release_duration_seconds",
+            "Connection context release latency.",
+        )
         self.database_pool_connections = gauge(
             "database_pool_connections", "Connection pool state.", ("state",)
         )
@@ -256,6 +283,10 @@ class ApplicationMetrics:
         )
         self.outbox_publish_duration = histogram(
             "outbox_publish_duration_seconds", "Outbox publish latency.", ("result",)
+        )
+        self.outbox_write_duration = histogram(
+            "outbox_write_duration_seconds",
+            "Transactional fraud outbox row write latency.",
         )
         self.outbox_batch_duration = histogram(
             "outbox_batch_duration_seconds", "Outbox batch latency."

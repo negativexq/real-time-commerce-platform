@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from time import perf_counter
-from typing import Protocol
+from typing import Protocol, cast
 
 import psycopg
 from psycopg_pool import PoolTimeout
@@ -20,6 +20,7 @@ from services.event_processor.fraud.engine import FraudEngine
 from services.event_processor.fraud.repository import FraudRepository
 from services.event_processor.models import ConsumedMessage, ProcessingContext
 from services.event_processor.persistence.database import Database
+from services.event_processor.persistence.instrumentation import InstrumentedConnection
 from services.event_processor.persistence.models import PersistenceResult
 from services.event_processor.persistence.repositories import (
     CartRepository,
@@ -33,6 +34,7 @@ from services.event_processor.persistence.repositories import (
     SessionRepository,
 )
 from shared.commerce_common.enums import EventType
+from shared.observability.metrics import ApplicationMetrics
 from shared.schemas import EventEnvelope
 from shared.schemas.base import ContractModel
 
@@ -60,6 +62,7 @@ class UnitOfWork:
         self,
         connection: psycopg.Connection[tuple[object, ...]],
         fraud_config: FraudConfig | None = None,
+        metrics: ApplicationMetrics | None = None,
     ) -> None:
         self.processed_events = ProcessedEventRepository(connection)
         self.customers = CustomerRepository(connection)
@@ -70,15 +73,23 @@ class UnitOfWork:
         self.payments = PaymentRepository(connection)
         self.refunds = RefundRepository(connection)
         self.fraud_alerts = FraudAlertRepository(connection)
-        self.fraud = FraudRepository(connection, fraud_config or FraudConfig())
+        self.fraud = FraudRepository(
+            connection, fraud_config or FraudConfig(), metrics=metrics
+        )
 
 
 class UnitOfWorkFactory:
     """Acquire a connection and atomically commit ledger plus business effects."""
 
-    def __init__(self, database: Database, config: ProcessorConfig) -> None:
+    def __init__(
+        self,
+        database: Database,
+        config: ProcessorConfig,
+        metrics: ApplicationMetrics | None = None,
+    ) -> None:
         self.database = database
         self.config = config
+        self.metrics = metrics
         self.fraud_config = FraudConfig.from_environment()
         self.fraud_context = FraudContextBuilder(self.fraud_config)
         self.fraud_engine = FraudEngine(self.fraud_config)
@@ -97,36 +108,101 @@ class UnitOfWorkFactory:
         fraud_score: int | None = None
         matched_rule_ids: tuple[str, ...] = ()
         try:
-            with (
-                self.database.pool.connection(
-                    timeout=self.config.processor_db_acquire_timeout_seconds
-                ) as connection,
-                connection.transaction(),
-            ):
-                unit_of_work = UnitOfWork(connection, self.fraud_config)
-                unit_of_work.processed_events.insert_identity(
-                    event,
-                    message,
-                    context,
-                    persist_raw_json=self.config.processor_persist_raw_event_json,
-                )
-                rows = dict(handler.apply(unit_of_work, event))
-                if (
-                    self.fraud_config.fraud_engine_enabled
-                    and event.event_type in FRAUD_ELIGIBLE_EVENT_TYPES
-                ):
-                    fraud_context = self.fraud_context.build(connection, event)
-                    evaluation = self.fraud_engine.evaluate(fraud_context)
-                    fraud_decision = evaluation.decision.value
-                    fraud_event_type = event.event_type.value
-                    fraud_severity = evaluation.severity.value
-                    fraud_score = evaluation.total_score
-                    matched_rule_ids = tuple(
-                        result.rule_id for result in evaluation.matched_rules
+            acquire_started = perf_counter()
+            connection_context = self.database.pool.connection(
+                timeout=self.config.processor_db_acquire_timeout_seconds
+            )
+            connection = connection_context.__enter__()
+            instrumented = (
+                InstrumentedConnection(connection, self.metrics)
+                if self.metrics
+                else None
+            )
+            observed_connection = cast(
+                psycopg.Connection[tuple[object, ...]], instrumented or connection
+            )
+            try:
+                if self.metrics is not None:
+                    self.metrics.database_pool_acquire_duration.observe(
+                        perf_counter() - acquire_started
                     )
-                    fraud_rows = unit_of_work.fraud.persist(evaluation, event)
-                    for table, count in fraud_rows.items():
-                        rows[table] = rows.get(table, 0) + count
+                unit_of_work = UnitOfWork(
+                    observed_connection, self.fraud_config, metrics=self.metrics
+                )
+                with connection.transaction():
+                    if instrumented:
+                        instrumented.set_phase("processed_events")
+                    stage_started = perf_counter()
+                    unit_of_work.processed_events.insert_identity(
+                        event,
+                        message,
+                        context,
+                        persist_raw_json=self.config.processor_persist_raw_event_json,
+                    )
+                    if self.metrics:
+                        self.metrics.database_stage_duration.labels(
+                            "processed_events"
+                        ).observe(perf_counter() - stage_started)
+                    if instrumented:
+                        instrumented.set_phase("business")
+                    stage_started = perf_counter()
+                    rows = dict(handler.apply(unit_of_work, event))
+                    if self.metrics:
+                        self.metrics.database_stage_duration.labels(
+                            "business_persistence"
+                        ).observe(perf_counter() - stage_started)
+                    if (
+                        self.fraud_config.fraud_engine_enabled
+                        and event.event_type in FRAUD_ELIGIBLE_EVENT_TYPES
+                    ):
+                        if instrumented:
+                            instrumented.set_phase("fraud_context")
+                        context_started = perf_counter()
+                        fraud_context = self.fraud_context.build(
+                            observed_connection, event
+                        )
+                        if self.metrics is not None:
+                            self.metrics.fraud_context_duration.observe(
+                                perf_counter() - context_started
+                            )
+                            self.metrics.database_stage_duration.labels(
+                                "fraud_context"
+                            ).observe(perf_counter() - context_started)
+                        evaluation_started = perf_counter()
+                        evaluation = self.fraud_engine.evaluate(fraud_context)
+                        if self.metrics is not None:
+                            self.metrics.fraud_evaluation_duration.labels(
+                                event.event_type.value, evaluation.decision.value
+                            ).observe(perf_counter() - evaluation_started)
+                        fraud_decision = evaluation.decision.value
+                        fraud_event_type = event.event_type.value
+                        fraud_severity = evaluation.severity.value
+                        fraud_score = evaluation.total_score
+                        matched_rule_ids = tuple(
+                            result.rule_id for result in evaluation.matched_rules
+                        )
+                        if instrumented:
+                            instrumented.set_phase("fraud_persistence")
+                        stage_started = perf_counter()
+                        fraud_rows = unit_of_work.fraud.persist(evaluation, event)
+                        if self.metrics:
+                            self.metrics.database_stage_duration.labels(
+                                "fraud_persistence"
+                            ).observe(perf_counter() - stage_started)
+                        for table, count in fraud_rows.items():
+                            rows[table] = rows.get(table, 0) + count
+                    body_finished = perf_counter()
+                if self.metrics:
+                    self.metrics.database_stage_duration.labels("commit").observe(
+                        perf_counter() - body_finished
+                    )
+            finally:
+                release_started = perf_counter()
+                connection_context.__exit__(None, None, None)
+                if self.metrics:
+                    self.metrics.database_connection_release_duration.observe(
+                        perf_counter() - release_started
+                    )
             rows["processed_events"] = 1
             return PersistenceResult(
                 already_persisted=False,

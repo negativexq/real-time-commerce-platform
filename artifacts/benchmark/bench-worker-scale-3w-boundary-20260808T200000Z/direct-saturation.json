@@ -1,0 +1,5904 @@
+{
+  "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z",
+  "rates": [
+    800,
+    850
+  ],
+  "warmup_seconds": 10,
+  "steady_seconds": 45,
+  "repeats": 3,
+  "results": [
+    {
+      "rate": 800,
+      "repeat": 0,
+      "requested_rate": 800,
+      "injected": {
+        "requested_rate": 800.0,
+        "target_count": 37800,
+        "published_count": 35692,
+        "actual_published_rate": 793.1349759058331,
+        "publish_duration_seconds": 45.001167625014205,
+        "publish_latency_ms": {
+          "p50": 0.015542027540504932,
+          "p95": 0.06118546298239368,
+          "p99": 0.11805324058514045
+        },
+        "missed_deadlines": 192,
+        "scheduler_drift_ms": {
+          "p50": 0.9346572915092111,
+          "p95": 10.705084845540107,
+          "p99": 16.18833124812227
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-800-0",
+        "seed": 1395202228
+      },
+      "processed_count": 35692,
+      "processed_counter_delta": 15304.0,
+      "actual_service_rate": 792.2341151311175,
+      "lag_slope_events_per_second": 0.9008607747155767,
+      "peak_lag": 1160.0,
+      "end_of_load_lag": 40.0,
+      "drain_time_seconds": 16.334848457947373,
+      "e2e_latency_ms": {
+        "p50": 102.7369384765625,
+        "p95": 1784.9978759765618,
+        "p99": 2343.788588867187,
+        "sample_count": 35692
+      },
+      "handler_latency_ms": {
+        "p50": 2.6325222019172205,
+        "p95": 5.041321703134256,
+        "p99": 9.897087522176232
+      },
+      "transaction_latency_ms": {
+        "p50": 2.56660734913053,
+        "p95": 4.876553963348008,
+        "p99": 8.876411469110254
+      },
+      "redis_latency_ms": {
+        "p50": 2.5010952202761785,
+        "p95": 4.7520809185247375,
+        "p99": 4.952168536146832
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.618384090605075,
+        "p95": 4.9749297721496415,
+        "p99": 53.725213219616386
+      },
+      "offset_commit_ms": {
+        "p50": 2.5018868154207596,
+        "p95": 4.753584949299444,
+        "p99": 4.9537358945331045
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 54.58,
+          "memory_percent": 13.34
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 50.34,
+          "memory_percent": 13.13
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 46.14,
+          "memory_percent": 13.42
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 19.89,
+          "memory_percent": 7.67
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 66.15,
+          "memory_percent": 35.35
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 558.1496493068864,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 1604.8934831487395,
+        "database.blks_hit_per_second": 69971.91357805567,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 10973.464037424767,
+        "wal.wal_fpi_per_second": 389.5571281172459,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 35692,
+        "processed_rows": 35692,
+        "matched_e2e": 35692
+      },
+      "samples": [
+        {
+          "t": 510522.204167541,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.15,
+              "memory_percent": 12.93
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.17,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.95,
+              "memory_percent": 7.49
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.99,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510525.646026708,
+          "lag": 379.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.15,
+              "memory_percent": 12.93
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.17,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.95,
+              "memory_percent": 7.49
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.99,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510526.669154416,
+          "lag": 379.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.15,
+              "memory_percent": 12.93
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.17,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.95,
+              "memory_percent": 7.49
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.99,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510527.692008333,
+          "lag": 379.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 47.98,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.34,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 46.14,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.89,
+              "memory_percent": 7.67
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510531.334207833,
+          "lag": 379.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 47.98,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.34,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 46.14,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.89,
+              "memory_percent": 7.67
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510532.358393458,
+          "lag": 379.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 47.98,
+              "memory_percent": 13.18
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.34,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 46.14,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.89,
+              "memory_percent": 7.67
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510533.3775945,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.5,
+              "memory_percent": 13.21
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.43,
+              "memory_percent": 13.04
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.44,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 5.2,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.55,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510537.001995125,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.5,
+              "memory_percent": 13.21
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.43,
+              "memory_percent": 13.04
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.44,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 5.2,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.55,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510538.016089541,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.5,
+              "memory_percent": 13.21
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.43,
+              "memory_percent": 13.04
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.44,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 5.2,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.55,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510539.039992166,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.58,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.17,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.11,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.46,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 58.77,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510542.668088833,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.58,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.17,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.11,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.46,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 58.77,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510543.691051291,
+          "lag": 1160.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.58,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.17,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.11,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.46,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 58.77,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510544.709505916,
+          "lag": 411.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.09,
+              "memory_percent": 13.25
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.22,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.54,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.64,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.8,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510548.352149791,
+          "lag": 411.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.09,
+              "memory_percent": 13.25
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.22,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.54,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.64,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.8,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510549.375861375,
+          "lag": 411.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.09,
+              "memory_percent": 13.25
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.22,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.54,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.64,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.8,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510550.40201775,
+          "lag": 411.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.62,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.6,
+              "memory_percent": 13.0
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.99,
+              "memory_percent": 13.42
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.22,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 45.26,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510553.567010583,
+          "lag": 411.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.62,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.6,
+              "memory_percent": 13.0
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.99,
+              "memory_percent": 13.42
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.22,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 45.26,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510554.581410916,
+          "lag": 411.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.62,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.6,
+              "memory_percent": 13.0
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.99,
+              "memory_percent": 13.42
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.22,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 45.26,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510555.605091833,
+          "lag": 65.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.95,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.59,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 25.56,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.14,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 46.43,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510559.229135333,
+          "lag": 65.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.95,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.59,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 25.56,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.14,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 46.43,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510560.245162583,
+          "lag": 65.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.95,
+              "memory_percent": 13.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.59,
+              "memory_percent": 12.94
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 25.56,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.14,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 46.43,
+              "memory_percent": 35.34
+            }
+          }
+        },
+        {
+          "t": 510561.274245625,
+          "lag": 65.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.26,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.02,
+              "memory_percent": 12.96
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.9,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.81,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.61,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510564.569011708,
+          "lag": 65.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.26,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.02,
+              "memory_percent": 12.96
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.9,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.81,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.61,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510565.588831666,
+          "lag": 40.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.26,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 35.02,
+              "memory_percent": 12.96
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.9,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.81,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.61,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510566.606145208,
+          "lag": 40.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.35,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 38.14,
+              "memory_percent": 13.13
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.98,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 52.81,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510570.29173575,
+          "lag": 40.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.19,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 2.86,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.12,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.74,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510573.578735291,
+          "lag": 40.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.13,
+              "memory_percent": 13.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 5.16,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.02,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510577.247152375,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 4.96,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 6.39,
+              "memory_percent": 13.06
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.07,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.97,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510580.918859541,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 4.38,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.55,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.68,
+              "memory_percent": 35.33
+            }
+          }
+        },
+        {
+          "t": 510583.967361125,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.19,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 8.27,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.83,
+              "memory_percent": 7.5
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.69,
+              "memory_percent": 35.33
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rate": 800,
+      "repeat": 1,
+      "requested_rate": 800,
+      "injected": {
+        "requested_rate": 800.0,
+        "target_count": 37800,
+        "published_count": 35546,
+        "actual_published_rate": 789.8830541849777,
+        "publish_duration_seconds": 45.001598415954504,
+        "publish_latency_ms": {
+          "p50": 0.015625031664967537,
+          "p95": 0.06370873597916216,
+          "p99": 0.14568315527867623
+        },
+        "missed_deadlines": 253,
+        "scheduler_drift_ms": {
+          "p50": 1.091791084036231,
+          "p95": 11.179950262885502,
+          "p99": 16.15990405436605
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-800-1",
+        "seed": 1660534216
+      },
+      "processed_count": 35546,
+      "processed_counter_delta": 7592.0,
+      "actual_service_rate": 742.513598061501,
+      "lag_slope_events_per_second": 47.3694561234767,
+      "peak_lag": 2126.0,
+      "end_of_load_lag": 2126.0,
+      "drain_time_seconds": 16.13992225000402,
+      "e2e_latency_ms": {
+        "p50": 338.945556640625,
+        "p95": 2910.7200317382812,
+        "p99": 3206.193127441407,
+        "sample_count": 35546
+      },
+      "handler_latency_ms": {
+        "p50": 2.6501803002756157,
+        "p95": 5.715828898987449,
+        "p99": 10.20027672188367
+      },
+      "transaction_latency_ms": {
+        "p50": 2.5720774141487723,
+        "p95": 4.8869470078193515,
+        "p99": 9.089280870207563
+      },
+      "redis_latency_ms": {
+        "p50": 2.50112237103188,
+        "p95": 4.75213249904511,
+        "p99": 4.952222284883425
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.6122647165043764,
+        "p95": 4.963305954928547,
+        "p99": 50.39770277794477
+      },
+      "offset_commit_ms": {
+        "p50": 2.5018678920511306,
+        "p95": 4.753548991945193,
+        "p99": 4.9536984195504665
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 53.67,
+          "memory_percent": 13.39
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 51.78,
+          "memory_percent": 13.46
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 52.88,
+          "memory_percent": 13.36
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 26.12,
+          "memory_percent": 7.56
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 80.57,
+          "memory_percent": 35.52
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 553.7538297658774,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 1798.0830627344194,
+        "database.blks_hit_per_second": 68918.91277615141,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 10864.39545183394,
+        "wal.wal_fpi_per_second": 513.0809003879517,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 35546,
+        "processed_rows": 35546,
+        "matched_e2e": 35546
+      },
+      "samples": [
+        {
+          "t": 510622.831987083,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.06
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.43,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510625.67704375,
+          "lag": 321.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.06
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.43,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510626.709953208,
+          "lag": 321.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.06
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.43,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510627.734990916,
+          "lag": 321.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.06
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.43,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.15,
+              "memory_percent": 35.35
+            }
+          }
+        },
+        {
+          "t": 510628.763126125,
+          "lag": 321.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 28.47,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 29.5,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.86,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.24,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 39.2,
+              "memory_percent": 35.36
+            }
+          }
+        },
+        {
+          "t": 510632.544980583,
+          "lag": 321.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 28.47,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 29.5,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.86,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.24,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 39.2,
+              "memory_percent": 35.36
+            }
+          }
+        },
+        {
+          "t": 510633.567632291,
+          "lag": 321.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 28.47,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 29.5,
+              "memory_percent": 13.1
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 28.86,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.24,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 39.2,
+              "memory_percent": 35.36
+            }
+          }
+        },
+        {
+          "t": 510634.5860875,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 49.42,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.59,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.32,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.94,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 69.82,
+              "memory_percent": 35.37
+            }
+          }
+        },
+        {
+          "t": 510638.229225916,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 49.42,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.59,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.32,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.94,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 69.82,
+              "memory_percent": 35.37
+            }
+          }
+        },
+        {
+          "t": 510639.245991625,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 49.42,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.59,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.32,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.94,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 69.82,
+              "memory_percent": 35.37
+            }
+          }
+        },
+        {
+          "t": 510640.26714275,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.67,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.23,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 47.22,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.45,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.41,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510643.629136,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.67,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.23,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 47.22,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.45,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.41,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510644.64447225,
+          "lag": 318.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.67,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.23,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 47.22,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.45,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.41,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510645.6910945,
+          "lag": 216.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.51,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.8,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.48,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.61,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510649.387400666,
+          "lag": 216.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.51,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.8,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.48,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.61,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510650.407048958,
+          "lag": 216.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.51,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.8,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.48,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.61,
+              "memory_percent": 35.38
+            }
+          }
+        },
+        {
+          "t": 510651.433003666,
+          "lag": 216.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.7,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.27,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 37.58,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 26.12,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.32,
+              "memory_percent": 35.39
+            }
+          }
+        },
+        {
+          "t": 510654.634743875,
+          "lag": 216.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.7,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.27,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 37.58,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 26.12,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.32,
+              "memory_percent": 35.39
+            }
+          }
+        },
+        {
+          "t": 510655.650021333,
+          "lag": 117.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.7,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.27,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 37.58,
+              "memory_percent": 13.26
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 26.12,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.32,
+              "memory_percent": 35.39
+            }
+          }
+        },
+        {
+          "t": 510656.673059166,
+          "lag": 117.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.98,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.5,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.72,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.61,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.5,
+              "memory_percent": 35.4
+            }
+          }
+        },
+        {
+          "t": 510660.286243375,
+          "lag": 117.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.98,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.5,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.72,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.61,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.5,
+              "memory_percent": 35.4
+            }
+          }
+        },
+        {
+          "t": 510661.320755333,
+          "lag": 117.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.98,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 34.5,
+              "memory_percent": 13.22
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.72,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.61,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.5,
+              "memory_percent": 35.4
+            }
+          }
+        },
+        {
+          "t": 510662.341617375,
+          "lag": 117.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.82,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 32.28,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 30.87,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.66,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.34,
+              "memory_percent": 35.41
+            }
+          }
+        },
+        {
+          "t": 510665.646577666,
+          "lag": 2126.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.82,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 32.28,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 30.87,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.66,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.34,
+              "memory_percent": 35.41
+            }
+          }
+        },
+        {
+          "t": 510666.681944625,
+          "lag": 2126.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 31.82,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 32.28,
+              "memory_percent": 13.27
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 30.87,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.66,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.34,
+              "memory_percent": 35.41
+            }
+          }
+        },
+        {
+          "t": 510667.713228583,
+          "lag": 2126.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.69,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 51.78,
+              "memory_percent": 13.46
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 52.88,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.5,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 80.57,
+              "memory_percent": 35.45
+            }
+          }
+        },
+        {
+          "t": 510671.390009125,
+          "lag": 2126.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.38
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.58,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.12,
+              "memory_percent": 35.46
+            }
+          }
+        },
+        {
+          "t": 510674.443675625,
+          "lag": 2126.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.13,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.24,
+              "memory_percent": 13.38
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.62,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.87,
+              "memory_percent": 35.46
+            }
+          }
+        },
+        {
+          "t": 510678.129082375,
+          "lag": 0.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.9,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.59,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510681.780839916,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.31,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.23,
+              "memory_percent": 13.39
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.19,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.43,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.58,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510684.865674208,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.2,
+              "memory_percent": 13.38
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 9.3,
+              "memory_percent": 13.36
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.85,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 3.77,
+              "memory_percent": 35.52
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rate": 800,
+      "repeat": 2,
+      "requested_rate": 800,
+      "injected": {
+        "requested_rate": 800.0,
+        "target_count": 37800,
+        "published_count": 35489,
+        "actual_published_rate": 788.6237642409955,
+        "publish_duration_seconds": 45.001180041988846,
+        "publish_latency_ms": {
+          "p50": 0.01587503356859088,
+          "p95": 0.06195900496095419,
+          "p99": 0.13848809991031952
+        },
+        "missed_deadlines": 243,
+        "scheduler_drift_ms": {
+          "p50": 1.120209984946996,
+          "p95": 10.079514340031889,
+          "p99": 26.662589762126935
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-800-2",
+        "seed": 19867174
+      },
+      "processed_count": 35489,
+      "processed_counter_delta": 131414.0,
+      "actual_service_rate": 788.2038717301692,
+      "lag_slope_events_per_second": 0.4198925108262657,
+      "peak_lag": 592.0,
+      "end_of_load_lag": 19.0,
+      "drain_time_seconds": 16.04444600001443,
+      "e2e_latency_ms": {
+        "p50": 49.861083984375,
+        "p95": 845.4248535156248,
+        "p99": 1122.374208984375,
+        "sample_count": 35489
+      },
+      "handler_latency_ms": {
+        "p50": 2.6416989110787967,
+        "p95": 5.409842129449273,
+        "p99": 9.914677145881921
+      },
+      "transaction_latency_ms": {
+        "p50": 2.567776495698502,
+        "p95": 4.878775083724429,
+        "p99": 8.906573846432556
+      },
+      "redis_latency_ms": {
+        "p50": 2.501077817524885,
+        "p95": 4.752047850430142,
+        "p99": 4.952134072126447
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.629832652160984,
+        "p95": 4.996682612043197,
+        "p99": 57.400038010621245
+      },
+      "offset_commit_ms": {
+        "p50": 2.5018568905038876,
+        "p95": 4.7535280919691285,
+        "p99": 4.953676643218673
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 45.18,
+          "memory_percent": 13.33
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 54.48,
+          "memory_percent": 13.28
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 50.76,
+          "memory_percent": 16.16
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 15.08,
+          "memory_percent": 7.52
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 62.55,
+          "memory_percent": 35.61
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 550.1482659777782,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 1701.9438532055162,
+        "database.blks_hit_per_second": 68398.95450459585,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 10789.436400830013,
+        "wal.wal_fpi_per_second": 172.86772433900904,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 35489,
+        "processed_rows": 35489,
+        "matched_e2e": 35489
+      },
+      "samples": [
+        {
+          "t": 510722.450891041,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.11
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.34,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.66,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510725.739139166,
+          "lag": 592.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.11
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.34,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.66,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510726.766031791,
+          "lag": 592.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.11
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.34,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.66,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510727.78899825,
+          "lag": 592.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.22,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.43,
+              "memory_percent": 13.16
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 32.64,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.19,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.6,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510731.393337791,
+          "lag": 592.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.22,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.43,
+              "memory_percent": 13.16
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 32.64,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.19,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.6,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510732.41901225,
+          "lag": 592.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 42.22,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 31.43,
+              "memory_percent": 13.16
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 32.64,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.19,
+              "memory_percent": 7.51
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 51.6,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510733.445182083,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.84,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.48,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.08,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.23,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510737.060296916,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.84,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.48,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.08,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.23,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510738.087990958,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.84,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.48,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.08,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.23,
+              "memory_percent": 35.61
+            }
+          }
+        },
+        {
+          "t": 510739.11005825,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.93,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.82,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.34,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 6.21,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510742.791018333,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.93,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.82,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.34,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 6.21,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510743.809133083,
+          "lag": 30.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.93,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.82,
+              "memory_percent": 13.17
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 1.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.34,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 6.21,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510744.830327666,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 43.45,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.48,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.76,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.68,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.55,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510748.4497445,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 43.45,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.48,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.76,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.68,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.55,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510749.481700625,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 43.45,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.48,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 50.76,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.68,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 62.55,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510750.744189208,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.18,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.62,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.57,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 59.06,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510753.681443041,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.18,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.62,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.57,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 59.06,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510754.700218791,
+          "lag": 371.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.18,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.62,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.57,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 59.06,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510755.726055625,
+          "lag": 110.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.18,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 45.62,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 36.91,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.57,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 59.06,
+              "memory_percent": 35.55
+            }
+          }
+        },
+        {
+          "t": 510756.745047208,
+          "lag": 110.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 39.25,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.95,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.47,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 47.25,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510760.377060166,
+          "lag": 110.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 39.25,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.95,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.47,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 47.25,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510761.403022333,
+          "lag": 110.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 39.25,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 30.95,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.47,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 47.25,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510762.420100625,
+          "lag": 110.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.13,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.82,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.52,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.35,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.21,
+              "memory_percent": 35.57
+            }
+          }
+        },
+        {
+          "t": 510765.654135083,
+          "lag": 19.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.13,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.82,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.52,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.35,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.21,
+              "memory_percent": 35.57
+            }
+          }
+        },
+        {
+          "t": 510766.680346625,
+          "lag": 19.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.13,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.82,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 31.52,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.35,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 48.21,
+              "memory_percent": 35.57
+            }
+          }
+        },
+        {
+          "t": 510767.700566875,
+          "lag": 19.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 6.43,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 15.23,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 3.93,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.58,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 14.9,
+              "memory_percent": 35.57
+            }
+          }
+        },
+        {
+          "t": 510771.369940291,
+          "lag": 19.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.12
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.2
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.42,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.65,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510774.395540375,
+          "lag": 19.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.14
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.16,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.9,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.71,
+              "memory_percent": 35.45
+            }
+          }
+        },
+        {
+          "t": 510778.029672,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 7.73,
+              "memory_percent": 13.14
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 7.92,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.62,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.83,
+              "memory_percent": 35.45
+            }
+          }
+        },
+        {
+          "t": 510781.6823195,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.14
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.16,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.36
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.16,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.99,
+              "memory_percent": 35.45
+            }
+          }
+        },
+        {
+          "t": 510784.781250333,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.15,
+              "memory_percent": 13.14
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.18,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 8.0,
+              "memory_percent": 16.16
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.33,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.83,
+              "memory_percent": 35.45
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rate": 850,
+      "repeat": 0,
+      "requested_rate": 850,
+      "injected": {
+        "requested_rate": 850.0,
+        "target_count": 40162,
+        "published_count": 37712,
+        "actual_published_rate": 838.0140943671129,
+        "publish_duration_seconds": 45.00162975001149,
+        "publish_latency_ms": {
+          "p50": 0.014791963621973991,
+          "p95": 0.06125000072643161,
+          "p99": 0.14051448961254195
+        },
+        "missed_deadlines": 337,
+        "scheduler_drift_ms": {
+          "p50": 0.8983504958450794,
+          "p95": 8.780559897422789,
+          "p99": 15.463150003924936
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-850-0",
+        "seed": 1957954443
+      },
+      "processed_count": 37712,
+      "processed_counter_delta": 11082.0,
+      "actual_service_rate": 836.9256845054141,
+      "lag_slope_events_per_second": 1.0884098616988036,
+      "peak_lag": 603.0,
+      "end_of_load_lag": 48.0,
+      "drain_time_seconds": 16.07540270901518,
+      "e2e_latency_ms": {
+        "p50": 74.677001953125,
+        "p95": 806.9555419921871,
+        "p99": 1028.4771435546875,
+        "sample_count": 37712
+      },
+      "handler_latency_ms": {
+        "p50": 2.685384084737031,
+        "p95": 6.654501130582249,
+        "p99": 12.777241035856532
+      },
+      "transaction_latency_ms": {
+        "p50": 2.5886533697039464,
+        "p95": 4.918441402437498,
+        "p99": 9.410492379835876
+      },
+      "redis_latency_ms": {
+        "p50": 2.5011283770713786,
+        "p95": 4.752143916435618,
+        "p99": 4.952234186601328
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.54343977444102,
+        "p95": 4.832535571437939,
+        "p99": 18.296603773584756
+      },
+      "offset_commit_ms": {
+        "p50": 2.5019551563721976,
+        "p95": 4.7537147971071745,
+        "p99": 4.953871209616951
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 56.75,
+          "memory_percent": 13.32
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 53.23,
+          "memory_percent": 13.31
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 54.7,
+          "memory_percent": 13.51
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 95.55,
+          "memory_percent": 8.37
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 72.81,
+          "memory_percent": 35.52
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 594.961191409361,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 1837.8211893121784,
+        "database.blks_hit_per_second": 73104.38894870847,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 11666.608246352585,
+        "wal.wal_fpi_per_second": 732.0323609219045,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 37712,
+        "processed_rows": 37712,
+        "matched_e2e": 37712
+      },
+      "samples": [
+        {
+          "t": 510823.655024291,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 2.41,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 2.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 8.14,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.75,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510827.2855275,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 2.41,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 2.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 8.14,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.75,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510828.30944175,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 2.41,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 2.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 8.14,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.75,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510829.336612916,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.51,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.02,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 44.79,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.67,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510833.013180625,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.51,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.02,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 44.79,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.67,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510834.02799675,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.51,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.02,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 44.79,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.32,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 66.67,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510835.056484208,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.75,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.73,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 42.85,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.01,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.15,
+              "memory_percent": 35.43
+            }
+          }
+        },
+        {
+          "t": 510838.669070958,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.75,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.73,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 42.85,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.01,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.15,
+              "memory_percent": 35.43
+            }
+          }
+        },
+        {
+          "t": 510839.702368208,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.75,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.73,
+              "memory_percent": 13.31
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 42.85,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.01,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.15,
+              "memory_percent": 35.43
+            }
+          }
+        },
+        {
+          "t": 510840.728048291,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.08,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.91,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.27,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.24,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.42,
+              "memory_percent": 35.44
+            }
+          }
+        },
+        {
+          "t": 510843.853009541,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.08,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.91,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.27,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.24,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.42,
+              "memory_percent": 35.44
+            }
+          }
+        },
+        {
+          "t": 510844.874183125,
+          "lag": 603.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.08,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.91,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.27,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 19.24,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.42,
+              "memory_percent": 35.44
+            }
+          }
+        },
+        {
+          "t": 510845.895169291,
+          "lag": 6.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.86,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.14,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.34,
+              "memory_percent": 13.51
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.18,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.0,
+              "memory_percent": 35.46
+            }
+          }
+        },
+        {
+          "t": 510849.492994333,
+          "lag": 6.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.86,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.14,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.34,
+              "memory_percent": 13.51
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.18,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.0,
+              "memory_percent": 35.46
+            }
+          }
+        },
+        {
+          "t": 510850.523729291,
+          "lag": 6.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 45.86,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.14,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 41.34,
+              "memory_percent": 13.51
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.18,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 54.0,
+              "memory_percent": 35.46
+            }
+          }
+        },
+        {
+          "t": 510851.558448125,
+          "lag": 6.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 52.86,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.31,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 68.78,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510854.7220485,
+          "lag": 6.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 52.86,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.31,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 68.78,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510855.742115416,
+          "lag": 320.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.43,
+              "memory_percent": 13.32
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.24,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 52.86,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 14.31,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 68.78,
+              "memory_percent": 35.47
+            }
+          }
+        },
+        {
+          "t": 510856.770072875,
+          "lag": 320.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.3,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 39.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 23.38,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 53.97,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510860.394173166,
+          "lag": 320.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.3,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 39.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 23.38,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 53.97,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510861.41946825,
+          "lag": 320.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 37.76,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.3,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 39.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 23.38,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 53.97,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510862.439070083,
+          "lag": 320.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.55,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.51,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 38.16,
+              "memory_percent": 13.36
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.84,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.93,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510865.70900325,
+          "lag": 48.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.55,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.51,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 38.16,
+              "memory_percent": 13.36
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.84,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.93,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510866.731377708,
+          "lag": 48.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 34.55,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 37.51,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 38.16,
+              "memory_percent": 13.36
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.84,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 50.93,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510867.756058,
+          "lag": 48.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.73,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 53.23,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 54.7,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.7,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 72.81,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510871.417104208,
+          "lag": 48.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.27,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.58,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.62,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510874.463473208,
+          "lag": 48.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.05,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.05,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.05,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 95.55,
+              "memory_percent": 8.37
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.28,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510878.119888541,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.42,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 4.25,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510881.785880416,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.22,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.16,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.66,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.1,
+              "memory_percent": 35.49
+            }
+          }
+        },
+        {
+          "t": 510884.859455416,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.14,
+              "memory_percent": 13.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.13,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.87,
+              "memory_percent": 7.52
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.01,
+              "memory_percent": 35.49
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rate": 850,
+      "repeat": 1,
+      "requested_rate": 850,
+      "injected": {
+        "requested_rate": 850.0,
+        "target_count": 40162,
+        "published_count": 37715,
+        "actual_published_rate": 838.064085622156,
+        "publish_duration_seconds": 45.00252504198579,
+        "publish_latency_ms": {
+          "p50": 0.01595797948539257,
+          "p95": 0.06187497638165951,
+          "p99": 0.11957137030549352
+        },
+        "missed_deadlines": 222,
+        "scheduler_drift_ms": {
+          "p50": 1.2951049720868468,
+          "p95": 12.532556659425607,
+          "p99": 21.028620332945138
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-850-1",
+        "seed": 1747195789
+      },
+      "processed_count": 37715,
+      "processed_counter_delta": 130168.0,
+      "actual_service_rate": 554.7547722652153,
+      "lag_slope_events_per_second": 283.30931335694066,
+      "peak_lag": 12918.0,
+      "end_of_load_lag": 12918.0,
+      "drain_time_seconds": 34.115989374986384,
+      "e2e_latency_ms": {
+        "p50": 11844.464111328125,
+        "p95": 24657.26662597656,
+        "p99": 24835.075385742188,
+        "sample_count": 37715
+      },
+      "handler_latency_ms": {
+        "p50": 2.7047286673447934,
+        "p95": 7.008806477653553,
+        "p99": 13.082250922509083
+      },
+      "transaction_latency_ms": {
+        "p50": 2.5893932053386397,
+        "p95": 4.919847090143414,
+        "p99": 9.361390573702078
+      },
+      "redis_latency_ms": {
+        "p50": 2.50120319945408,
+        "p95": 4.752286078962752,
+        "p99": 4.952382334919078
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.604887439261538,
+        "p95": 4.949286134596921,
+        "p99": 48.286601027397204
+      },
+      "offset_commit_ms": {
+        "p50": 2.502105872958712,
+        "p95": 4.754001158621552,
+        "p99": 4.95416962845825
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 60.43,
+          "memory_percent": 15.82
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 57.83,
+          "memory_percent": 14.34
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 57.61,
+          "memory_percent": 14.91
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 90.29,
+          "memory_percent": 7.56
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 79.36,
+          "memory_percent": 36.23
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 456.70946590539506,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 1516.7498679090031,
+        "database.blks_hit_per_second": 57750.21707525288,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 9073.61421161216,
+        "wal.wal_fpi_per_second": 312.71179878270505,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 37715,
+        "processed_rows": 37715,
+        "matched_e2e": 37715
+      },
+      "samples": [
+        {
+          "t": 510923.854298916,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.46,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.31,
+              "memory_percent": 35.54
+            }
+          }
+        },
+        {
+          "t": 510927.476264125,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.46,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.31,
+              "memory_percent": 35.54
+            }
+          }
+        },
+        {
+          "t": 510928.517078125,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.28
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.08,
+              "memory_percent": 13.23
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.35
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.46,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.31,
+              "memory_percent": 35.54
+            }
+          }
+        },
+        {
+          "t": 510929.546223666,
+          "lag": 0.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.33,
+              "memory_percent": 13.4
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.1,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.72,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.47,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.87,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510933.332218875,
+          "lag": 0.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.33,
+              "memory_percent": 13.4
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.1,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.72,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.47,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.87,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510934.367633708,
+          "lag": 0.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 36.33,
+              "memory_percent": 13.4
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.1,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.72,
+              "memory_percent": 13.43
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.47,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.87,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510935.39505775,
+          "lag": 4053.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.8,
+              "memory_percent": 13.79
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 55.79,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.71,
+              "memory_percent": 13.65
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.43,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 70.65,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510939.076199666,
+          "lag": 4053.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.8,
+              "memory_percent": 13.79
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 55.79,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.71,
+              "memory_percent": 13.65
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.43,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 70.65,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510940.154882125,
+          "lag": 4053.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 56.8,
+              "memory_percent": 13.79
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 55.79,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 56.71,
+              "memory_percent": 13.65
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.43,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 70.65,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510941.194557,
+          "lag": 4053.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 60.43,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 56.99,
+              "memory_percent": 13.64
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 57.48,
+              "memory_percent": 13.89
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.85,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 73.35,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510944.820301875,
+          "lag": 4053.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 60.43,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 56.99,
+              "memory_percent": 13.64
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 57.48,
+              "memory_percent": 13.89
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.85,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 73.35,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510945.851719958,
+          "lag": 7136.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 60.43,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 56.99,
+              "memory_percent": 13.64
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 57.48,
+              "memory_percent": 13.89
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.85,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 73.35,
+              "memory_percent": 35.52
+            }
+          }
+        },
+        {
+          "t": 510946.878727291,
+          "lag": 7136.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.67,
+              "memory_percent": 14.54
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.99,
+              "memory_percent": 13.86
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.59,
+              "memory_percent": 14.07
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.53,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 65.72,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510950.541332875,
+          "lag": 7136.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.67,
+              "memory_percent": 14.54
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.99,
+              "memory_percent": 13.86
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.59,
+              "memory_percent": 14.07
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.53,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 65.72,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510951.564551208,
+          "lag": 7136.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.67,
+              "memory_percent": 14.54
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 50.99,
+              "memory_percent": 13.86
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.59,
+              "memory_percent": 14.07
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.53,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 65.72,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510952.594802458,
+          "lag": 7136.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.2,
+              "memory_percent": 14.78
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.66,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.71,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.73,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.84,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510955.956106375,
+          "lag": 9596.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.2,
+              "memory_percent": 14.78
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.66,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.71,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.73,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.84,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510956.982664708,
+          "lag": 9596.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.2,
+              "memory_percent": 14.78
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.66,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.71,
+              "memory_percent": 14.24
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.73,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.84,
+              "memory_percent": 35.53
+            }
+          }
+        },
+        {
+          "t": 510958.007565416,
+          "lag": 9596.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 3.84,
+              "memory_percent": 15.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 3.81,
+              "memory_percent": 14.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 3.51,
+              "memory_percent": 14.5
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.26,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 27.02,
+              "memory_percent": 35.69
+            }
+          }
+        },
+        {
+          "t": 510961.659472083,
+          "lag": 9596.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 3.84,
+              "memory_percent": 15.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 3.81,
+              "memory_percent": 14.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 3.51,
+              "memory_percent": 14.5
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.26,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 27.02,
+              "memory_percent": 35.69
+            }
+          }
+        },
+        {
+          "t": 510962.70016175,
+          "lag": 9596.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 3.84,
+              "memory_percent": 15.24
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 3.81,
+              "memory_percent": 14.05
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 3.51,
+              "memory_percent": 14.5
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.26,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 27.02,
+              "memory_percent": 35.69
+            }
+          }
+        },
+        {
+          "t": 510963.72765675,
+          "lag": 12918.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 46.73,
+              "memory_percent": 15.51
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.59,
+              "memory_percent": 14.15
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.83,
+              "memory_percent": 14.74
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.04,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 61.44,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510967.3884395,
+          "lag": 12918.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 46.73,
+              "memory_percent": 15.51
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.59,
+              "memory_percent": 14.15
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.83,
+              "memory_percent": 14.74
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.04,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 61.44,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510968.410906541,
+          "lag": 12918.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 46.73,
+              "memory_percent": 15.51
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 46.59,
+              "memory_percent": 14.15
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.83,
+              "memory_percent": 14.74
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.04,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 61.44,
+              "memory_percent": 35.51
+            }
+          }
+        },
+        {
+          "t": 510969.451105625,
+          "lag": 12918.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.85,
+              "memory_percent": 15.67
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 55.1,
+              "memory_percent": 14.26
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.14,
+              "memory_percent": 14.91
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 11.23,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.82,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510973.132454083,
+          "lag": 12918.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 60.03,
+              "memory_percent": 15.67
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 52.05,
+              "memory_percent": 14.34
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 53.99,
+              "memory_percent": 14.91
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 22.03,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 69.22,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510976.766024333,
+          "lag": 10856.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 58.05,
+              "memory_percent": 15.74
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 56.94,
+              "memory_percent": 14.26
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 57.61,
+              "memory_percent": 14.91
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 10.74,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.06,
+              "memory_percent": 35.56
+            }
+          }
+        },
+        {
+          "t": 510980.405309875,
+          "lag": 10856.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 60.2,
+              "memory_percent": 15.74
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.83,
+              "memory_percent": 14.26
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 57.37,
+              "memory_percent": 14.91
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 13.42,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 79.36,
+              "memory_percent": 35.89
+            }
+          }
+        },
+        {
+          "t": 510983.836625583,
+          "lag": 10856.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.93,
+              "memory_percent": 15.67
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.04,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 53.75,
+              "memory_percent": 14.91
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 9.66,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 53.58,
+              "memory_percent": 35.89
+            }
+          }
+        },
+        {
+          "t": 510987.4773655,
+          "lag": 4138.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 52.59,
+              "memory_percent": 15.75
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.04,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 14.7,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 5.15,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 33.3,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 510991.114216833,
+          "lag": 4138.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.14,
+              "memory_percent": 15.82
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.05,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 2.76,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.72,
+              "memory_percent": 7.55
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 31.48,
+              "memory_percent": 36.23
+            }
+          }
+        },
+        {
+          "t": 510994.198641458,
+          "lag": 4138.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.25,
+              "memory_percent": 14.65
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.2,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.2,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.71,
+              "memory_percent": 7.55
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.9,
+              "memory_percent": 35.65
+            }
+          }
+        },
+        {
+          "t": 510997.844128125,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.13,
+              "memory_percent": 14.65
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.16,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.17,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.79,
+              "memory_percent": 35.65
+            }
+          }
+        },
+        {
+          "t": 511001.536416458,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 14.65
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.05,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 90.29,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.34,
+              "memory_percent": 35.65
+            }
+          }
+        },
+        {
+          "t": 511004.579766,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.19,
+              "memory_percent": 14.65
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.12,
+              "memory_percent": 7.53
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.86,
+              "memory_percent": 35.65
+            }
+          }
+        }
+      ]
+    },
+    {
+      "rate": 850,
+      "repeat": 2,
+      "requested_rate": 850,
+      "injected": {
+        "requested_rate": 850.0,
+        "target_count": 40162,
+        "published_count": 37702,
+        "actual_published_rate": 837.7897454515311,
+        "publish_duration_seconds": 45.00174441700801,
+        "publish_latency_ms": {
+          "p50": 0.016208970919251442,
+          "p95": 0.06562500493600965,
+          "p99": 0.13899793091695714
+        },
+        "missed_deadlines": 288,
+        "scheduler_drift_ms": {
+          "p50": 0.9688648860901594,
+          "p95": 9.08068773860577,
+          "p99": 15.78630083182361
+        },
+        "producer_errors": 0,
+        "run_tag": "bench-worker-scale-3w-boundary-20260808T200000Z-850-2",
+        "seed": 37561984
+      },
+      "processed_count": 37702,
+      "processed_counter_delta": 127876.0,
+      "actual_service_rate": 652.1485762429145,
+      "lag_slope_events_per_second": 185.64116920861665,
+      "peak_lag": 8406.0,
+      "end_of_load_lag": 8406.0,
+      "drain_time_seconds": 36.92871470900718,
+      "e2e_latency_ms": {
+        "p50": 3310.550537109375,
+        "p95": 25868.584631347654,
+        "p99": 26021.084072265625,
+        "sample_count": 37702
+      },
+      "handler_latency_ms": {
+        "p50": 2.7834922349895126,
+        "p95": 7.986642214463175,
+        "p99": 16.76632599921893
+      },
+      "transaction_latency_ms": {
+        "p50": 2.621390965841555,
+        "p95": 4.980642835098955,
+        "p99": 9.74426928642144
+      },
+      "redis_latency_ms": {
+        "p50": 2.5014360128701743,
+        "p95": 4.7527284244533305,
+        "p99": 4.952843305482944
+      },
+      "poll_to_handler_ms": {
+        "p50": 2.5732082975902677,
+        "p95": 4.889095765421509,
+        "p99": 37.86619585687372
+      },
+      "offset_commit_ms": {
+        "p50": 2.502388195967704,
+        "p95": 4.754537572338638,
+        "p99": 4.9547286280160545
+      },
+      "max_inflight_sampled": 1.0,
+      "errors_delta": 0.0,
+      "runtime_max": {
+        "real-time-commerce-platform-event-processor-3": {
+          "cpu_percent": 62.9,
+          "memory_percent": 15.09
+        },
+        "real-time-commerce-platform-event-processor-4": {
+          "cpu_percent": 63.79,
+          "memory_percent": 13.93
+        },
+        "real-time-commerce-platform-event-processor-2": {
+          "cpu_percent": 59.91,
+          "memory_percent": 14.22
+        },
+        "real-time-commerce-platform-kafka-1": {
+          "cpu_percent": 54.03,
+          "memory_percent": 7.95
+        },
+        "real-time-commerce-platform-postgres-1": {
+          "cpu_percent": 124.84,
+          "memory_percent": 37.81
+        }
+      },
+      "postgres_rates": {
+        "database.xact_commit_per_second": 443.4593466898734,
+        "database.xact_rollback_per_second": 0.0,
+        "database.blks_read_per_second": 2196.0494093944826,
+        "database.blks_hit_per_second": 55075.402784946134,
+        "database.temp_files_per_second": 0.0,
+        "database.temp_bytes_per_second": 0.0,
+        "database.deadlocks_per_second": 0.0,
+        "database.blk_read_time_per_second": 0.0,
+        "database.blk_write_time_per_second": 0.0,
+        "wal.wal_records_per_second": 8912.810273272695,
+        "wal.wal_fpi_per_second": 273.4225742835047,
+        "wal.wal_buffers_full_per_second": 0.0
+      },
+      "correctness": {
+        "unique_event_ids": 37702,
+        "processed_rows": 37702,
+        "matched_e2e": 37702
+      },
+      "samples": [
+        {
+          "t": 511042.195608583,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.07,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.57,
+              "memory_percent": 36.06
+            }
+          }
+        },
+        {
+          "t": 511044.81669425,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.07,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.57,
+              "memory_percent": 36.06
+            }
+          }
+        },
+        {
+          "t": 511045.839803041,
+          "lag": 364.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.07,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.57,
+              "memory_percent": 36.06
+            }
+          }
+        },
+        {
+          "t": 511046.872024041,
+          "lag": 364.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.1,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.09,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 2.07,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.57,
+              "memory_percent": 36.06
+            }
+          }
+        },
+        {
+          "t": 511047.9005405,
+          "lag": 364.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.53,
+              "memory_percent": 13.37
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.59,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 59.91,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.82,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 60.42,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511051.604428458,
+          "lag": 364.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.53,
+              "memory_percent": 13.37
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.59,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 59.91,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.82,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 60.42,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511052.634903458,
+          "lag": 364.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.53,
+              "memory_percent": 13.37
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 33.59,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 59.91,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 12.82,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 60.42,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511053.679592958,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.68,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 48.33,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.92,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.54,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.23,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511057.317794541,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.68,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 48.33,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.92,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.54,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.23,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511058.344222208,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 53.68,
+              "memory_percent": 13.29
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 48.33,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 45.92,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 15.54,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 67.23,
+              "memory_percent": 36.07
+            }
+          }
+        },
+        {
+          "t": 511059.366475541,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.53,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.47,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 54.98,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.66,
+              "memory_percent": 7.57
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.03,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511063.029061708,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.53,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.47,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 54.98,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.66,
+              "memory_percent": 7.57
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.03,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511064.055506541,
+          "lag": 97.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 55.53,
+              "memory_percent": 13.33
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.47,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 54.98,
+              "memory_percent": 14.03
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 17.66,
+              "memory_percent": 7.57
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.03,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511065.082291541,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.61,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.17,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.08,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.06,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.48,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511068.783312333,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.61,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.17,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.08,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.06,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.48,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511069.818126583,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 54.61,
+              "memory_percent": 13.52
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 54.17,
+              "memory_percent": 13.72
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 55.08,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.06,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 74.48,
+              "memory_percent": 35.9
+            }
+          }
+        },
+        {
+          "t": 511070.85742125,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.81,
+              "memory_percent": 13.8
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 49.83,
+              "memory_percent": 13.88
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 53.15,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.79,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 121.47,
+              "memory_percent": 36.73
+            }
+          }
+        },
+        {
+          "t": 511073.911853833,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.81,
+              "memory_percent": 13.8
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 49.83,
+              "memory_percent": 13.88
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 53.15,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.79,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 121.47,
+              "memory_percent": 36.73
+            }
+          }
+        },
+        {
+          "t": 511074.938671166,
+          "lag": 1820.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.81,
+              "memory_percent": 13.8
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 49.83,
+              "memory_percent": 13.88
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 53.15,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.79,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 121.47,
+              "memory_percent": 36.73
+            }
+          }
+        },
+        {
+          "t": 511075.973694208,
+          "lag": 4776.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 48.51,
+              "memory_percent": 14.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.33,
+              "memory_percent": 13.74
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 48.25,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.1,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 124.84,
+              "memory_percent": 37.55
+            }
+          }
+        },
+        {
+          "t": 511079.731138125,
+          "lag": 4776.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 48.51,
+              "memory_percent": 14.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.33,
+              "memory_percent": 13.74
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 48.25,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.1,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 124.84,
+              "memory_percent": 37.55
+            }
+          }
+        },
+        {
+          "t": 511080.767452666,
+          "lag": 4776.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 48.51,
+              "memory_percent": 14.34
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 47.33,
+              "memory_percent": 13.74
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 48.25,
+              "memory_percent": 13.95
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 20.1,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 124.84,
+              "memory_percent": 37.55
+            }
+          }
+        },
+        {
+          "t": 511081.837321041,
+          "lag": 4776.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 57.66,
+              "memory_percent": 14.7
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.33,
+              "memory_percent": 13.76
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 49.45,
+              "memory_percent": 14.01
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.14,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.2,
+              "memory_percent": 37.81
+            }
+          }
+        },
+        {
+          "t": 511085.421406083,
+          "lag": 8406.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 57.66,
+              "memory_percent": 14.7
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.33,
+              "memory_percent": 13.76
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 49.45,
+              "memory_percent": 14.01
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.14,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.2,
+              "memory_percent": 37.81
+            }
+          }
+        },
+        {
+          "t": 511086.451394333,
+          "lag": 8406.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 57.66,
+              "memory_percent": 14.7
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 57.33,
+              "memory_percent": 13.76
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 49.45,
+              "memory_percent": 14.01
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 16.14,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 71.2,
+              "memory_percent": 37.81
+            }
+          }
+        },
+        {
+          "t": 511087.476512791,
+          "lag": 8406.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 1.01,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 1.19,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 9.43,
+              "memory_percent": 14.15
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.65,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 2.31,
+              "memory_percent": 37.67
+            }
+          }
+        },
+        {
+          "t": 511091.150638041,
+          "lag": 8406.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 9.11,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 8.06,
+              "memory_percent": 13.93
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 8.42,
+              "memory_percent": 14.22
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.51,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 14.04,
+              "memory_percent": 37.13
+            }
+          }
+        },
+        {
+          "t": 511094.174886,
+          "lag": 8406.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 43.38,
+              "memory_percent": 15.09
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 42.87,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 43.16,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 8.75,
+              "memory_percent": 7.55
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 59.47,
+              "memory_percent": 37.14
+            }
+          }
+        },
+        {
+          "t": 511097.81977125,
+          "lag": 7967.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 29.25,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 28.64,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 30.09,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 6.34,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 40.47,
+              "memory_percent": 37.14
+            }
+          }
+        },
+        {
+          "t": 511101.463534625,
+          "lag": 7967.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 62.9,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 63.79,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 49.84,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 54.03,
+              "memory_percent": 7.68
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 75.65,
+              "memory_percent": 37.14
+            }
+          }
+        },
+        {
+          "t": 511104.514850916,
+          "lag": 7967.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.69,
+              "memory_percent": 15.09
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.06,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 51.31,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 8.3,
+              "memory_percent": 7.68
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 52.19,
+              "memory_percent": 37.13
+            }
+          }
+        },
+        {
+          "t": 511108.215120625,
+          "lag": 3374.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 51.29,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.04,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.79,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 26.22,
+              "memory_percent": 37.13
+            }
+          }
+        },
+        {
+          "t": 511111.878861375,
+          "lag": 3374.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 50.05,
+              "memory_percent": 15.09
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.34,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.04,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 4.47,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 32.57,
+              "memory_percent": 37.13
+            }
+          }
+        },
+        {
+          "t": 511114.911282291,
+          "lag": 3374.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.11,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.11,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.13,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 47.18,
+              "memory_percent": 7.7
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 1.35,
+              "memory_percent": 37.3
+            }
+          }
+        },
+        {
+          "t": 511118.606648125,
+          "lag": 0.0,
+          "inflight": 1.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.12,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.26,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 1.17,
+              "memory_percent": 7.54
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 5.2,
+              "memory_percent": 37.3
+            }
+          }
+        },
+        {
+          "t": 511122.2972645,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.07,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.07,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.07,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 3.64,
+              "memory_percent": 7.56
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.88,
+              "memory_percent": 37.13
+            }
+          }
+        },
+        {
+          "t": 511125.432880125,
+          "lag": 0.0,
+          "inflight": 0.0,
+          "runtime": {
+            "real-time-commerce-platform-event-processor-3": {
+              "cpu_percent": 0.19,
+              "memory_percent": 15.01
+            },
+            "real-time-commerce-platform-event-processor-4": {
+              "cpu_percent": 0.16,
+              "memory_percent": 13.85
+            },
+            "real-time-commerce-platform-event-processor-2": {
+              "cpu_percent": 0.11,
+              "memory_percent": 14.14
+            },
+            "real-time-commerce-platform-kafka-1": {
+              "cpu_percent": 25.91,
+              "memory_percent": 7.95
+            },
+            "real-time-commerce-platform-postgres-1": {
+              "cpu_percent": 0.69,
+              "memory_percent": 37.13
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

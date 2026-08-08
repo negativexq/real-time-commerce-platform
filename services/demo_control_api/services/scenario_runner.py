@@ -2,9 +2,19 @@
 
 import asyncio
 import random
+from contextlib import suppress
+from time import perf_counter
 from uuid import UUID
 
 from services.demo_control_api.config import DemoConfig
+from services.demo_control_api.metrics import (
+    GENERATOR_EVENTS_GENERATED,
+    GENERATOR_GENERATION_DURATION,
+    GENERATOR_INTER_EVENT_INTERVAL,
+    GENERATOR_MISSED_DEADLINES,
+    GENERATOR_SCHEDULER_DRIFT,
+    GENERATOR_STAGE_DURATION,
+)
 from services.demo_control_api.models.runs import TERMINAL_STATUSES, DemoRun, RunStatus
 from services.demo_control_api.models.scenarios import ScenarioType
 from services.demo_control_api.repositories.demo_runs import DemoRunRepository
@@ -24,6 +34,8 @@ PERSONA_MAP = {
     ScenarioType.DUPLICATE: CustomerPersona.NORMAL,
     ScenarioType.MALFORMED: CustomerPersona.NORMAL,
 }
+
+PROGRESS_REFRESH_INTERVAL_SECONDS = 0.5
 
 
 class ConcurrencyLimitError(RuntimeError):
@@ -107,6 +119,7 @@ class ScenarioRunner:
             self._tasks.pop(run_id, None)
 
     async def _generate(self, run: DemoRun) -> None:
+        generation_started = perf_counter()
         request = run.parameters
         persona = PERSONA_MAP.get(request.scenario_type)
         weights = request.persona_distribution
@@ -156,27 +169,126 @@ class ScenarioRunner:
         injector = AnomalyInjector(config, rng)
         generated = 0
         interval = 1 / request.events_per_second
-        while generated < request.event_count:
-            journey = builder.build()
-            messages = injector.prepare(journey.events)
-            remaining = request.event_count - generated
-            messages = messages[:remaining]
-            self.repository.add_manifest(
-                run.run_id,
-                [
-                    (message.event_id, message.event_type)
-                    for message in messages
-                    if message.event_id
-                ],
+        loop = asyncio.get_running_loop()
+        next_deadline = loop.time()
+        previous_event_started: float | None = None
+        latest_generated = 0
+        progress_changed = asyncio.Event()
+        stop_progress = asyncio.Event()
+
+        async def progress_updater() -> None:
+            refreshed_generated = 0
+            while True:
+                with suppress(TimeoutError):
+                    await asyncio.wait_for(
+                        progress_changed.wait(),
+                        timeout=PROGRESS_REFRESH_INTERVAL_SECONDS,
+                    )
+                progress_changed.clear()
+
+                target_generated = latest_generated
+                if target_generated != refreshed_generated:
+                    refresh_started = perf_counter()
+                    await asyncio.to_thread(
+                        self.repository.refresh, run.run_id, target_generated
+                    )
+                    GENERATOR_STAGE_DURATION.labels("progress_refresh").observe(
+                        perf_counter() - refresh_started
+                    )
+                    refreshed_generated = target_generated
+
+                if stop_progress.is_set():
+                    return
+
+        progress_task = asyncio.create_task(progress_updater())
+        try:
+            generation_loop_started = perf_counter()
+            while generated < request.event_count:
+                build_started = perf_counter()
+                journey = builder.build()
+                GENERATOR_STAGE_DURATION.labels("journey_build").observe(
+                    perf_counter() - build_started
+                )
+                anomaly_started = perf_counter()
+                messages = injector.prepare(journey.events)
+                GENERATOR_STAGE_DURATION.labels("anomaly_prepare").observe(
+                    perf_counter() - anomaly_started
+                )
+                remaining = request.event_count - generated
+                messages = messages[:remaining]
+                manifest_started = perf_counter()
+                self.repository.add_manifest(
+                    run.run_id,
+                    [
+                        (message.event_id, message.event_type)
+                        for message in messages
+                        if message.event_id
+                    ],
+                )
+                GENERATOR_STAGE_DURATION.labels("add_manifest").observe(
+                    perf_counter() - manifest_started
+                )
+                for message in messages:
+                    event_started = loop.time()
+                    if previous_event_started is not None:
+                        GENERATOR_INTER_EVENT_INTERVAL.observe(
+                            event_started - previous_event_started
+                        )
+                    previous_event_started = event_started
+                    publish_started = perf_counter()
+                    producer.publish_message(message)
+                    GENERATOR_STAGE_DURATION.labels("publish_message").observe(
+                        perf_counter() - publish_started
+                    )
+                    generated += 1
+                    latest_generated = generated
+                    GENERATOR_EVENTS_GENERATED.labels(request.scenario_type.value).inc()
+                    progress_changed.set()
+                    if interval:
+                        next_deadline += interval
+                        now = loop.time()
+                        lateness = now - next_deadline
+                        if lateness > 0:
+                            GENERATOR_SCHEDULER_DRIFT.observe(lateness)
+                            GENERATOR_MISSED_DEADLINES.labels(
+                                request.scenario_type.value
+                            ).inc()
+                            if lateness > interval:
+                                # Rebase after a long miss so delayed work
+                                # cannot create an unbounded catch-up burst.
+                                next_deadline = now
+                        if now < next_deadline:
+                            delay = next_deadline - now
+                            pacing_started = perf_counter()
+                            await asyncio.sleep(delay)
+                            GENERATOR_STAGE_DURATION.labels("pacing_sleep").observe(
+                                perf_counter() - pacing_started
+                            )
+                producer.poll(0)
+            GENERATOR_GENERATION_DURATION.labels("generation_loop").observe(
+                perf_counter() - generation_loop_started
             )
-            for message in messages:
-                producer.publish_message(message)
-                generated += 1
-                self.repository.refresh(run.run_id, generated)
-                if interval:
-                    await asyncio.sleep(interval)
-            producer.poll(0)
-        producer.flush()
+            flush_started = perf_counter()
+            producer.flush()
+            GENERATOR_STAGE_DURATION.labels("kafka_flush").observe(
+                perf_counter() - flush_started
+            )
+
+            # Signal shutdown only after generation and producer delivery have
+            # completed. The updater performs and awaits the final refresh
+            # before exiting, so generated_event_count is durable on return.
+            stop_progress.set()
+            progress_changed.set()
+            await progress_task
+            GENERATOR_GENERATION_DURATION.labels("generation_total").observe(
+                perf_counter() - generation_started
+            )
+        except BaseException:
+            if not progress_task.done():
+                progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+            raise
 
     async def _wait_for_processing(self, run: DemoRun) -> None:
         """Bound completion waiting without arbitrary sleeps."""

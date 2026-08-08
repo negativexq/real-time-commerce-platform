@@ -11,7 +11,7 @@ fraud rules, and exposes the result through an interactive operations console.
 [API](#api) ·
 [Testing](#testing) ·
 [Troubleshooting](#troubleshooting) ·
-[Benchmark](#performance-benchmark)
+[Performance Engineering](#performance-engineering)
 
 ## Overview
 
@@ -510,56 +510,36 @@ make demo-web-health
 This rebuild preserves named volumes. Avoid `make clean-volumes` unless data
 loss is intentional.
 
-## Performance Benchmark
+## Performance Engineering
 
-`scripts/benchmark/` is a reproducible performance and reliability benchmark
-that drives real traffic through the running stack (primary event-processor
-consumer group, real Kafka/Postgres/Redis) and measures throughput, latency
-(processor, end-to-end, and API, reported separately), consumer lag and
-recovery, idempotency, retry/DLQ behavior, and transactional outbox
-correctness. It reuses the demo control API scenario runner and an isolated
-consumer group for the transient-retry path, so it never resets the primary
-consumer group's offsets.
+This repository includes an artifact-backed performance-engineering study:
+profile the real path, isolate the bottleneck, test one hypothesis, and retain
+or revert the change based on steady-state measurements.
 
-```bash
-scripts/benchmark/run_benchmark.sh
-```
+- **Generator hot path:** removing synchronous progress work and correcting
+  fixed-delay pacing raised the same Demo Control API full-path benchmark from
+  **49.843 to 97.934 evt/s median**.
+- **Query-plan-driven indexing:** payment-history `Seq Scan` analysis led to
+  `payments(customer_id, attempted_at DESC)`. Recent/prior lookups fell from
+  **10.897/7.143 ms to 0.253/0.100 ms**, while measured transaction average
+  fell from roughly **6.9–7.5 ms to 1.7–1.8 ms**.
+- **Controlled decisions:** a separate SQL round-trip reduction experiment
+  was reverted after steady-state throughput and latency regressed; fewer
+  queries were not assumed to mean a faster system.
+- **Horizontal scaling:** processor saturation was measured independently
+  with a direct Kafka injector. The isolated pipeline sustained approximately
+  **500 evt/s with one worker** and **742.185 evt/s service rate at 750
+  requested with three workers/three partitions**. At 775 requested, all
+  repeats accumulated backlog (+52.9/+86.8/+93.4 evt/s), placing the measured
+  transition between **750 and 775 evt/s**.
 
-This runs the non-disruptive phases (throughput/latency, a lag burst ramp,
-idempotency, retry/DLQ, outbox) three times each by default and writes:
-
-- `docs/performance-report.md` — the generated report, with only observed
-  values (no estimates)
-- `artifacts/benchmark/<run_tag>/` — raw JSON results per phase, plus
-  `summary.json` and `verification.json`
-
-A disruptive consumer-outage sub-test (stops and restarts the
-`event-processor` container to measure lag recovery under an outage) is
-available but not run automatically:
-
-```bash
-scripts/benchmark/run_benchmark.sh --with-outage-test
-```
-
-### Latest observed results
-
-From run `bench-20260802T004243Z` (single MacBook Air M2, 8 CPUs, Docker
-Desktop; see `docs/performance-report.md` for full methodology and
-environment details — these numbers are local-machine observations, not a
-certified capacity claim):
-
-| Metric | Observed Result |
-| --- | ---: |
-| Average throughput | 49.84 evt/s (range 38.53–50.51, n=3) |
-| Processor latency p95 / p99 | 4.94 ms / 9.03 ms |
-| End-to-end latency p95 / p99 | 22.98 ms / 23.75 ms |
-| Maximum consumer lag (burst ramp) | 2 events |
-| Duplicate durable side effects | 0 (of 300 deliveries, 35 duplicates injected) |
-| Retry success rate | 100% |
-| Outbox publish success | 100% |
-
-See the most recent `docs/performance-report.md` for methodology,
-environment details, and current results.
+The scaling result is for the documented workload on a local Docker
+environment and the isolated `Kafka → processor → persistence` path—not Demo
+full-path or production capacity. Details: [Performance Report](docs/performance-report.md)
+· [Methodology](docs/performance/methodology.md) ·
+[Optimization History](docs/performance/optimization-history.md) ·
+[Scaling Analysis](docs/performance/scaling-analysis.md) ·
+[Artifacts](artifacts/benchmark/README.md).
 
 ## Future Improvements
 

@@ -1,0 +1,33 @@
+{
+  "captured_at": "2026-08-07T11:12:02.100849+00:00",
+  "duplicate_deliveries_implied": 35,
+  "duplicate_deliveries_reported_by_processor": 0,
+  "duplicate_durable_side_effects_entity_tables": 0,
+  "duplicate_durable_side_effects_processed_events": 0,
+  "entity_table_breakdown": [
+    {
+      "distinct_events": 35,
+      "rows": 35,
+      "table_name": "orders"
+    },
+    {
+      "distinct_events": 35,
+      "rows": 35,
+      "table_name": "payments"
+    },
+    {
+      "distinct_events": 35,
+      "rows": 35,
+      "table_name": "carts"
+    }
+  ],
+  "processed_events_distinct_event_ids": 265,
+  "processed_events_total_rows": 265,
+  "requested_event_count": 300,
+  "run_id": "0797c592-c221-46d7-915d-9af19c2c92da",
+  "seed": 514798760,
+  "status": "COMPLETED",
+  "total_deliveries": 300,
+  "unique_event_ids": 265,
+  "verification": "PASS"
+}

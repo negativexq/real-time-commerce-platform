@@ -1,0 +1,20 @@
+{
+  "batch_size": 60,
+  "captured_at": "2026-08-07T11:37:23.262960+00:00",
+  "committed_offset_total": 50334,
+  "dlq_count": 12,
+  "dlq_metadata_complete": true,
+  "dlq_rate": 0.2,
+  "dlq_records_matched": 12,
+  "expected_exhausted_to_dlq": 12,
+  "expected_succeed_after_retry": 48,
+  "isolated_consumer_group": "commerce-benchmark-retry-bench-fixed-rate-20260807T150000Z-e261e625",
+  "log_end_offset_total": 168104,
+  "offsets_committed_only_after_terminal_handling": true,
+  "retry_attempts_total": 120,
+  "retry_exhausted": 12,
+  "retry_success_count": 48,
+  "retry_success_rate": 1.0,
+  "sub_test": "retry",
+  "terminal_outcomes": 60
+}

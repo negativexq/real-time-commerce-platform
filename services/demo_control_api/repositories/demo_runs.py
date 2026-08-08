@@ -2,12 +2,14 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
 
+from services.demo_control_api.metrics import REPOSITORY_CONNECTION_DURATION
 from services.demo_control_api.models.overview import OverviewScope
 from services.demo_control_api.models.runs import (
     TERMINAL_STATUSES,
@@ -29,7 +31,10 @@ class DemoRunRepository:
         self._dsn = dsn
 
     def _connect(self) -> psycopg.Connection[dict[str, Any]]:
-        return psycopg.connect(self._dsn, row_factory=dict_row)
+        started = perf_counter()
+        connection = psycopg.connect(self._dsn, row_factory=dict_row)
+        REPOSITORY_CONNECTION_DURATION.observe(perf_counter() - started)
+        return connection
 
     @staticmethod
     def _model(row: dict[str, Any]) -> DemoRun:

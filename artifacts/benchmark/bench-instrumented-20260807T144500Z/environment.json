@@ -1,0 +1,50 @@
+{
+  "compose_project": "real-time-commerce-platform",
+  "container_instance_counts": {
+    "demo-control-api": 1,
+    "demo-control-web": 1,
+    "event-processor": 1,
+    "fraud-outbox-publisher": 1,
+    "grafana": 1,
+    "kafka": 1,
+    "kafka-exporter": 1,
+    "kafka-ui": 1,
+    "postgres": 1,
+    "postgres-exporter": 1,
+    "prometheus": 1,
+    "redis": 1,
+    "redis-exporter": 1
+  },
+  "container_mem_limits": {
+    "kafka": null,
+    "kafka-init": null,
+    "kafka-ui": null,
+    "postgres": null,
+    "redis": "402653184"
+  },
+  "docker": {
+    "docker_server_version": "28.3.0",
+    "docker_vm_cpus": 8,
+    "docker_vm_kernel": "6.10.14-linuxkit",
+    "docker_vm_mem_bytes": 8218316800,
+    "docker_vm_os": "Docker Desktop"
+  },
+  "host": {
+    "machine": "arm64",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "processor": "arm",
+    "python_version": "3.12.13"
+  },
+  "kafka_topics": {
+    "commerce.events": 3,
+    "commerce.events.dlq": 1
+  },
+  "postgres": {
+    "version": "PostgreSQL 17.5 (Debian 17.5-1.pgdg120+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14) 12.2.0, 64-bit"
+  },
+  "redis": {
+    "maxmemory": "268435456",
+    "maxmemory_policy": "allkeys-lru",
+    "redis_version": "7.4.5"
+  }
+}

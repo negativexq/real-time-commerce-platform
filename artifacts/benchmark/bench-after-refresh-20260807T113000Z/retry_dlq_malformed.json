@@ -1,0 +1,52 @@
+{
+  "all_metadata_complete": true,
+  "captured_at": "2026-08-07T11:01:15.688915+00:00",
+  "cases": [
+    {
+      "dlq_metadata_complete": true,
+      "dlq_records_from_kafka": 4,
+      "dlq_records_from_postgres_time_window": 0,
+      "malformed_case": "malformed_json",
+      "requested_event_count": 40,
+      "run_id": "e368086c-0ada-47cf-be5c-5e8535e0382c",
+      "sample_error_categories": [
+        "malformed_json"
+      ]
+    },
+    {
+      "dlq_metadata_complete": true,
+      "dlq_records_from_kafka": 4,
+      "dlq_records_from_postgres_time_window": 0,
+      "malformed_case": "missing_field",
+      "requested_event_count": 40,
+      "run_id": "c9e22d9e-0e66-4287-b3f2-4cb513d6f461",
+      "sample_error_categories": [
+        "contract_validation_failed"
+      ]
+    },
+    {
+      "dlq_metadata_complete": true,
+      "dlq_records_from_kafka": 4,
+      "dlq_records_from_postgres_time_window": 0,
+      "malformed_case": "unknown_event_type",
+      "requested_event_count": 40,
+      "run_id": "ed324cd3-9a3e-402b-8c0e-c29f91cf0220",
+      "sample_error_categories": [
+        "unknown_event_type"
+      ]
+    },
+    {
+      "dlq_metadata_complete": true,
+      "dlq_records_from_kafka": 4,
+      "dlq_records_from_postgres_time_window": 0,
+      "malformed_case": "payload_mismatch",
+      "requested_event_count": 40,
+      "run_id": "c9b087ec-ffb0-4064-a43e-1349aa87c555",
+      "sample_error_categories": [
+        "contract_validation_failed"
+      ]
+    }
+  ],
+  "note": "dlq_records_from_postgres_time_window is consistently 0: nothing in the current codebase writes to the legacy dead_letter_events table (grep confirms only a read path in demo_control_api/main.py GET /api/v1/dlq). The event-processor's actual DLQ mechanism (services/event_processor/dlq.py) publishes exclusively to the commerce.events.dlq Kafka topic, which is the authoritative source used for dlq_records_from_kafka above.",
+  "sub_test": "malformed"
+}

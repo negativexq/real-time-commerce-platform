@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 from threading import Event
-from time import monotonic
+from time import monotonic, perf_counter
 from types import FrameType
 
 from services.event_processor.config import ProcessorConfig, parse_config
@@ -62,7 +62,7 @@ def run_processor(
         default_persistence_registry(),
         summary,
         processor_instance_id=instance_id,
-        persistence=UnitOfWorkFactory(database, config),
+        persistence=UnitOfWorkFactory(database, config, metrics=metrics),
         metrics=metrics,
     )
     store.ping()
@@ -71,6 +71,7 @@ def run_processor(
     HEALTH_FILE.touch()
     last_record_at = monotonic()
     terminal_count = 0
+    previous_process_end: float | None = None
     logger.info(
         "processor_started",
         kafka_bootstrap_servers=config.kafka_bootstrap_servers,
@@ -91,6 +92,11 @@ def run_processor(
                 and terminal_count >= config.processor_max_messages
             ):
                 break
+            poll_started = perf_counter()
+            if metrics is not None and previous_process_end is not None:
+                metrics.processor_loop_gap_duration.observe(
+                    poll_started - previous_process_end
+                )
             message = consumer.poll()
             if metrics is not None:
                 metrics.processor_last_poll.set_to_current_time()
@@ -107,7 +113,12 @@ def run_processor(
                     break
                 continue
             last_record_at = monotonic()
+            if metrics is not None:
+                metrics.processor_poll_to_handler_duration.observe(
+                    perf_counter() - poll_started
+                )
             outcome = processor.process(message)
+            previous_process_end = perf_counter()
             if not outcome.terminal:
                 break
             terminal_count += 1

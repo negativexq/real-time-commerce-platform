@@ -1,0 +1,25 @@
+{
+  "captured_at": "2026-08-07T11:37:38.660049+00:00",
+  "fraud_alerts_created": 8,
+  "missing_outbox_rows_for_alerts": 0,
+  "no_committed_alert_silently_lost": true,
+  "outbox_pending_or_failed_count": 0,
+  "outbox_published_count": 8,
+  "outbox_rows_created": 8,
+  "outbox_status_breakdown": {
+    "PUBLISHED": 8
+  },
+  "publish_delay_ms": {
+    "p50": 294.0205078125,
+    "p95": 421.6932861328125,
+    "p99": 426.8433447265625,
+    "sample_count": 8
+  },
+  "publish_success_rate": 1.0,
+  "requested_event_count": 150,
+  "run_id": "e9c5a47b-6c04-4c1e-b61f-4272a3a3133a",
+  "scenario_type": "suspicious_payment",
+  "seed": 1000374631,
+  "stuck_pending_or_publishing_rows": 0,
+  "verification": "PASS"
+}

@@ -1,0 +1,122 @@
+{
+  "all_samples": [
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1786102423.597454
+    },
+    {
+      "lag_cli": 101,
+      "lag_prometheus": 93.0,
+      "t": 1786102433.518738
+    },
+    {
+      "lag_cli": 147,
+      "lag_prometheus": 145.0,
+      "t": 1786102442.682941
+    },
+    {
+      "lag_cli": 123,
+      "lag_prometheus": 145.0,
+      "t": 1786102450.398355
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1786102456.3274062
+    },
+    {
+      "lag_cli": 0,
+      "lag_prometheus": 0.0,
+      "t": 1786102464.85583
+    },
+    {
+      "lag_cli": 591,
+      "lag_prometheus": 251.0,
+      "t": 1786102482.244168
+    },
+    {
+      "lag_cli": 1014,
+      "lag_prometheus": 1027.0,
+      "t": 1786102492.8235362
+    },
+    {
+      "lag_cli": 1378,
+      "lag_prometheus": 1389.0,
+      "t": 1786102502.309489
+    },
+    {
+      "lag_cli": 1781,
+      "lag_prometheus": 1389.0,
+      "t": 1786102510.2042592
+    },
+    {
+      "lag_cli": 570,
+      "lag_prometheus": 551.0,
+      "t": 1786102553.541505
+    },
+    {
+      "lag_cli": 1163,
+      "lag_prometheus": 551.0,
+      "t": 1786102560.570024
+    },
+    {
+      "lag_cli": 1764,
+      "lag_prometheus": 1338.0,
+      "t": 1786102567.419421
+    },
+    {
+      "lag_cli": 2302,
+      "lag_prometheus": 2157.0,
+      "t": 1786102574.191734
+    },
+    {
+      "lag_cli": 2861,
+      "lag_prometheus": 2157.0,
+      "t": 1786102581.061891
+    }
+  ],
+  "baseline_lag": 0,
+  "baseline_lag_prometheus": 0.0,
+  "captured_at": "2026-08-07T11:36:47.079994+00:00",
+  "disruptive": false,
+  "first_stage_rate_with_growing_lag": 150,
+  "max_lag_observed": 2861,
+  "note": "first_stage_rate_with_growing_lag reports the lowest tested rate at which lag was still net-increasing through the whole stage in this run; it is an observed data point under this local configuration, not a certified maximum capacity.",
+  "stages": [
+    {
+      "event_count": 1000,
+      "lag_at_stage_start": 63,
+      "lag_first_half_avg": 124.0,
+      "lag_second_half_avg": 41.0,
+      "lag_still_growing_through_stage": false,
+      "requested_events_per_second": 50,
+      "run_id": "05aa727d-71cb-446e-8039-84b2350ce342",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": true
+    },
+    {
+      "event_count": 3000,
+      "lag_at_stage_start": 290,
+      "lag_first_half_avg": 802.5,
+      "lag_second_half_avg": 1579.5,
+      "lag_still_growing_through_stage": true,
+      "requested_events_per_second": 150,
+      "run_id": "0f7e9d29-356b-4eee-9295-bbfe223ea5e5",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": true
+    },
+    {
+      "event_count": 6000,
+      "lag_at_stage_start": 256,
+      "lag_first_half_avg": 866.5,
+      "lag_second_half_avg": 2309.0,
+      "lag_still_growing_through_stage": true,
+      "requested_events_per_second": 300,
+      "run_id": "37aa7e70-5446-4d5b-8469-0ddc25f886d6",
+      "stage_duration_seconds": 20,
+      "stage_terminated_on_its_own": true
+    }
+  ],
+  "sub_test": "burst"
+}
