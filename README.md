@@ -1,36 +1,135 @@
 # Real-Time Commerce Platform
-Production-oriented event-driven commerce platform built with Kafka, Redis, PostgreSQL, Docker, Prometheus and Grafana.
 
-A local, event-driven commerce system that generates stateful customer
-journeys, processes them through Kafka, persists business outcomes, evaluates
-fraud rules, and exposes the result through an interactive operations console.
+An event-driven commerce platform that models stateful customer journeys from
+browsing through payment and refund, then processes versioned Kafka events into
+durable business and fraud outcomes.
 
-[Quick Start](#sprint-10-demo-quick-start) ·
+The runnable local system demonstrates the engineering guarantees behind
+at-least-once workflows: idempotent consumption, transactional persistence,
+bounded retries and DLQ handling, a transactional outbox, fraud evaluation,
+and end-to-end observability.
+
 [Architecture](#architecture) ·
+[Engineering Highlights](#engineering-highlights) ·
+[Performance](#performance-engineering) ·
+[Quick Start](#sprint-10-demo-quick-start) ·
 [Explore](#explore-the-project) ·
 [API](#api) ·
 [Testing](#testing) ·
-[Troubleshooting](#troubleshooting) ·
-[Performance Engineering](#performance-engineering)
+[Troubleshooting](#troubleshooting)
 
 ## Overview
 
-This project models a commerce event pipeline in which registrations, browsing,
-carts, orders, payments, and refunds arrive asynchronously. It focuses on the
-failure modes that make streaming systems difficult: duplicate delivery,
-invalid records, dependency ordering, consumer retries, durable state changes,
-fraud decisions, and reliable publication of derived alerts.
-
-It was built as a compact reference implementation for engineers learning
-event-driven design and for reviewers who want to inspect those guarantees in a
-runnable system. The stack is intentionally local and resource-conscious; it
-demonstrates production-oriented boundaries without claiming production
-availability or exactly-once processing.
-
-The current implementation includes the Sprint 10 Demo Control Center:
-allow-listed scenarios, bounded run control, live Server-Sent Events (SSE),
-run-specific outcomes, platform health, Prometheus metrics, and provisioned
+Registrations, browsing, carts, orders, payments, and refunds arrive
+asynchronously. The processor validates and persists them, evaluates
+deterministic fraud rules, and reliably publishes derived alerts. An
+interactive Demo Control Center drives bounded scenarios and exposes live run
+progress, outcomes, infrastructure health, Prometheus metrics, and provisioned
 Grafana dashboards.
+
+The repository is a compact reference implementation for inspecting streaming
+failure modes—not a claim of production availability or exactly-once delivery.
+
+## Architecture
+
+Docker Compose runs the services on one local network. Kafka uses a single
+KRaft broker/controller for the development topology; PostgreSQL is the durable
+system of record, while Redis contains reconstructible coordination state.
+
+```mermaid
+flowchart LR
+    U[Browser] --> W[Demo Control Web]
+    W --> A[Demo Control API]
+    A --> G[Scenario Runner<br/>Shared Event Generator]
+    G -->|commerce.events| K[Kafka]
+
+    K --> P[Event Processor]
+    P -->|leases and completion markers| R[(Redis)]
+    P -->|business state, fraud decisions,<br/>processed events, outbox| DB[(PostgreSQL)]
+    P -->|invalid or exhausted records| DLQ[[commerce.events.dlq]]
+
+    DB --> O[Fraud Outbox Publisher]
+    O -->|commerce.fraud-alerts| K
+
+    A -. metrics .-> M[Prometheus]
+    P -. metrics .-> M
+    O -. metrics .-> M
+    K -. exporters .-> M
+    R -. exporters .-> M
+    DB -. exporters .-> M
+    M --> GR[Grafana]
+```
+
+The processor commits source-event identity, commerce effects, fraud results,
+and outbox rows in one PostgreSQL transaction. Redis leases coordinate active
+processing, PostgreSQL uniqueness protects durable effects, and Kafka offsets
+are committed only after terminal handling. Delivery is **at least once**;
+ordering is partition-scoped rather than global.
+
+## Engineering Highlights
+
+- **Versioned event contracts:** shared Pydantic envelopes and payload models
+  provide one producer/consumer validation boundary.
+- **Idempotent Kafka processing:** Redis token-checked leases coordinate work;
+  PostgreSQL constraints prevent duplicate durable side effects.
+- **Transactional consistency:** a Unit of Work commits business state, fraud
+  decisions, and outbox records atomically per accepted source event.
+- **Bounded failure handling:** classified transient failures retry with capped
+  backoff; invalid or exhausted records follow a confirmed DLQ path.
+- **Reliable derived events:** a separate publisher claims committed outbox
+  rows and publishes fraud alerts with at-least-once delivery.
+- **Operability and evidence:** bounded-label Prometheus metrics, provisioned
+  Grafana dashboards, deterministic scenarios, and retained benchmark artifacts
+  make behavior inspectable and reproducible.
+
+## Performance Engineering
+
+The performance work follows a repeatable loop: profile the real path, isolate
+one bottleneck, test one hypothesis under steady-state load, then retain or
+revert the change based on system-level evidence.
+
+### Benchmark scopes
+
+| Scope | Path measured | What the rate means |
+| --- | --- | --- |
+| **Demo full path** | Demo Control API → Scenario Runner → Kafka → processor → persistence | End-to-end generation and processing through the interactive application path. |
+| **Isolated processor pipeline** | Benchmark-only direct injector → Kafka → processor → Redis/PostgreSQL | Processor saturation without the Demo API or Scenario Runner limiting input. |
+
+These scopes are intentionally separate: the isolated three-worker result is
+not a continuation of the Demo full-path series and must not be read as a
+“49 → 750 evt/s” optimization.
+
+### Performance engineering journey
+
+| Stage | Observation | Change or experiment | Artifact-backed result |
+| --- | --- | --- | --- |
+| Initial Demo full path | A 100 evt/s request produced much less traffic although handler latency was low. | Profile Scenario Runner. | **49.843 evt/s median**. |
+| Generator hot path | Synchronous progress refresh and `work(); sleep(1/rate)` extended every event period. | Coalesce refresh work off the event loop; use monotonic fixed-rate deadlines. | Same Demo full-path benchmark reached **97.934 evt/s median**. |
+| Transaction decomposition | Payment-history reads dominated measured PostgreSQL work; commit and pool acquire did not. | Measure SQL classes and transaction stages before changing the database path. | Recent/prior lookups identified as the expensive query class. |
+| Combined payment lookup | Fewer SQL round trips might reduce transaction cost. | Combine recent/prior reads in one controlled query. | Steady-state throughput and latency regressed; **reverted**. |
+| Query-plan optimization | Payment-history predicates used a `Seq Scan`. | Add `payments(customer_id, attempted_at DESC)`. | Recent **10.897 → 0.253 ms**; prior **7.143 → 0.100 ms**; transaction average roughly **6.9–7.5 → 1.7–1.8 ms**. |
+| Isolated single processor | The Demo path could no longer feed the processor fast enough to locate its ceiling. | Introduce a benchmark-only direct Kafka injector. | Approximately **500 evt/s sustainable** with one serial worker. |
+| Two-worker scaling | A second consumer should increase service capacity. | Run two consumers in the same group against three partitions. | At 600 requested, service rose roughly **502.0 → 584.5 evt/s** and lag growth fell **+90.7 → +10.4 evt/s**; the 2/1 partition assignment limited linear scaling. |
+| Three-worker alignment | Kafka partition assignment bounded useful consumer concurrency. | Match three workers to three partitions for a 1/1/1 assignment. | At 750 requested, the isolated pipeline delivered **742.185 evt/s service rate** sustainably. |
+| Boundary refinement | Processed rate alone could hide accumulating backlog. | Repeat steady-state tests above 750 and classify by lag slope and drain behavior. | 775 was non-sustainable in all repeats: **+52.9 / +86.8 / +93.4 evt/s** lag growth; transition **750–775 evt/s**. |
+
+The rejected combined-query experiment is retained as evidence of the decision
+process: reducing two SQL statements to one did not reduce total execution
+cost, and the change was removed when the steady-state benchmark contradicted
+the hypothesis.
+
+> **Local benchmark environment:** Results were measured under the documented
+> workload in a local Docker environment. The ~750 evt/s result applies only to
+> the isolated `Kafka → processor → persistence` path with three processor
+> workers and three Kafka partitions. It is a comparative engineering result,
+> not Demo full-path throughput or production capacity. Rates at 775, 800, 850,
+> and 900 evt/s were boundary/saturation tests, not achieved capacity claims.
+
+Follow the evidence from the [Performance Report](docs/performance-report.md)
+→ [Methodology](docs/performance/methodology.md)
+→ [Optimization History](docs/performance/optimization-history.md)
+→ [Scaling Analysis](docs/performance/scaling-analysis.md)
+→ [Raw Artifact Index](artifacts/benchmark/README.md).
 
 ## Sprint 10 demo quick start
 
@@ -148,103 +247,6 @@ If the primary processor has historical lag, use the isolated, non-destructive
 takeover acceptance workflow documented in
 [Interactive Demo Control Center](docs/demo-control-center.md); never reset the
 primary consumer group offsets.
-
-## Architecture
-
-The platform runs as a set of Docker Compose services on one local network.
-Kafka uses a single KRaft broker/controller for a lightweight development
-topology. PostgreSQL is the durable system of record; Redis holds only
-reconstructible operational state.
-
-## Architecture
-
-The platform runs as a set of Docker Compose services on a single local
-network. Kafka uses a single KRaft broker/controller for a lightweight
-development topology. PostgreSQL is the durable system of record, while Redis
-stores only reconstructible operational state.
-
-```mermaid
-flowchart LR
-    B[Browser] --> W[Demo Control Web]
-    W --> A[Demo Control API]
-
-    A --> G[Scenario Runner<br/>Shared Event Generator]
-    G -->|commerce.events| K[Kafka<br/>KRaft Broker]
-
-    K --> P[Event Processor]
-
-    P -->|processing leases<br/>and idempotency| R[(Redis)]
-    P -->|business state,<br/>events, fraud decisions,<br/>transactional outbox| DB[(PostgreSQL)]
-    P -->|invalid or exhausted records| D[[commerce.events.dlq]]
-
-    DB --> O[Fraud Outbox Publisher]
-    O -->|commerce.fraud-alerts| K
-
-    P --> X[Application Metrics<br/>and Exporters]
-    K --> X
-    DB --> X
-    R --> X
-    O --> X
-    A --> X
-
-    X --> M[Prometheus]
-    M --> GF[Grafana]
-
-    DB -->|demo state and results| A
-    M -->|metrics queries| A
-```
-
-### Components
-
-| Component | Responsibility |
-| --- | --- |
-| Event generator | Builds deterministic, stateful customer journeys from shared Pydantic contracts and publishes keyed events. |
-| Kafka | Carries commerce events, dead letters, and derived fraud alerts; topics are created explicitly in KRaft mode. |
-| Event processor | Validates envelopes and headers, retries bounded transient failures, enforces idempotency, persists business effects, and evaluates fraud rules. |
-| PostgreSQL | Stores processed events, commerce read models, fraud evaluations and alerts, outbox rows, DLQ records, and demo-run manifests. |
-| Redis | Coordinates event-ID processing leases and completion markers and holds temporary fraud/velocity state. |
-| Fraud outbox publisher | Claims committed outbox rows and publishes alerts to `commerce.fraud-alerts` with at-least-once delivery. |
-| Demo Control API | Runs fixed, bounded scenarios; exposes run results, health, fraud, DLQ, dashboard metadata, and SSE progress. |
-| Demo Control Web | Provides the Next.js operations console for scenarios, runs, fraud, DLQ, infrastructure, and dashboards. |
-| Prometheus and exporters | Collect application, Kafka, PostgreSQL, and Redis metrics and evaluate recording and demo alert rules. |
-| Grafana | Provisions seven dashboards and the Prometheus datasource directly from the repository. |
-
-### Event flow
-
-1. A user starts an allow-listed scenario through the web application.
-2. The API uses the existing generator interfaces to publish versioned events
-   to `commerce.events`; related events retain consistent business identifiers.
-3. The processor validates each record, reserves its global `event_id` in
-   Redis, and applies one PostgreSQL transaction.
-4. Successful database work is followed by Redis completion and then a manual
-   Kafka offset commit. Duplicate event IDs do not repeat durable effects.
-5. Invalid or exhausted records are confirmed on `commerce.events.dlq` before
-   their source offsets are committed.
-6. Eligible events are scored by deterministic fraud rules. REVIEW/BLOCK
-   alerts and their outbox rows commit atomically with the source event.
-7. The outbox publisher sends committed alerts to `commerce.fraud-alerts`.
-8. The API combines run-specific PostgreSQL results with platform-wide
-   Prometheus metrics for the dashboard.
-
-> Delivery is **at least once**. The design uses Redis-assisted and
-> PostgreSQL-enforced idempotency; it does not claim exactly-once processing or
-> global Kafka ordering.
-
-### Docker Compose profiles
-
-| Profile | Services enabled |
-| --- | --- |
-| Default | `kafka`, `kafka-init`, `kafka-ui`, `postgres`, `redis` |
-| `generator` | `event-generator` |
-| `processor` | `event-processor`, `postgres-migrate` |
-| `fraud` | `fraud-outbox-publisher`, `postgres-migrate` |
-| `observability` | Kafka/PostgreSQL/Redis exporters, `prometheus`, `grafana` |
-| `demo` | `demo-control-api`, `demo-control-web`, `postgres-migrate` |
-| `demo-verification` | Temporary isolated `demo-verification-processor` |
-
-The Quick Start's `make demo-up` enables the processor, fraud, observability,
-and demo profiles together. The generator profile remains available for
-standalone generator workflows.
 
 ## Repository Structure
 
@@ -510,49 +512,17 @@ make demo-web-health
 This rebuild preserves named volumes. Avoid `make clean-volumes` unless data
 loss is intentional.
 
-## Performance Engineering
+## Future Work
 
-This repository includes an artifact-backed performance-engineering study:
-profile the real path, isolate the bottleneck, test one hypothesis, and retain
-or revert the change based on steady-state measurements.
+Meaningful next steps, none of which are implemented today:
 
-- **Generator hot path:** removing synchronous progress work and correcting
-  fixed-delay pacing raised the same Demo Control API full-path benchmark from
-  **49.843 to 97.934 evt/s median**.
-- **Query-plan-driven indexing:** payment-history `Seq Scan` analysis led to
-  `payments(customer_id, attempted_at DESC)`. Recent/prior lookups fell from
-  **10.897/7.143 ms to 0.253/0.100 ms**, while measured transaction average
-  fell from roughly **6.9–7.5 ms to 1.7–1.8 ms**.
-- **Controlled decisions:** a separate SQL round-trip reduction experiment
-  was reverted after steady-state throughput and latency regressed; fewer
-  queries were not assumed to mean a faster system.
-- **Horizontal scaling:** processor saturation was measured independently
-  with a direct Kafka injector. The isolated pipeline sustained approximately
-  **500 evt/s with one worker** and **742.185 evt/s service rate at 750
-  requested with three workers/three partitions**. At 775 requested, all
-  repeats accumulated backlog (+52.9/+86.8/+93.4 evt/s), placing the measured
-  transition between **750 and 775 evt/s**.
-
-The scaling result is for the documented workload on a local Docker
-environment and the isolated `Kafka → processor → persistence` path—not Demo
-full-path or production capacity. Details: [Performance Report](docs/performance-report.md)
-· [Methodology](docs/performance/methodology.md) ·
-[Optimization History](docs/performance/optimization-history.md) ·
-[Scaling Analysis](docs/performance/scaling-analysis.md) ·
-[Artifacts](artifacts/benchmark/README.md).
-
-## Future Improvements
-
-Potential extensions consistent with the current boundaries:
-
-- a multi-broker Kafka topology for replication and failover exercises;
-- authentication and role-based controls for the Demo Control API and Web;
-- OpenTelemetry traces across generation, processing, persistence, and outbox;
-- additional fixed fraud scenarios and explainability views;
-- production-oriented deployment manifests, including Kubernetes;
-- broader integration and browser accessibility coverage in CI.
-
-These are roadmap ideas, not implemented features.
+- define cloud infrastructure with Terraform and add Kubernetes deployment
+  manifests rather than relying only on local Compose;
+- add CI-owned benchmark smoke tests with explicit regression thresholds while
+  keeping full saturation runs outside routine pull-request checks;
+- run longer soak and failure-recovery tests on dedicated infrastructure;
+- isolate PostgreSQL, Kafka, and storage behavior beyond the current
+  three-worker boundary before attempting further application optimization.
 
 ## License
 
