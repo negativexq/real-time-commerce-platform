@@ -1472,6 +1472,74 @@ scheduler-starvation methodology at 6-consumer scale (only ever run at
 3-consumer scale) to confirm or rule out host CPU oversubscription
 directly.
 
+### Stage 30 — Persistence batching feasibility: rejected (analysis only)
+
+**Why?** Before attempting any batch-persistence optimization, map the
+current event-processing persistence lifecycle and ask: is there a safe
+batching boundary that doesn't weaken the correctness guarantees already
+established (idempotency, transactional persistence, transactional
+outbox, Kafka ordering, safe offset advancement)? **No code was changed** -
+this is a code-path inventory, not a benchmark.
+
+**Lifecycle confirmed by direct inspection:** exactly one PostgreSQL
+transaction per source Kafka event, exactly one commit per event, Redis
+`reserve()`/`complete()` bracketing (never inside) that transaction, and
+the Kafka offset only marked safe after both the DB commit and Redis
+`complete()` succeed. Same-partition sequential processing is what makes
+the business-dependency chain (`customer -> session -> cart -> checkout
+-> order -> payment -> refund`) safe - several steps are read-modify-write
+under `FOR UPDATE` locks, validated against the previous step's already-
+durable state.
+
+**Code-derived cost** (not measured under load): a typical non-fraud
+event costs ~3-7 SQL calls in its one transaction; a fraud-eligible event
+costs ~14-23, in the same single-transaction model - the difference is
+fraud-context reads (up to 9 bounded SELECTs) plus conditional
+evaluation/alert/outbox persistence, consistent with every prior stage's
+transaction-decomposition finding that `fraud_context` is the largest
+DB-side stage for fraud-eligible events.
+
+**Every batching candidate was rejected, each for a distinct reason:**
+- **`processed_events` bulk insert** - mechanically possible, but the
+  durable idempotency check is event-specific and today's offset-safety
+  model maps 1:1 to one event reaching a terminal outcome; a batch needs
+  partial-row-failure bookkeeping that doesn't exist today. **Requires
+  redesign** - not a claim PostgreSQL can't bulk-insert these rows.
+- **Business persistence batching** - these are dependency-checked,
+  lock-guarded, validated read-modify-writes against the previous event's
+  durable state, not independent inserts. Batching reintroduces the exact
+  ordering hazard Stage 28 already demonstrated. **Unsafe.**
+- **`fraud_outbox` batching** - would break the atomicity between an
+  outbox row and the specific business effect it represents, which is the
+  entire mechanism that makes the outbox pattern correct. **Unsafe.**
+- **Fraud-context read batching** - only possible in narrow cases sharing
+  a customer/context, which arbitrary adjacent events don't guarantee;
+  Stage 29 didn't show PostgreSQL saturation that would justify the added
+  buffering/state complexity. **Narrow / not justified** (a cached
+  per-customer aggregate is noted only as a future research idea, not
+  something implemented or recommended now).
+
+**Conclusion: no safe, low-complexity persistence-batching boundary was
+identified within the current transaction and correctness model.** The
+one-event/one-transaction design anchors durable idempotency, causal
+business validation, transactional-outbox atomicity, event-specific
+retry/DLQ semantics, and safe offset advancement - a design constraint,
+not a failed coding attempt. No batching was implemented. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#persistence-batching-feasibility--code-path-analysis-only-no-implementation).
+
+**Precise framing, not overclaimed:** not "batching cannot improve this
+system" - only that no safe boundary was found in the current model. Not
+"PostgreSQL is not a bottleneck" - only that prior measurements didn't
+show saturation justifying weakened transaction semantics. Not "CPU is
+confirmed as the bottleneck" - host compute contention remains the
+leading *unresolved* hypothesis after Stage 29, not a confirmed finding.
+
+**Official capacity claim unchanged: ~1050 evt/s sustainable** - this
+stage ran no benchmark and established no new ceiling. **Recommended next
+step:** confirm or rule out Stage 29's host-CPU-oversubscription
+hypothesis, the one item still unconfirmed, rather than pursuing
+persistence optimization further.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

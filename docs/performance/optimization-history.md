@@ -2832,3 +2832,143 @@ configuration was changed. This is attribution, not optimization.
   single-host Docker Desktop VM (8 shared vCPUs across every service) or
   would persist on dedicated hardware per consumer, which this local
   environment cannot answer on its own.
+
+## Persistence batching feasibility — code-path analysis only, no implementation
+
+- **Previous diagnosis leading to this analysis:** Stage 28 showed naive
+  intra-partition concurrency breaks Kafka ordering and business-dependency
+  validation. Stage 29 showed Kafka-native partition scaling preserves
+  correctness but did not materially increase throughput on the shared
+  local benchmark host, leaving host compute contention as the leading
+  unresolved environment-level hypothesis. Before attempting any batch
+  persistence optimization, this stage builds an accurate map of the
+  current event-processing persistence lifecycle to answer: is there any
+  safe batching boundary without weakening the correctness guarantees
+  already established? **No code was changed.** This is a code-path
+  inventory, not a benchmark - the call counts below are derived by
+  reading the actual repository/SQL code, not measured under load.
+- **Lifecycle confirmed by direct inspection** of
+  [`services/event_processor/processor.py`](../../services/event_processor/processor.py),
+  [`services/event_processor/persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
+  every repository under
+  [`services/event_processor/persistence/repositories/`](../../services/event_processor/persistence/repositories/),
+  and
+  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py)/[`repository.py`](../../services/event_processor/fraud/repository.py):
+
+  ```
+  Kafka event -> Redis idempotency reserve
+    -> one PostgreSQL transaction
+         -> processed_events durable ledger (idempotency + Kafka-coordinate guard)
+         -> business persistence (repository specific to event_type)
+         -> fraud-context reads, when eligible (up to 9 bounded SELECTs)
+         -> fraud evaluation persistence, conditional alert + outbox insert
+    -> PostgreSQL commit
+    -> Redis idempotency complete
+    -> Kafka terminal offset tracking / safe commit (only after both of the above)
+  ```
+
+  Confirmed structurally, not inferred: exactly one PostgreSQL transaction
+  per source Kafka event; exactly one commit per event; Redis
+  `reserve()`/`complete()` bracket the transaction (never inside it); the
+  Kafka offset is only marked safe to commit after both the DB commit and
+  the Redis `complete()` call succeed; same-partition sequential
+  processing is what makes the business-dependency chains below safe
+  (`customer -> session -> cart -> checkout -> order -> payment ->
+  refund`, each read-modify-write step validated against the previous
+  step's already-durable state, several under `FOR UPDATE` row locks).
+- **Code-derived persistence cost, non-fraud vs. fraud-eligible.** These
+  are operation counts read directly from the repository code, not
+  benchmark measurements:
+  - Typical non-fraud event (`user_registered`, `session_started`,
+    `product_viewed`, `added_to_cart`): ~3-7 SQL calls, 1 transaction, 1
+    commit.
+  - Fraud-eligible event (`checkout_started`, `order_created`,
+    `payment_completed`, `payment_failed`, `refund_requested`): ~14-23
+    SQL calls, 1 transaction, 1 commit - the same single-transaction
+    model, not a second transaction. The added cost is fraud-context
+    reads (up to 9 bounded SELECTs), fraud-evaluation persistence
+    (idempotency check + insert), and conditional fraud-alert/outbox
+    persistence (only fires on REVIEW/BLOCK decisions). This is
+    consistent with, and explained by, every prior stage's
+    transaction-decomposition finding that `fraud_context` is the largest
+    single DB-side stage for fraud-eligible events.
+- **Batching candidates, each explicitly rejected with reasons:**
+  1. **`processed_events` bulk insertion** - mechanically batchable
+     (`INSERT ... VALUES (...), (...)` is not a PostgreSQL limitation),
+     but unsafe as a simple optimization: the durable idempotency check is
+     event-specific (a digest/coordinate conflict must stay attributable
+     to exactly one source event), and today's offset-safety model maps
+     cleanly to one event reaching a terminal durable outcome. A batch
+     introduces partial-row-failure/retry bookkeeping that does not exist
+     today and was not designed for. **Classification: requires
+     redesign** - not a claim that PostgreSQL itself cannot bulk-insert
+     these rows; the rejection is semantic (correctness-model), not
+     mechanical (SQL capability).
+  2. **Business persistence batching** - rejected. These are not
+     independent blind inserts: they carry dependency checks (`exists()`
+     guards), read-modify-write behavior, `FOR UPDATE` row locks, and
+     totals/integrity validation against the *previous* event's durable
+     state along the `customer -> session -> cart -> checkout -> order ->
+     payment -> refund` chain. Correctness depends on prior events being
+     durable before dependent events execute - batching (or any
+     mechanism that processes several of these concurrently or
+     out-of-order) reintroduces the exact ordering hazard Stage 28
+     already demonstrated, just relocated from concurrent threads to a
+     batched/reordered SQL boundary. **Classification: unsafe.**
+  3. **`fraud_outbox` batching** - rejected. The transactional-outbox
+     property depends on an outbox row committing atomically with the
+     specific fraud/business effect it represents - that is the entire
+     mechanism that makes the pattern correct. Cross-event outbox
+     batching would change this atomicity boundary (either publish
+     unrelated alerts as one meaningless atomic group, or require
+     rebuilding per-row atomicity by some other means). **Classification:
+     unsafe.**
+  4. **Fraud-context read batching** - potentially possible only in
+     narrow cases (several events sharing the same customer/context), but
+     the processor handles one ordered event at a time, arbitrary
+     adjacent Kafka events are not guaranteed to share useful query keys,
+     and grouping would require new buffering/state. Stage 29 did not
+     show PostgreSQL saturation sufficient to justify that added
+     architectural complexity. **Classification: narrow / not
+     justified** - a cached or materialized per-customer aggregate is
+     mentioned here only as a possible future research direction, not
+     something this stage implemented or recommends implementing now.
+- **Conclusion (negative result): no safe, low-complexity persistence-
+  batching boundary was identified within the current transaction and
+  correctness model.** The one-event/one-transaction model anchors
+  durable idempotency, causal business validation, transactional-outbox
+  atomicity, event-specific failure handling (retry/DLQ), and safe offset
+  advancement. No batching implementation was attempted - this stage is
+  analysis only.
+- **Do not overclaim, stated precisely:**
+  - Not "batching cannot improve this system" - only that no safe,
+    low-complexity batching boundary was identified within the current
+    model.
+  - Not "PostgreSQL is not a bottleneck" - only that previous measurements
+    (Stage 20, Stage 29) did not show PostgreSQL saturation sufficient to
+    justify weakening transaction semantics for batching.
+  - Not "CPU is confirmed as the bottleneck" - host compute contention
+    remains the leading unresolved environment-level hypothesis after
+    Stage 29, not a confirmed finding.
+- **Connection to the running series:** Stage 28 rejected naive
+  intra-partition concurrency because it broke ordering and correctness.
+  Stage 29 showed Kafka-native partition scaling preserves correctness
+  but did not move the throughput ceiling on this host. Stage 30 Phase 1
+  rejects persistence batching because the per-event transaction boundary
+  is structurally tied to durable idempotency, business dependency
+  ordering, event-specific retry/DLQ semantics, transactional outbox
+  atomicity, and safe Kafka offset advancement - a design constraint, not
+  a failed coding attempt, and the third consecutive stage in this series
+  to conclude that a plausible-looking throughput lever is unsafe to pull
+  without a larger redesign.
+- **Official capacity claim unchanged:** ~1050 evt/s sustainable. This
+  stage did not run a benchmark and did not establish a new throughput
+  ceiling.
+- **Correctness / validation:** no application code was changed (`git
+  status`/`git diff` confirmed clean before and after); no tests were
+  added or needed since no code path changed. Existing suite: pytest,
+  ruff, mypy all pass unchanged from the pre-analysis baseline.
+- **Recommended next step:** not persistence optimization. The more
+  productive next step is confirming or ruling out Stage 29's host-CPU-
+  oversubscription hypothesis - the one item explicitly left unconfirmed
+  and the leading unresolved factor in the current ceiling.
