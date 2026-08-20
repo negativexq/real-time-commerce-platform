@@ -296,6 +296,7 @@ def _run_one(
         "commerce_processor_events_terminal_total",
         '{result=~"failed|unresolved|dlq"}',
     )
+    before_empty_polls = _counter(prom, "commerce_processor_empty_polls_total")
     wall_start = time.monotonic()
     samples: list[dict[str, Any]] = []
     last_runtime_at = 0.0
@@ -312,6 +313,12 @@ def _run_one(
                 "t": now,
                 "lag": _lag(config, prom),
                 "inflight": prom.instant("sum(commerce_processor_inflight_events)"),
+                "fetchq_records": prom.instant(
+                    "sum(commerce_processor_consumer_fetchq_records)"
+                ),
+                "broker_rtt_ms": prom.instant(
+                    "avg(commerce_processor_consumer_broker_rtt_ms)"
+                ),
                 "runtime": last_runtime,
             }
         )
@@ -357,6 +364,12 @@ def _run_one(
                 "t": time.monotonic(),
                 "lag": current_lag,
                 "inflight": prom.instant("sum(commerce_processor_inflight_events)"),
+                "fetchq_records": prom.instant(
+                    "sum(commerce_processor_consumer_fetchq_records)"
+                ),
+                "broker_rtt_ms": prom.instant(
+                    "avg(commerce_processor_consumer_broker_rtt_ms)"
+                ),
                 "runtime": _runtime_snapshot(config.compose_project),
             }
         )
@@ -382,6 +395,7 @@ def _run_one(
         "commerce_processor_events_terminal_total",
         '{result=~"failed|unresolved|dlq"}',
     )
+    after_empty_polls = _counter(prom, "commerce_processor_empty_polls_total")
     load_samples = samples[:load_sample_count]
     if len(load_samples) >= 2:
         lag_slope = (load_samples[-1]["lag"] - load_samples[0]["lag"]) / max(
@@ -461,6 +475,26 @@ def _run_one(
         ),
         "loop_gap_ms": _quantiles(
             prom, "commerce_processor_loop_gap_duration_seconds_bucket", window
+        ),
+        "poll_duration_ms": _quantiles(
+            prom, "commerce_processor_poll_duration_seconds_bucket", window
+        ),
+        "empty_polls_delta": after_empty_polls - before_empty_polls,
+        "max_fetchq_records_sampled": max(
+            (
+                float(sample_item["fetchq_records"])
+                for sample_item in samples
+                if sample_item.get("fetchq_records") is not None
+            ),
+            default=None,
+        ),
+        "max_broker_rtt_ms_sampled": max(
+            (
+                float(sample_item["broker_rtt_ms"])
+                for sample_item in samples
+                if sample_item.get("broker_rtt_ms") is not None
+            ),
+            default=None,
         ),
         "offset_commit_ms": _quantiles(
             prom, "commerce_processor_offset_commit_duration_seconds_bucket", window

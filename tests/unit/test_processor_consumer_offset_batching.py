@@ -55,6 +55,29 @@ def message(offset: int, partition: int = 0) -> ConsumedMessage:
     return ConsumedMessage(TOPIC, partition, offset, None, b"key", b"value", [])
 
 
+def test_poll_records_empty_poll_and_duration_metrics() -> None:
+    from shared.observability.metrics import ApplicationMetrics
+
+    metrics = ApplicationMetrics("test-processor")
+    config = ProcessorConfig()
+    client = FakeKafkaClient()
+    consumer = KafkaEventConsumer(config, client=client, metrics=metrics)
+
+    result = consumer.poll()
+
+    assert result is None
+    assert (
+        metrics.registry.get_sample_value("commerce_processor_empty_polls_total", {})
+        == 1
+    )
+    assert (
+        metrics.registry.get_sample_value(
+            "commerce_processor_poll_duration_seconds_count", {}
+        )
+        == 1
+    )
+
+
 def test_commit_terminal_batches_below_threshold() -> None:
     consumer, client = make_consumer(batch_size=5, interval_ms=60_000)
     consumer.commit_terminal(message(1))

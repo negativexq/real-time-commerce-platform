@@ -1269,6 +1269,68 @@ fetch-request/response timing and broker-side partition metrics around the
 moment a repeat tips into degradation, since producer, transaction, and
 processor-internal layers are all now ruled out.
 
+### Stage 27 — Kafka consumer fetch boundary diagnosis: a client-side buffer, one layer down
+
+**Why?** Stage 25 concluded waiting happens "in the Kafka topic itself"
+since no application-visible buffer existed. Stage 26 ruled out producer
+arrival bursts. This stage tests the remaining hypothesis: the broker →
+consumer fetch/poll boundary. Diagnostic only, no processing logic changed.
+
+**What was added:** librdkafka (the Kafka client library already in use)
+already computes fetch-queue depth and broker RTT internally via its
+`statistics.interval.ms`/`stats_cb` mechanism - unused until now. Enabled
+it for the real client only (test doubles unaffected), added two pure
+parsing functions (`fetchq_records_total()`, `broker_rtt_avg_ms()`,
+unit-tested) feeding two new gauges, plus a `poll()`-call duration
+histogram and an empty-poll counter - all diagnostic, no branching-logic
+change.
+
+**Benchmark:** 3 workers, 1/1/1, rebuilt processor image, 1050/1075/1100
+evt/s, 3 repeats (tag
+[`bench-consumer-fetch-boundary-3w`](../artifacts/benchmark/bench-consumer-fetch-boundary-3w/)).
+
+**Central finding: a real buffer exists, one layer below where Stage 25
+could see.** `max_fetchq_records_sampled` was never near zero (hundreds to
+thousands of records) at any rate or repeat - librdkafka holds
+already-fetched, not-yet-consumed records in its own internal queue. This
+refines, not contradicts, Stage 25: "no internal buffer" was only true for
+`processor_inflight_events` (records inside an active `process()` call),
+never for librdkafka's own C-level fetch queue sitting between the broker
+and the Python `poll()` call.
+
+**Neither the broker nor `poll()` itself is delayed.** Broker RTT stayed
+flat (~501-504ms) regardless of degradation; `poll_duration_ms` stayed as
+flat as Stage 25's `poll_to_handler_ms` (~2.5ms p50 in every repeat) - the
+call returns almost instantly because the local queue already has records
+ready. Empty-poll count moved in the expected direction at 1050 (fewer
+empty polls as fetchq depth and lag slope rose) but not with a clean rank
+order across all nine repeats - a real, directionally consistent, but
+noisy signal at this sample size.
+
+**Conclusion: none of the four hypothesized symptoms (increased empty
+polls, delayed fetches, bursty delivery, scheduling gaps) grow with
+degradation** - but `fetchq_records` does, sharpening rather than
+overturning Stage 25's structural explanation: the broker delivers
+promptly, librdkafka hands records to its buffer promptly, and the queue
+that builds up under load sits exactly between "already fetched" and
+"actually processed," invisible to any metric added before this stage.
+Full detail in
+[`optimization-history.md`](performance/optimization-history.md#kafka-consumer-fetch-boundary-diagnosis--measurement-only-no-processing-logic-change).
+
+**Correctness** held in all 9 repeats. **Data-collection note:** broker
+RTT is librdkafka's blended average across all request types on a
+connection (Fetch, Heartbeat, OffsetCommit, Metadata), not Fetch-specific -
+the flat figure shows the connection as a whole isn't visibly slower, not
+that Fetch latency specifically is ruled out. All four processor smoke
+scenarios (including `normal`, which passed as recently as Stage 25) now
+fail; re-isolated via `git stash` against unmodified `main`, confirming
+this is the same pre-existing, already-tracked issue, apparently
+broadened since Stage 25/26 - unrelated to this stage and not touched
+here. **Recommended next experiment:** correlate `fetchq_records` against
+broker-reported `consumer_lag` at matching timestamps within a single
+degrading repeat, to see whether the two move together throughout or
+diverge.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

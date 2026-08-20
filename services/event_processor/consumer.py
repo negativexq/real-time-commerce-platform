@@ -1,7 +1,9 @@
 """Confluent Kafka polling, rebalance callbacks, and manual offset commits."""
 
+import json
 from datetime import UTC, datetime
-from typing import Protocol
+from time import perf_counter
+from typing import Any, Protocol
 
 from confluent_kafka import (  # type: ignore[import-untyped]
     Consumer,
@@ -16,6 +18,35 @@ from services.event_processor.logging import get_logger
 from services.event_processor.models import ConsumedMessage
 from services.event_processor.offset_tracker import OffsetCommitTracker, PartitionKey
 from shared.observability.metrics import ApplicationMetrics
+
+
+def fetchq_records_total(stats: dict[str, Any]) -> int:
+    """Sum of librdkafka's per-partition fetch-queue depth: records already
+    fetched from the broker and buffered locally, not yet returned by
+    poll(). A queue that stays near zero means the broker/network is the
+    pacing factor; a queue that grows means records are arriving from the
+    broker faster than poll()/process() drains them - a buffer this
+    codebase's own Python loop cannot see."""
+    total = 0
+    for topic in stats.get("topics", {}).values():
+        for partition in topic.get("partitions", {}).values():
+            count = partition.get("fetchq_cnt")
+            if isinstance(count, int):
+                total += count
+    return total
+
+
+def broker_rtt_avg_ms(stats: dict[str, Any]) -> float | None:
+    """Average broker round-trip time (ms) across brokers that have
+    reported at least one sample this interval, or None if none have."""
+    values: list[float] = [
+        float(broker["rtt"]["avg"]) / 1000
+        for broker in stats.get("brokers", {}).values()
+        if isinstance(broker.get("rtt"), dict) and broker["rtt"].get("cnt", 0) > 0
+    ]
+    if not values:
+        return None
+    return sum(values) / len(values)
 
 
 class ConsumerClient(Protocol):
@@ -42,7 +73,7 @@ class KafkaEventConsumer:
         metrics: ApplicationMetrics | None = None,
     ) -> None:
         self._config = config
-        self._client = client or Consumer(self.kafka_config(config))
+        self._client = client or Consumer(self._real_client_config(config, metrics))
         self._logger = get_logger()
         self._revoked: set[tuple[str, int]] = set()
         self._metrics = metrics
@@ -68,6 +99,28 @@ class KafkaEventConsumer:
             "max.poll.interval.ms": config.processor_max_poll_interval_ms,
             "partition.assignment.strategy": "cooperative-sticky",
         }
+
+    def _real_client_config(
+        self, config: ProcessorConfig, metrics: ApplicationMetrics | None
+    ) -> dict[str, object]:
+        """kafka_config() plus librdkafka's own statistics callback, wired
+        only for the real client this instance constructs - diagnostic only,
+        reads client-internal fetch-queue/broker-RTT stats the library
+        already computes, changes no processing behavior."""
+        client_config = dict(self.kafka_config(config))
+
+        def on_stats(payload: str) -> None:
+            if metrics is None:
+                return
+            stats = json.loads(payload)
+            metrics.processor_consumer_fetchq_records.set(fetchq_records_total(stats))
+            rtt = broker_rtt_avg_ms(stats)
+            if rtt is not None:
+                metrics.processor_consumer_broker_rtt_ms.set(rtt)
+
+        client_config["statistics.interval.ms"] = 1000
+        client_config["stats_cb"] = on_stats
+        return client_config
 
     def subscribe(self) -> None:
         self._client.subscribe(
@@ -134,10 +187,14 @@ class KafkaEventConsumer:
             self._metrics.processor_assigned.set(0)
 
     def poll(self) -> ConsumedMessage | None:
+        poll_started = perf_counter()
         raw = self._client.poll(self._config.processor_poll_timeout_seconds)
         if self._metrics is not None:
             self._metrics.processor_last_poll.set_to_current_time()
+            self._metrics.processor_poll_duration.observe(perf_counter() - poll_started)
         if raw is None:
+            if self._metrics is not None:
+                self._metrics.processor_empty_polls.inc()
             return None
         error = raw.error()
         if error is not None:

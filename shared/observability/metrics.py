@@ -129,6 +129,26 @@ class ApplicationMetrics:
             "Kafka record timestamp through poll() return - time a record "
             "spent waiting in the topic before this consumer fetched it.",
         )
+        self.processor_poll_duration = histogram(
+            "processor_poll_duration_seconds",
+            "Time actually blocked inside the Kafka client's poll() call.",
+        )
+        self.processor_empty_polls = counter(
+            "processor_empty_polls_total",
+            "poll() calls that returned no record within the poll timeout.",
+        )
+        self.processor_consumer_fetchq_records = gauge(
+            "processor_consumer_fetchq_records",
+            "librdkafka's internal fetch-queue depth (records already "
+            "fetched from the broker, buffered locally, not yet returned "
+            "by poll()), summed across assigned partitions - from the "
+            "client's own statistics callback.",
+        )
+        self.processor_consumer_broker_rtt_ms = gauge(
+            "processor_consumer_broker_rtt_ms",
+            "Average broker round-trip time (ms) across brokers reporting "
+            "one, from the client's own statistics callback.",
+        )
         self.processor_validation_duration = histogram(
             "processor_validation_duration_seconds", "Contract validation latency."
         )
