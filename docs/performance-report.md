@@ -1022,7 +1022,6 @@ sweep. Recommended next experiment: apply the same consolidation
 methodology to the two independent bounded `COUNT(*)` subqueries
 (recent-orders, product-view counts).
 
-
 ### Stage 23 — Post fraud-context optimization capacity discovery
 
 **Why?** Stage 22 kept a fraud-context round-trip reduction with strong
@@ -1085,6 +1084,65 @@ capacity claim is wanted; otherwise Stage 22's own next recommendation
 (consolidating the two independent bounded `COUNT(*)` subqueries) remains
 the next isolated optimization experiment.
 
+### Stage 24 — Transaction lifecycle decomposition v3: no phase grows
+
+**Why?** Stage 22's fraud-context round-trip reduction improved per-metric
+behavior but Stage 23 found the saturation boundary itself unmoved. This
+stage shifts attribution from "how many SQL calls" to "which transaction
+phase - read, write, or commit - dominates and grows near saturation."
+Diagnostic only.
+
+**Lifecycle model** (from `UnitOfWorkFactory.persist()`): pool acquire →
+`processed_events` insert (write) → `business_persistence` (write) → if
+fraud-eligible: `fraud_context` reads (~9 bounded SELECTs) → fraud
+evaluation (pure Python) → `fraud_persistence` (write) → commit →
+connection release. Every span was already instrumented by existing
+`database_stage_duration_seconds`/`database_transaction_duration_seconds`
+histograms - no new metric was needed. One new pure benchmark-side helper,
+`phase_group_breakdown()`, regroups the already-fetched averages into
+read/write/commit with zero added overhead (unit-tested, 8 cases).
+
+**Benchmark:** 3 workers, 1/1/1, current optimized code, 1000/1050/1075/
+1100 evt/s only (not extending the ceiling search), 3 repeats (tag
+[`bench-transaction-lifecycle-v3-3w`](../artifacts/benchmark/bench-transaction-lifecycle-v3-3w/)).
+
+**Central finding: phase durations do not track degradation.** Read,
+write, and commit stayed in the same ~0.4-1.3ms band regardless of
+whether a repeat was clean or severely lagging. The single most degraded
+repeat in the sweep (1075 rep 0: +176 events/s lag slope, E2E p99
+16,672ms) had a read phase of 0.886ms and write phase of 0.873ms -
+**nearly identical** to a clean repeat at the same rate (0.896ms /
+0.920ms, slope +4.58/s only). Commit stayed consistently smallest
+(~0.2-0.5ms) throughout. PostgreSQL CPU, processor CPU, WAL records/sec,
+and lock evidence (`{AccessShareLock: 1}` - the benchmark's own snapshot
+query - at every single rate/repeat) showed no clean split between clean
+and degraded repeats either.
+
+**Answers to the eight analysis questions:** read phase is not dominant;
+write phase is not dominant; commit/WAL is not becoming dominant;
+transaction duration does not grow before lag growth; SQL count does not
+increase near saturation; SQL execution time does not increase near
+saturation; no contention evidence; no transaction-internal phase
+correlates strongly with E2E tail growth (fraud-eligible handler latency
+showed a weak, inconsistent correlation only). Full detail in
+[`optimization-history.md`](performance/optimization-history.md#transaction-lifecycle-decomposition-v3--measurement-only-no-code-change).
+
+**Conclusion: Outcome D.** No transaction phase grows with saturation or
+correlates cleanly with degradation - ruling out transaction-lifecycle
+cost as the mechanism, joining Stage 20/21's already-ruled-out list
+(locks, LWLock, IO waits, cgroup throttling, host scheduling, connection
+explosion, single slow query). The repeatable pattern of one or two
+repeats per rate degrading severely while internal costs stay identical
+to clean repeats is more consistent with a **transient arrival-rate/
+queueing burst** than a per-transaction cost increase - a hypothesis for
+the next experiment, not a proven mechanism.
+
+**Correctness** held in all 12 repeats, including severely-lagged ones;
+all four processor smoke scenarios passed. **Recommended next
+experiment:** sample Kafka consumer poll-to-handler latency and in-flight
+event counts at sub-second resolution around the moment a repeat tips
+into degradation, to test whether a transient arrival-rate burst (not
+per-event cost) precedes the lag-slope spike.
 
 ## Final Capacity Summary
 

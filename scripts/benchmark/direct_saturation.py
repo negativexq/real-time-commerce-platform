@@ -165,6 +165,63 @@ def _transaction_breakdown(prom: PrometheusClient, window: int) -> dict[str, Any
     return breakdown
 
 
+def phase_group_breakdown(
+    breakdown: dict[str, dict[str, float | None]],
+) -> dict[str, float | None]:
+    """Group the already-active per-stage instrumentation
+    (commerce_database_stage_duration_seconds, already emitted by
+    UnitOfWorkFactory.persist for every transaction - see
+    persistence/unit_of_work.py) into read/write/commit lifecycle phases,
+    for Transaction Lifecycle Decomposition v3. This adds no new metric
+    and issues no new Prometheus query - it is a pure regrouping of
+    averages ``_transaction_breakdown`` already fetched.
+
+    Read phase: ``fraud_context`` - the ~9 bounded SELECTs building
+    FraudContext; the only read-heavy stage (fraud-eligible events only).
+    Write phase: ``processed_events_insert`` + ``business_persistence`` +
+    ``fraud_persistence`` - every stage that inserts/updates rows.
+    Commit: the ``commit`` stage (time from end of transaction body to
+    after ``connection.transaction()`` exits, i.e. the actual COMMIT).
+    ``unattributed_ms`` is what's left after subtracting every phase plus
+    pool acquire/connection release from the transaction total - Python
+    overhead between phases, handler dispatch outside the stages, etc.
+    """
+
+    def avg(key: str) -> float | None:
+        value = breakdown.get(key, {}).get("avg")
+        return value
+
+    read_phase = avg("fraud_context")
+    write_parts = [
+        avg("processed_events_insert"),
+        avg("business_persistence"),
+        avg("fraud_persistence"),
+    ]
+    present_write_parts = [part for part in write_parts if part is not None]
+    write_phase = sum(present_write_parts) if present_write_parts else None
+    commit = avg("commit")
+    pool_acquire = avg("pool_acquire")
+    connection_release = avg("connection_release")
+    total = avg("transaction_total")
+
+    known = [
+        value
+        for value in (read_phase, write_phase, commit, pool_acquire, connection_release)
+        if value is not None
+    ]
+    unattributed = (total - sum(known)) if total is not None and known else None
+
+    return {
+        "read_phase_ms": read_phase,
+        "write_phase_ms": write_phase,
+        "commit_ms": commit,
+        "pool_acquire_ms": pool_acquire,
+        "connection_release_ms": connection_release,
+        "transaction_total_ms": total,
+        "unattributed_ms": unattributed,
+    }
+
+
 def _event_type_handler_latency(
     prom: PrometheusClient, window: int
 ) -> dict[str, float | dict[str, float | None] | None]:
@@ -420,7 +477,10 @@ def _run_one(
             operation: (delta / len(rows) if rows else None)
             for operation, delta in sql_call_deltas.items()
         },
-        "transaction_breakdown_ms": _transaction_breakdown(prom, window),
+        "transaction_breakdown_ms": (
+            transaction_breakdown := _transaction_breakdown(prom, window)
+        ),
+        "phase_group_breakdown_ms": phase_group_breakdown(transaction_breakdown),
         "event_type_handler_latency_ms": _event_type_handler_latency(prom, window),
         "correctness": {
             "unique_event_ids": len(set(event_ids)),

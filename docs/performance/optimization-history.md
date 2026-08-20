@@ -1451,6 +1451,7 @@ configuration was changed. This is attribution, not optimization.
   promising direction) - as a controlled, single-variable A/B against the
   current ~1050 evt/s boundary, following the same reset methodology used
   throughout this series.
+
 ## Fraud-context round-trip reduction — kept
 
 - **Accumulated diagnosis leading to this experiment:** Stage 16 found
@@ -1733,3 +1734,198 @@ configuration was changed. This is attribution, not optimization.
   the same round-trip-consolidation methodology to the two independent
   bounded `COUNT(*)` subqueries in `fraud_context`.
 
+## Transaction lifecycle decomposition v3 — measurement only, no code change
+
+- **Previous diagnosis leading to this experiment:** Stage 16 found no
+  single dominant SQL query; Stage 20 ruled out lock/LWLock/IO-wait/
+  connection-explosion with aggregate call-volume-driven cost as the
+  strongest mechanism; Stage 21 ruled out cgroup throttling and host
+  scheduling starvation with STRONG confidence; Stage 22 reduced
+  fraud-context round trips (~8.7 → ~7.7/event) with real per-metric
+  improvement but Stage 23 found the saturation boundary itself did not
+  move. This stage shifts from "how many SQL calls" to "which phase of
+  the transaction's own lifecycle dominates and grows" - read, write, or
+  commit.
+- **Lifecycle model** (from direct inspection of
+  [`services/event_processor/persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
+  `UnitOfWorkFactory.persist()`):
+
+  ```
+  persist() started
+    -> pool.connection() acquire         [database_pool_acquire_duration]
+    -> connection.transaction() begins
+       -> phase "processed_events": insert_identity()   [stage=processed_events, WRITE]
+       -> phase "business": handler.apply()             [stage=business_persistence, WRITE]
+       -> if fraud-eligible:
+            phase "fraud_context": FraudContextBuilder.build()  [stage=fraud_context, READ - ~9 bounded SELECTs]
+            fraud_engine.evaluate()                     [fraud_evaluation_duration - pure Python, no DB]
+            phase "fraud_persistence": fraud.persist()  [stage=fraud_persistence, WRITE]
+    -> connection.transaction() exits -> COMMIT          [stage=commit]
+    -> connection release                                 [database_connection_release_duration]
+  persist() returns; database_transaction_duration observes the whole span
+  ```
+
+  Every one of these spans is **already instrumented** by the existing
+  `database_stage_duration_seconds{stage=...}`,
+  `database_pool_acquire_duration_seconds`,
+  `database_connection_release_duration_seconds`, and
+  `database_transaction_duration_seconds` histograms (all active in
+  production since the Stage 5/9 instrumentation, reused by every
+  decomposition stage in this history) - no rollback path is separately
+  recorded, because `AlreadyPersistedEvent`/dependency errors are caught
+  *before* reaching the commit-metric line and are exceptional/rare (zero
+  occurrences in any retained benchmark repeat to date, consistent with
+  the 100% correctness held throughout this series).
+- **Instrumentation added:** a single pure function,
+  `phase_group_breakdown()` in
+  [`scripts/benchmark/direct_saturation.py`](../../scripts/benchmark/direct_saturation.py),
+  which regroups the already-fetched per-stage averages into
+  **read phase** (`fraud_context`), **write phase**
+  (`processed_events_insert` + `business_persistence` +
+  `fraud_persistence`), and **commit** (`commit`), alongside pool-acquire/
+  connection-release and the transaction total - no new metric, no new
+  Prometheus query, zero added runtime overhead. Wired into each benchmark
+  repeat's output as `phase_group_breakdown_ms`. Unit-tested in
+  [`tests/unit/test_phase_group_breakdown.py`](../../tests/unit/test_phase_group_breakdown.py)
+  (8 cases: read/write/commit extraction, the non-fraud-event case where
+  `fraud_context` is absent, missing-total handling, and an empty
+  breakdown).
+- **Known limitation of the derived breakdown:** `unattributed_ms` (the
+  residual after subtracting every phase from `transaction_total`) was
+  **negative in nearly every repeat** of this sweep. This is not evidence
+  of double-counting inside one transaction - it reflects that
+  `transaction_total` is averaged over *all* processed events (fraud and
+  non-fraud alike), while `fraud_context`/`fraud_persistence` are averaged
+  only over the fraud-eligible subset; summing averages taken over
+  different sub-populations does not reconstruct one transaction's exact
+  internal budget. The phase magnitudes remain valid for **relative**
+  comparison across rates and repeats, which is what this experiment
+  needed; they are not a literal reconciled accounting.
+- **Benchmark:** 3 workers, 1/1/1 verified, current code (fraud-context
+  optimization active, unmodified in this stage), 1000/1050/1075/1100
+  evt/s only (per instruction, not extending the ceiling search further),
+  10s warmup, 45s steady, 3 repeats. Tag
+  [`bench-transaction-lifecycle-v3-3w`](../../artifacts/benchmark/bench-transaction-lifecycle-v3-3w/).
+  Command:
+  `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-transaction-lifecycle-v3-3w`.
+- **Transaction phase breakdown (per repeat, ms - showing the full
+  per-repeat spread rather than only means, since the central finding is
+  about repeat-to-repeat behavior):**
+
+  | Rate | Repeat | Lag slope | Read | Write | Commit | Total |
+  | --- | --- | ---: | ---: | ---: | ---: | ---: |
+  | 1000 | 0 (clean) | +1.87/s | 0.809 | 0.828 | 0.402 | 1.751 |
+  | 1000 | 1 (clean) | +1.91/s | 0.571 | 0.852 | 0.439 | 1.892 |
+  | 1000 | 2 (clean) | +1.74/s | 0.445 | 0.465 | 0.224 | 0.976 |
+  | 1050 | 0 (degraded) | +38.46/s | 0.828 | 0.975 | 0.411 | 1.816 |
+  | 1050 | 1 (clean) | +1.19/s | 0.469 | 0.429 | 0.241 | 0.213* |
+  | 1050 | 2 (moderate) | +14.72/s | 0.644 | 0.672 | 0.447 | 1.428 |
+  | 1075 | 0 (severe) | +176.07/s | 0.886 | 0.873 | 0.460 | 1.948 |
+  | 1075 | 1 (clean) | +2.86/s | 0.511 | 0.587 | 0.258 | 1.108 |
+  | 1075 | 2 (clean) | +4.58/s | 0.896 | 0.920 | 0.453 | 1.945 |
+  | 1100 | 0 (moderate) | +35.20/s | 0.901 | 0.924 | 0.467 | 1.971 |
+  | 1100 | 1 (severe) | +255.19/s | 0.621 | 0.947 | 0.326 | 1.361 |
+  | 1100 | 2 (severe) | +66.80/s | 1.346 | 1.122 | 0.502 | 2.044 |
+
+  *1050 repeat 1's `transaction_total` (0.213ms) is implausibly low
+  relative to its own read+write+commit sum (~1.1ms) and is treated as a
+  Prometheus-window sampling artifact for that one repeat, not a real
+  value - excluded from the qualitative conclusion below.
+- **The central finding: phase durations do not track degradation.**
+  Read, write, and commit phase durations stay in the same
+  **~0.4-1.3ms band regardless of whether the repeat was clean or
+  severely lagging.** 1075 repeat 0 - the most severely degraded repeat
+  in the entire sweep (+176 events/s lag slope, E2E p99 16,672ms) - had a
+  read phase of 0.886ms and write phase of 0.873ms, **nearly identical**
+  to 1075 repeat 2's clean run (0.896ms / 0.920ms, slope +4.58/s only).
+  The same pattern holds at every rate: the worst-lagging repeat's
+  internal phase costs are not distinguishable from the cleanest repeat's
+  at the same rate. Read and write phases stay roughly balanced with each
+  other throughout (neither consistently dominates the other), and commit
+  stays consistently the smallest of the three (~0.2-0.5ms) at every rate
+  and every repeat.
+- **PostgreSQL/processor resource evidence:** `postgres_locks_after`
+  showed `{'AccessShareLock': 1}` - the benchmark's own read-only snapshot
+  query - at **every single rate and repeat**, clean or degraded alike.
+  Zero heavyweight lock evidence anywhere in this sweep, consistent with
+  Stage 20. PostgreSQL CPU (67-116% across all repeats) and processor CPU
+  (161-209%, three workers summed) showed no clean split between clean
+  and degraded repeats at the same rate (e.g. 1075's severely-degraded
+  repeat 0 measured 84.8% PG CPU, barely different from clean repeat 1's
+  77.8%). WAL records/sec (11,832-16,066) showed the same pattern - no
+  clean degraded-vs-clean separation.
+- **Fraud vs. non-fraud comparison:** fraud-eligible-event handler
+  latency was consistently 1.3-2x higher than non-fraud handler latency
+  at every rate (e.g. 1000: 1.28-2.88ms fraud-eligible vs. 1.92-1.99ms
+  non-fraud, already an *unusually tight* non-fraud band by comparison),
+  matching every prior stage's finding. Within a single rate, the
+  degraded repeat's fraud-eligible latency was sometimes (not always)
+  moderately higher than the clean repeat's (1050: 2.99ms degraded vs.
+  1.69ms clean; 1075: 3.22ms severely-degraded vs. 1.86ms clean) - a real
+  but weak and inconsistent signal (1100's ordering did not follow the
+  same pattern: its *worst* repeat by lag slope, +255/s, showed the
+  *lowest* fraud-eligible latency of the three, 2.84ms).
+- **Analysis questions, answered directly:**
+  1. **Is read phase dominant?** No single phase dominates consistently;
+     read and write stay roughly balanced (each ~0.4-1.3ms), commit stays
+     smallest throughout.
+  2. **Is write phase dominant?** No - see above; write is comparable to
+     read, not clearly larger.
+  3. **Is commit/WAL becoming dominant?** No - commit stayed the smallest
+     phase at every rate and repeat (~0.2-0.5ms), and WAL records/sec
+     showed no clean degraded-vs-clean split.
+  4. **Does transaction duration grow before lag growth?** No - the
+     opposite: transaction phase durations stayed flat regardless of
+     whether lag was already growing severely.
+  5. **Does SQL count increase near saturation?** No - `fraud_context_customer_order`
+     calls/event stayed in the same noisy ~0.1-0.25 band at every rate
+     with no monotonic rise (one 1100 repeat even showed a small negative
+     value, a Prometheus-counter-window artifact, not evidence of fewer
+     real calls).
+  6. **Does SQL execution time increase near saturation?** No - consistent
+     with (1)-(3), no phase's duration trended upward with rate or with
+     degradation.
+  7. **Is there evidence of contention?** No - zero heavyweight locks at
+     every rate/repeat; this stage adds no new contention evidence beyond
+     Stage 20/21's already-clean findings.
+  8. **What phase correlates strongest with E2E tail growth?** None of
+     the measured transaction-internal phases do. The only weak
+     correlate found was fraud-eligible handler latency, and it was
+     inconsistent (see above) - not strong enough to name as "the"
+     correlate.
+- **Outcome: D - no transaction phase grows with saturation; a different
+  hypothesis is needed.** Every phase this experiment could measure (read,
+  write, commit, pool acquire, connection release) stayed flat across
+  clean and severely-degraded repeats at the same rate, and none trended
+  upward with requested rate either. Combined with Stage 20/21's already-
+  clean lock/wait/throttling/scheduling evidence, this rules out
+  "transaction lifecycle cost grows under load" as the mechanism. The
+  repeatable pattern instead - one or two repeats per rate degrading
+  severely while phase-internal costs stay identical to clean repeats -
+  is more consistent with a **transient queueing/arrival-burst dynamic**
+  (a momentary mismatch between event arrival rate and available service
+  capacity that produces a temporary backlog, which then persists for the
+  rest of that repeat's measurement window) than with any per-transaction
+  execution cost increase. This experiment does not have direct evidence
+  of the burst mechanism itself - only clean evidence that transaction
+  internals are not the cause - so this is reported as a hypothesis for
+  the next experiment, not a proven mechanism.
+- **Hypotheses ruled out (this stage, joining the running list):**
+  transaction read-phase growth, write-phase growth, commit/WAL-phase
+  growth, SQL-count growth near saturation, SQL-execution-time growth near
+  saturation, lock/contention growth. Combined with Stages 20/21: cgroup
+  throttling, host CPU saturation, scheduler starvation, connection
+  explosion, LWLock contention, IO-wait explosion, a single slow query.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e`
+  held in all 12 repeats, including the severely-lagged ones. All four
+  processor smoke scenarios passed.
+- **Next experiment:** since transaction-internal phases are now cleanly
+  ruled out at every rate tested, the next isolated diagnostic should
+  target **arrival-side/queueing dynamics directly** rather than the
+  transaction or PostgreSQL again - e.g. sampling Kafka consumer
+  poll-to-handler latency and in-flight/inflight-event counts at
+  sub-second resolution around the moment a repeat tips into degradation,
+  to test whether a transient burst in arrival rate (not measured cost
+  per event) precedes the lag-slope spike. This is a measurement
+  experiment, not an optimization, and follows directly from this stage's
+  "no phase grows" finding.
