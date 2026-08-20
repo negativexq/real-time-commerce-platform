@@ -820,6 +820,78 @@ the two indexes are not solely credited with the full 750→1050 change.
 **No implementation changes were made.** Environment restored to 1 worker,
 lag 0.
 
+### Stage 20 — PostgreSQL saturation diagnosis: what changes at 1075-1100
+
+**Why?** Stage 19 found PostgreSQL CPU was the strongest saturation signal
+near the 1050-1100 evt/s boundary but did not say what specifically changes
+inside PostgreSQL. This stage answers that with an external, sampling-based
+diagnostic - no code, SQL, index, or configuration change.
+
+**Method.** New `scripts/benchmark/postgres_diagnostics.py` polls
+`pg_stat_activity`/`pg_locks` once per second and snapshots `pg_stat_io`/
+`pg_stat_checkpointer` before/after, for the duration of each rate's
+3-repeat sweep at 1050/1075/1100 evt/s (tag
+[`bench-postgres-saturation-diagnosis-3w`](../artifacts/benchmark/bench-postgres-saturation-diagnosis-3w/)).
+Query text is never persisted - only bounded `<table>_<kind>` classes.
+
+**Active/waiting backend and wait-event evidence:**
+
+| Metric | 1050 | 1075 | 1100 |
+| --- | ---: | ---: | ---: |
+| Active backends avg/max | 1.24 / 4 | 1.28 / 4 | 1.32 / 4 |
+| Longest active-query age (max) | 0.66 s | 3.21 s | 4.55 s |
+| Lock waits (heavyweight) | 0 | 0 | 0 |
+| LWLock waits | 4 | 8 | 9 |
+| IO waits | 41 | 43 | 34 |
+| Blocked backends (max) | 0 | 0 | 0 |
+| Transactions/sec | 443.4 | 452.9 | 462.8 |
+
+Active-backend concurrency is essentially flat across the boundary - **this
+is not a concurrency-explosion pattern.** Heavyweight lock contention and
+blocking never appeared at any rate, at any of the ~400 one-second ticks
+per rate. LWLock and IO waits stay small and roughly flat. The one signal
+that grows sharply is the longest single active-query/transaction age
+observed (0.66s → 3.21s → 4.55s) - a small number of transactions
+occasionally stall well past this workload's normal sub-millisecond cost
+at 1075/1100, invisible to any captured PostgreSQL `wait_event`.
+
+**Query-class accumulation** (via existing SQL-class Prometheus
+instrumentation - `pg_stat_statements` remains disabled, unchanged from
+prior stages): the same query classes dominate at every rate in the same
+rank order, and **per-class mean latency stayed flat to noisy across all
+three rates** (e.g. `fraud_context_recent_payments`: 0.109 → 0.134 →
+0.096 ms). Total time per class grew in proportion to call volume - the
+signature of aggregate call-volume-driven cost, not a query getting
+slower.
+
+**Secondary signal:** autovacuum-worker vacuum-context IO grew sharply
+with rate (reads 58,285 → 226,578 → 219,241; writes 1,463 → 19,935 →
+54,773), alongside rising background-writer buffer writes - a plausible
+additive contributor from higher insert/update volume, separate from the
+query-CPU explanation.
+
+**Diagnosis.** Strongest supported mechanism: **aggregate query-execution
+CPU, proportional to event/call volume** - not concurrency, not locking,
+not a single slow query. A secondary autovacuum/background-writer I/O
+contribution also grows with rate. Ruled out: connection/concurrency
+explosion, heavyweight lock contention, LWLock contention as a dominant
+cause, a single runaway query class, IO wait explosion. **Confidence:
+moderate** - the wait/lock evidence is clean and consistent (strong), but
+the CPU-vs-host-scheduling distinction behind the growing longest-query-age
+signal is inferred, not directly measured. Full detail, including a known
+tooling limitation (three sequential single-rate invocations under one run
+tag overwrote `direct-saturation.json`, closed via recomputed correctness/
+E2E for 1050 and 1075 from retained injector/processed_events data), is in
+[`optimization-history.md`](performance/optimization-history.md#postgresql-saturation-diagnosis--measurement-only-no-code-change).
+
+**Correctness** held for all 9 repeats; all four processor smoke scenarios
+passed. **No optimization was made or recommended for implementation in
+this stage.** Recommended next step: a lightweight host/container
+CPU-scheduling probe to test whether the growing longest-query-age signal
+reflects OS/hypervisor scheduling delay rather than PostgreSQL-internal
+cost, before considering any reduction in per-event PostgreSQL read/write
+volume.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

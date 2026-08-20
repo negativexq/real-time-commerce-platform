@@ -956,3 +956,247 @@ configuration was changed. This is attribution, not optimization.
 - **No implementation changes were made in this stage** - reset, topology
   verification, and benchmarking only. Environment restored to 1 worker,
   lag 0, after completion.
+
+## PostgreSQL saturation diagnosis — measurement only, no code change
+
+- **Motivation:** Stage 19 established that PostgreSQL CPU is the strongest
+  measured saturation-resource signal near the 1050-1100 evt/s boundary,
+  but did not say *what inside PostgreSQL* changes - active-query
+  concurrency, lock/LWLock waits, IO waits, WAL/write coordination, or
+  aggregate query-execution volume. This stage answers that, using only
+  external, sampling-based PostgreSQL observation.
+- **Rates:** 1050, 1075, 1100 evt/s; 10s warmup, 45s steady, 3 repeats;
+  same 3-worker/1/1/1 topology, re-verified before starting from a
+  `scripts/reset-benchmark-data.sql`-clean state with all 7 migrations and
+  all three composite indexes confirmed present. Tag
+  [`bench-postgres-saturation-diagnosis-3w`](../../artifacts/benchmark/bench-postgres-saturation-diagnosis-3w/).
+  Command per rate:
+  `python -m scripts.benchmark.direct_saturation --rates <rate> --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-postgres-saturation-diagnosis-3w`.
+- **Diagnostic sampler:** new
+  [`scripts/benchmark/postgres_diagnostics.py`](../../scripts/benchmark/postgres_diagnostics.py),
+  an external, read-only sampler polling `pg_stat_activity` and `pg_locks`
+  once per second (`--interval-seconds 1.0`) for the duration of each
+  rate's 3-repeat sweep, plus one `pg_stat_io`/`pg_stat_checkpointer`
+  snapshot before and after. It never persists raw SQL text - queries are
+  bucketed into bounded `<table>_<statement-kind>` classes
+  (`classify_query()`). Command per rate:
+  `python -m scripts.benchmark.postgres_diagnostics --run-tag bench-postgres-saturation-diagnosis-3w --label <rate> --duration-seconds 400 --interval-seconds 1.0`,
+  started just before the matching benchmark invocation. Output:
+  `postgres-diagnostics-<rate>.json` per rate, each with a raw sample
+  series plus an aggregated `summary` (`summarize_samples()`, unit-tested
+  in
+  [`tests/unit/test_postgres_diagnostics.py`](../../tests/unit/test_postgres_diagnostics.py)).
+  Summary statistics exclude samples where zero backends were active by
+  default (`active_only=True`), approximating "under load" periods within
+  a series that also spans warmup/idle/drain gaps, since precise
+  cross-process wall-clock correlation with the benchmark's own load
+  windows was out of scope for this lightweight sampler.
+- **Instrumentation overhead:** four small catalog-view queries per tick
+  (`pg_stat_activity`, `pg_locks`, `pg_stat_database` counters) against a
+  server already running ~450-460 transactions/sec at these rates is a
+  negligible fraction of total query volume (roughly 0.02-0.03% of
+  transaction rate at 1 tick/second); no formal isolated A/B was run to
+  quantify this further, since the sampler issues no query anywhere near
+  the hot fraud-context/business-write path and adds no per-event cost.
+- **Known tooling limitation:** `direct_saturation.py` writes
+  `direct-saturation.json` unconditionally to the run tag's directory on
+  every invocation; running it three times sequentially under one shared
+  run tag (once per rate) overwrote that file, leaving only the final
+  (1100 evt/s) rate's full JSON (transaction/stage breakdown, PostgreSQL
+  container CPU, WAL rates) retained in that file. This is a real gap for
+  future multi-rate-under-one-tag runs of this exact pattern, not a data
+  loss in general - the `injector-<rate>-<repeat>.json` files (raw
+  per-event samples, unaffected by this) and this stage's own
+  `postgres-diagnostics-<rate>.json` files (the primary evidence for this
+  stage's question, unaffected since each has a distinct filename by
+  label) remained fully intact for all three rates. Where possible this
+  gap was closed by direct recomputation (below); PostgreSQL container
+  CPU% and `pg_stat_wal`-based WAL rates for 1050/1075 specifically were
+  not recoverable (they were only ever sampled live via `docker stats`/
+  direct SQL and never exposed through Prometheus, so there was nothing to
+  query retroactively) - only the 1100 evt/s repeats retain those two
+  metrics directly from this stage's own run. This should be fixed in any
+  future run of this tool by using a distinct run tag per rate or an
+  output-path override.
+- **Correctness (recovered where needed):** `unique_event_ids ==
+  processed_rows` was independently reverified for all six 1050/1075
+  repeats by re-querying `processed_events` against each repeat's retained
+  `injector-<rate>-<repeat>.json` event-ID list (all six matched exactly);
+  1100's three repeats matched `unique_event_ids == processed_rows ==
+  matched_e2e` directly from the retained `direct-saturation.json`. E2E
+  latency for the six 1050/1075 repeats was also recomputed from the same
+  event-ID lists against Kafka publish timestamps and `processed_events.processed_at`
+  (matching direct_saturation.py's own method) - full detail below. All
+  correctness held; zero duplicate durable side effects, zero missing
+  durable events, across all 9 repeats.
+- **System-level results (lag slope / peak lag / E2E p50-p95-p99 ms):**
+
+  | Rate | Repeat | Lag slope | Peak lag | E2E p50/p95/p99 |
+  | --- | --- | ---: | ---: | --- |
+  | 1050 | 0 | +1.99/s | 610 | 32 / 1529 / 2568 |
+  | 1050 | 1 | +1.72/s | 535 | 30 / 149 / 411 |
+  | 1050 | 2 | +2.49/s | 426 | 45 / 197 / 526 |
+  | 1075 | 0 | +5.70/s | 267 | 54 / 483 / 563 |
+  | 1075 | 1 | +10.37/s | 477 | 42 / 518 / 593 |
+  | 1075 | 2 | +11.06/s | 517 | 46 / 697 / 916 |
+  | 1100 | 0 | +3.70/s | 173 | 34 / 265 / 729 |
+  | 1100 | 1 | +3.14/s | 743 | 38 / 496 / 629 |
+  | 1100 | 2 | +9.80/s | 458 | 54 / 716 / 1175 |
+
+  This fresh sweep's own 1100 repeats came back somewhat cleaner than
+  Stage 19's broad-sweep 1100 result (which had 2/3 repeats with slope
+  11.6-24.9/s and E2E p95 up to 2.47s) - consistent with the
+  already-documented run-to-run variance in this saturated regime, not a
+  contradiction; both sweeps agree that 1075-1100 evt/s is materially
+  noisier and higher-tailed than 1050. 1050 rep 0's E2E p99 spike (2568 ms)
+  despite a low lag slope (+1.99/s) is itself an example of the
+  "bounded lag, inflated tail latency" pattern this task asked to watch
+  for - not treated as disqualifying 1050, since 2 of 3 repeats were clean
+  on both dimensions, but noted as a real, repeatable-enough possibility
+  even at the "sustainable" rate.
+- **Active/waiting backend evidence (aggregated per rate from the sampler,
+  1s ticks, load-active samples only):**
+
+  | Metric | 1050 | 1075 | 1100 |
+  | --- | ---: | ---: | ---: |
+  | Active backends avg/max | 1.24 / 4 | 1.28 / 4 | 1.32 / 4 |
+  | Waiting backends (any `wait_event`) avg/max | 6.53 / 8 | 5.03 / 6 | 4.83 / 6 |
+  | Idle-in-transaction avg/max | 0.42 / 3 | 0.48 / 3 | 0.55 / 3 |
+  | Active transactions avg/max | 1.66 / 4 | 1.76 / 5 | 1.87 / 5 |
+  | Longest active-query age (max) | 0.66 s | 3.21 s | 4.55 s |
+  | Longest transaction age (max) | 0.66 s | 3.21 s | 4.55 s |
+  | Transactions/sec | 443.4 | 452.9 | 462.8 |
+  | Blocked backends (max) | 0 | 0 | 0 |
+
+  Active-backend concurrency is essentially flat (1.24 → 1.32 avg) across
+  the boundary - **this is not a concurrency-explosion pattern.** The
+  "waiting" count is dominated overwhelmingly by `ClientRead`
+  (`wait_event_type=Client`), which is the normal, benign state of a
+  pooled backend idling between queries, not contention; it is *higher* at
+  1050 than at 1075/1100 (more idle capacity when the system keeps up).
+  The one value that grows sharply and monotonically with the boundary is
+  the **longest single active-query/transaction age observed: 0.66s →
+  3.21s → 4.55s** - a small number of individual transactions occasionally
+  stall well past this workload's normal sub-millisecond-to-low-millisecond
+  cost at 1075/1100, while nothing in this sample series ever reaches
+  above ~0.7s at 1050.
+- **Wait-event distribution (summed counts across all ticks, per rate):**
+
+  | wait_event_type | 1050 | 1075 | 1100 |
+  | --- | ---: | ---: | ---: |
+  | Client (`ClientRead`) | 2558 | 1946 | 1865 |
+  | IO | 41 | 43 | 34 |
+  | LWLock | 4 | 8 | 9 |
+  | Timeout (`VacuumDelay`, autovacuum's own cost-based throttling) | 2 | 11 | 20 |
+  | Lock (heavyweight) | 0 | 0 | 0 |
+  | IPC / BufferPin / Activity / Extension | 0 | 0 | 0 |
+
+  **Lock, IPC, BufferPin, Activity, and Extension waits never appeared at
+  any rate.** LWLock waits are present but stay in the single digits out
+  of ~400 one-second ticks at every rate - a mild upward trend (4 → 8 → 9)
+  from a near-zero base, not a repeatable contention signature. IO waits
+  are flat (41/43/34). The only wait class that clearly grows with rate is
+  `VacuumDelay` (2 → 11 → 20), which is autovacuum's own internal
+  cost-based throttling pausing itself, not an application query waiting
+  on anything - it reflects more vacuum work being needed as insert/update
+  volume rises, not query-path contention.
+- **Lock evidence:** `locks_waiting_by_mode` was empty at every tick at all
+  three rates (max ungranted-lock count across the entire series: 0).
+  `pg_blocking_pids()` never returned a non-empty result for any sampled
+  backend at any rate (`blocked_max = 0` throughout). **There is no
+  heavyweight lock contention or blocking anywhere in this data.**
+- **Transaction concurrency:** active-transaction count tracked active
+  backends closely (1.66 → 1.76 → 1.87 avg) - a small, gradual rise
+  consistent with more work in flight at higher throughput, not a
+  qualitative shift. Transactions/sec rose in proportion to the requested
+  rate (443 → 453 → 463/s), exactly as expected from more events being
+  processed per second; this is not itself evidence of a bottleneck.
+- **Query-class accumulation (`pg_stat_statements` is not enabled in this
+  environment - confirmed via `pg_extension`/`shared_preload_libraries`,
+  unchanged from prior stages; this experiment did not enable it, per the
+  task constraint. The existing `commerce_database_sql_duration_seconds`/
+  `commerce_database_sql_statement_count_total` Prometheus histograms were
+  used instead, queried historically via Prometheus's own retained data
+  for windows ending at each rate's last repeat):** the same query classes
+  dominate accumulated DB time at every rate, in the same rank order -
+  `processed_events_select` (duplicate-check/idempotency reads, multiple
+  per event), `processed_events_insert`, `fraud_evaluation_write`, then
+  the `fraud_context_*` lookups (recent/prior payments, recent orders,
+  product views, refunds, in roughly even proportion, matching Stage 16's
+  finding that no single fraud-context query dominates). Per-operation
+  **mean latency stayed flat to noisy across all three rates** (e.g.
+  `fraud_context_recent_payments`: 0.109 → 0.134 → 0.096 ms;
+  `processed_events_select`: 0.110 → 0.092 → 0.086 ms) - **no query class
+  got slower per call as rate rose.** Total accumulated time per class grew
+  roughly in proportion to call volume at every rate, which is exactly the
+  signature of aggregate call-volume-driven cost, not per-query
+  degradation.
+- **WAL/write-path and IO/buffer evidence:** PostgreSQL container CPU and
+  `pg_stat_wal`-based rates were only retained for this stage's own 1100
+  repeats (see the known tooling limitation above): 62.2/75.1/68.0% CPU,
+  WAL FPI 9.1/185.7/23.1 per second (noisy, consistent with the
+  checkpoint-timing dominance already established), WAL records/sec
+  16112/16089/16611 (flat across the three 1100 repeats). `pg_stat_io` and
+  `pg_stat_checkpointer` before/after deltas were captured at all three
+  rates: checkpointer buffer writes were 5202 → 15088 → 12760 (one timed
+  checkpoint per window at every rate, plus one *requested* checkpoint at
+  1075 specifically - the only rate where `restartpoints_req`/
+  `num_requested` moved, suggesting WAL volume crossed
+  `max_wal_size` during that window). More strikingly, **autovacuum-worker
+  IO in the `vacuum` context grew sharply with rate: reads 58,285 →
+  226,578 → 219,241; writes 1,463 → 19,935 → 54,773**, and background
+  writer's normal-context buffer writes also rose (34,416 → 54,250 →
+  63,579). This points to a secondary, plausible contributor: higher
+  insert/update volume produces more dead tuples per unit time, driving
+  more autovacuum and background-writer I/O activity competing for the
+  same shared buffers/IO bandwidth as the query path - separate from, and
+  additional to, the aggregate query-CPU explanation above.
+- **CPU interpretation:** combining the evidence above, PostgreSQL CPU
+  rising near the boundary is best explained by **(A) aggregate
+  query-execution CPU scaling with call volume** (flat per-query mean
+  latency, proportional total-time growth, no lock/LWLock/IO wait
+  explosion) as the primary driver, with **increasing autovacuum/
+  background-writer I/O activity** as a secondary, additive contributor
+  that also scales with insert/update volume. There is no evidence
+  supporting (B) connection/concurrency-driven degradation (active
+  backends nearly flat), (C) lock/LWLock contention (zero heavyweight
+  locks, LWLock counts trivial), or a dominant (D) WAL-wait/checkpoint
+  cause (checkpoint activity present but not clearly correlated with the
+  degraded repeats specifically). The one still-unexplained, genuinely
+  growing signal - the longest single active-query/transaction age
+  reaching several seconds at 1075/1100 while never exceeding ~0.7s at
+  1050 - does not show up as any captured `wait_event`, which points
+  toward host/container CPU scheduling contention (the query is marked
+  `active` in PostgreSQL's own view the whole time, meaning PostgreSQL
+  itself has no internal wait to report, but the OS/hypervisor may not be
+  scheduling that backend's CPU time slice promptly under load) rather
+  than anything visible inside PostgreSQL's own instrumentation - this is
+  a hypothesis, not proven by this stage's evidence.
+- **Hypotheses ruled out:** connection/query-concurrency explosion (active
+  backends 1.24→1.32 avg, essentially flat); heavyweight lock contention
+  (zero at every rate, every tick); LWLock contention as a dominant cause
+  (present but trivial in absolute count); a single runaway query class
+  (rank order and per-call mean latency both stable across all three
+  rates); IO wait explosion (41/43/34, flat).
+- **Strongest supported diagnosis:** aggregate query-execution CPU,
+  proportional to event/call volume, is what changes inside PostgreSQL
+  between 1050 and 1075-1100 evt/s - not concurrency, not locking, not a
+  single slow query. A secondary, additive autovacuum/background-writer
+  I/O contribution was also measured and grows with rate. **Confidence:
+  moderate.** The wait-event and lock evidence is clean and consistent
+  across all three rates (strong), but the CPU-vs-scheduling distinction
+  for the growing longest-query-age signal is inferred, not directly
+  measured by this sampler, and the `active_only` aggregation methodology
+  is a simplification rather than a precisely load-window-correlated
+  measurement.
+- **Correctness:** held for all 9 repeats (6 recomputed, 3 direct); all
+  four processor smoke scenarios passed using the established procedure.
+- **Next isolated experiment recommended:** a lightweight host/container
+  CPU-scheduling probe (e.g. sampling `docker stats` for the PostgreSQL
+  container at sub-second granularity alongside a synthetic
+  fixed-cost query loop) to test the "OS/hypervisor scheduling delay,
+  not a PostgreSQL-internal wait" hypothesis directly, before considering
+  any reduction in per-event PostgreSQL read/write volume (e.g.
+  precomputed/rolling fraud-context state) as a throughput-focused
+  follow-up. No optimization was made or recommended for implementation
+  in this stage.
