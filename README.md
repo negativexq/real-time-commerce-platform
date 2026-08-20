@@ -97,7 +97,26 @@ revert the change based on system-level evidence.
 
 These scopes are intentionally separate: the isolated three-worker result is
 not a continuation of the Demo full-path series and must not be read as a
-“49 → 750 evt/s” optimization.
+“49 → 1050 evt/s” optimization.
+
+> **Isolated processor capacity:** controlled benchmarking moved the
+> three-worker Kafka → processor → persistence path from ~750 evt/s
+> sustainable to ~1050 evt/s sustainable while durable correctness held in
+> every retained run — a measured ~40% increase, delivered across three
+> separate, independently evidenced changes (commit batching, then
+> query-plan-aware indexing plus a fresh capacity sweep). The current
+> transition begins around 1050–1075 evt/s. This is a local isolated
+> benchmark result, not a production capacity or SLA claim.
+
+| Milestone | Sustainable isolated capacity |
+| --- | ---: |
+| Three workers / three partitions, per-event offset commit | ~750 evt/s |
+| After bounded Kafka offset commit batching | ~900 evt/s |
+| After query-plan-aware PostgreSQL indexing + fresh capacity sweep | ~1050 evt/s |
+
+**~40% measured sustainable-capacity improvement from the ~750 evt/s
+baseline**, reached in two distinct, separately retained steps — not
+attributed to any single change.
 
 ### Performance engineering journey
 
@@ -112,6 +131,12 @@ not a continuation of the Demo full-path series and must not be read as a
 | Two-worker scaling | A second consumer should increase service capacity. | Run two consumers in the same group against three partitions. | At 600 requested, service rose roughly **502.0 → 584.5 evt/s** and lag growth fell **+90.7 → +10.4 evt/s**; the 2/1 partition assignment limited linear scaling. |
 | Three-worker alignment | Kafka partition assignment bounded useful consumer concurrency. | Match three workers to three partitions for a 1/1/1 assignment. | At 750 requested, the isolated pipeline delivered **742.185 evt/s service rate** sustainably. |
 | Boundary refinement | Processed rate alone could hide accumulating backlog. | Repeat steady-state tests above 750 and classify by lag slope and drain behavior. | 775 was non-sustainable in all repeats: **+52.9 / +86.8 / +93.4 evt/s** lag growth; transition **750–775 evt/s**. |
+| Batched Kafka offset commits | A synchronous commit after every terminal event bounded throughput on the Kafka round trip, not processing itself. | Bounded per-partition contiguous-offset batching (50 records or 100 ms, whichever first), with synchronous idle/rebalance/shutdown flush and no commit past an unresolved gap. | **125,669 terminal events → 4,385 commit calls (~28.6x fewer)**; boundary moved **750 → 900 evt/s (~+20%)**. |
+| Success-log volume experiment | The per-event `event_processed` success log ran at INFO on the hot path. | Move it to DEBUG; Prometheus already exposes equivalent observability. | **~456,181 → 0 INFO lines, ~254 MB → ~7 KB stdout (~36,000x less)** — an operational win with **no material throughput or latency change**; kept for log volume, not performance. |
+| Transaction decomposition v2 | Reused existing stage/SQL-class instrumentation to attribute cost at 900–950 evt/s rather than guess. | Measure per-stage and per-query cost under load; no code change. | `fraud_context` was the largest DB-side stage for fraud-eligible events; pool acquire/release and commit were not dominant; no seq-scan regression; PostgreSQL was the strongest saturation-resource signal. EXPLAIN identified missing composite indexes on `orders` and `product_views`. |
+| Orders composite index | The fraud-context `orders` lookup ran a `customer_id`-only Bitmap Heap Scan with the date range as a `Filter`, plus an explicit sort. | Add `orders(customer_id, ordered_at DESC)`. | EXPLAIN: **Bitmap Heap Scan + Filter + Sort → Index Only Scan, ~0.195 → 0.073 ms (~2.7x), 39 → 5 buffers**; consistent lag/E2E improvement at 900/925/950 in a controlled A/B; no write/WAL regression. **Kept.** |
+| Product-views composite index | Same access pattern on `product_views`, unindexed for the date-range predicate. | Add `product_views(customer_id, viewed_at DESC)`. | EXPLAIN: **~0.613 → 0.172 ms (~3.6x), 60 → 5 buffers (~12x fewer)** — the larger query-plan win of the two indexes, but a clear system-level win only at 900 evt/s (neutral/noisy at 925/950); no write/WAL regression. **Kept**, without claiming a standalone throughput increase. |
+| Post-index capacity discovery | Both indexes retained; the ~900/925/950 boundary predated them and needed re-establishing from clean data. | Full deterministic reset, then a fresh 3-worker/1/1/1 sweep at 950–1100 evt/s with direct-injector fidelity confirmed at 99.4–99.9% of requested. | **1000 and 1050 evt/s: 3/3 repeats clean. 1100: only 1/3 clean. Refinement at 1075: 2/3 degraded** (lag slope up to +34.8 evt/s, E2E p95 up to ~2.3 s). **~1050 evt/s clearly sustainable; ~1075 evt/s repeatably degraded; transition ~1050–1075 evt/s.** |
 
 The rejected combined-query experiment is retained as evidence of the decision
 process: reducing two SQL statements to one did not reduce total execution
@@ -119,17 +144,22 @@ cost, and the change was removed when the steady-state benchmark contradicted
 the hypothesis.
 
 > **Local benchmark environment:** Results were measured under the documented
-> workload in a local Docker environment. The ~750 evt/s result applies only to
-> the isolated `Kafka → processor → persistence` path with three processor
-> workers and three Kafka partitions. It is a comparative engineering result,
-> not Demo full-path throughput or production capacity. Rates at 775, 800, 850,
-> and 900 evt/s were boundary/saturation tests, not achieved capacity claims.
+> workload in a local Docker environment. The current ~1050 evt/s result
+> applies only to the isolated `Kafka → processor → persistence` path with
+> three processor workers and three Kafka partitions, verified 1/1/1
+> assignment, and the retained Kafka commit-batching and PostgreSQL indexing
+> changes above. ~1050 evt/s is the highest rate where all repeats stayed
+> bounded and correct; ~1075 evt/s is the first rate that repeatably
+> degraded. It is a comparative engineering result, not Demo full-path
+> throughput and not a production capacity or SLA claim. Earlier 750/775
+> evt/s figures above remain historically accurate for the pre-batching
+> configuration they were measured against.
 
 Follow the evidence from the [Performance Report](docs/performance-report.md)
 → [Methodology](docs/performance/methodology.md)
 → [Optimization History](docs/performance/optimization-history.md)
 → [Scaling Analysis](docs/performance/scaling-analysis.md)
-→ [Raw Artifact Index](artifacts/benchmark/README.md).
+→ [Benchmark Artifact Index](artifacts/benchmark/README.md).
 
 ## Sprint 10 demo quick start
 
