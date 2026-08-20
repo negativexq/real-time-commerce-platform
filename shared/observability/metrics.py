@@ -90,7 +90,20 @@ class ApplicationMetrics:
             ("error_category",),
         )
         self.processor_offset_commits = counter(
-            "processor_offset_commits", "Manual offset commit attempts.", ("result",)
+            "processor_offset_commits",
+            "Batched manual offset commit call outcomes (one per Kafka "
+            "commit() call, not per event).",
+            ("result",),
+        )
+        self.processor_offset_commit_calls = counter(
+            "processor_offset_commit_calls",
+            "Batched offset commit calls by trigger.",
+            ("trigger",),
+        )
+        self.processor_offset_commit_batch_records = histogram(
+            "processor_offset_commit_batch_records",
+            "Terminal records represented by each batched offset commit call.",
+            buckets=(1, 5, 10, 25, 50, 100, 250, 500),
         )
         self.processor_rebalances = counter(
             "processor_rebalances", "Consumer rebalance actions.", ("action",)
@@ -129,7 +142,7 @@ class ApplicationMetrics:
         )
         self.processor_offset_duration = histogram(
             "processor_offset_commit_duration_seconds",
-            "Synchronous offset commit latency.",
+            "Synchronous batched offset commit call latency.",
         )
         self.processor_inflight = gauge(
             "processor_inflight_events", "Current in-flight records."

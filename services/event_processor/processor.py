@@ -241,7 +241,7 @@ class MessageProcessor:
         self._summary.processed_records += 1
         self._summary.processed_events[event.event_type] += 1
         self._summary.record_latency(duration)
-        self._logger.info(
+        self._logger.debug(
             "event_processed",
             event_id=str(event.event_id),
             event_type=event.event_type.value,
@@ -462,19 +462,18 @@ class MessageProcessor:
         return ProcessingOutcome(ProcessingStatus.DLQ, attempts)
 
     def _commit(self, message: ConsumedMessage) -> None:
-        started = perf_counter()
+        # commit_terminal() records this record's offset as safe and may or
+        # may not trigger an actual batched Kafka commit call; the
+        # processor_offset_commits/processor_offset_duration metrics are
+        # recorded by the committer's own batching layer (OffsetCommitTracker)
+        # against real Kafka commit calls, not per event.
         try:
             self._committer.commit_terminal(message)
         except Exception:
-            if self._metrics is not None:
-                self._metrics.processor_offset_commits.labels("failed").inc()
             self._summary.commit_failures += 1
             self._summary.unresolved_records += 1
             raise
         self._summary.commit_successes += 1
-        if self._metrics is not None:
-            self._metrics.processor_offset_commits.labels("success").inc()
-            self._metrics.processor_offset_duration.observe(perf_counter() - started)
 
     def _observe_terminal(
         self, event_type: str, outcome: ProcessingOutcome, started: float

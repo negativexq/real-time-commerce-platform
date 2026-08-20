@@ -78,3 +78,21 @@ assignment.
 The 2/1 assignment was a real contributor to the two-worker result, but not
 the sole bottleneck. With 1/1/1 assignment, three workers reached ~750 evt/s
 sustainably; the transition to saturation occurred between 750 and 775 evt/s.
+
+**Update:** this ceiling was a property of the per-event synchronous offset
+commit in place at the time of this sweep, not of horizontal scaling itself.
+The "Bounded batched offset commits" entry in
+[`optimization-history.md`](optimization-history.md) re-tested 750/775/800
+evt/s with the same 3-worker/3-partition topology after batching offset
+commits, and 775/800 evt/s became clearly sustainable (near-zero lag slope
+in all repeats, versus non-sustainable/unstable here).
+
+**Second update:** the "Post-batching capacity discovery" entry in
+[`optimization-history.md`](optimization-history.md) located the new
+ceiling with the same 1/1/1 topology unchanged: **900 evt/s is the highest
+artifact-backed sustainable rate** (up from 750 evt/s, ~20% higher).
+Repeatable saturation now begins in the **900-950 evt/s** band. PostgreSQL
+CPU and WAL full-page-image rate rose sharply toward 1000 evt/s while
+processor CPU stayed moderate, making PostgreSQL the strongest
+evidence-based hypothesis for the next bottleneck - see that entry for the
+full measurement.

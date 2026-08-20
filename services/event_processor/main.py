@@ -102,6 +102,11 @@ def run_processor(
                 metrics.processor_last_poll.set_to_current_time()
             HEALTH_FILE.touch()
             if message is None:
+                # The interval-based flush threshold must hold on wall-clock
+                # time, not merely on new terminal records arriving - once
+                # traffic goes idle, a partial batch below the batch-size
+                # threshold still needs its time-based commit.
+                consumer.maybe_flush_idle()
                 if (
                     config.processor_max_messages is not None
                     and monotonic() - last_record_at
@@ -124,6 +129,10 @@ def run_processor(
             terminal_count += 1
     finally:
         HEALTH_FILE.unlink(missing_ok=True)
+        try:
+            consumer.flush_pending("shutdown")
+        except Exception:
+            logger.exception("offset_flush_on_shutdown_failed")
         consumer.close()
         dlq.close()
         store.close()

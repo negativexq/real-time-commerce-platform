@@ -99,6 +99,30 @@ Finite mode exits non-zero on unresolved work. The current synchronous design
 stops rather than consuming a later same-partition record, preserving partition
 order. It favors auditable ownership over throughput.
 
+**Commits are batched, not per-event.** `commit_terminal()` (called once a
+record reaches success, duplicate-skip, or confirmed DLQ delivery) hands the
+offset to `services/event_processor/offset_tracker.py::OffsetCommitTracker`,
+which tracks the highest *contiguous* terminal offset per partition and only
+issues an actual `commit(asynchronous=False)` call once
+`PROCESSOR_OFFSET_COMMIT_BATCH_SIZE` terminal records have accumulated
+(default 50) or `PROCESSOR_OFFSET_COMMIT_INTERVAL_MS` has elapsed since the
+last flush (default 100ms), whichever comes first - see
+[`docs/performance/optimization-history.md`](performance/optimization-history.md)
+for the measured effect. This changes *when* the Kafka round trip happens,
+not the ordering/gap invariants described above: an offset is still never
+committed while an earlier offset in the same partition is unresolved, and
+the commit call itself is still synchronous, so a failure is detected
+immediately with nothing silently discarded. Partition revocation
+synchronously flushes only the partitions being revoked before ownership is
+relinquished (`KafkaEventConsumer.on_revoke`), and graceful shutdown
+synchronously flushes every remaining partition before the consumer closes
+(`KafkaEventConsumer.flush_pending`, called from `main.py`'s `finally`
+block). The practical effect on crash/redelivery: a crash can now replay up
+to a full batch/interval window of already-terminal events per partition
+instead of at most one, which is still bounded and still safe because
+PostgreSQL uniqueness and the Redis completion lease make replays no-ops -
+see the "duplicate delivery" sequence above.
+
 ## Redis idempotency
 
 Keys use `commerce:processor:v1:event:{event_id}` by default. Values contain
@@ -210,7 +234,15 @@ Diagnostic key listing uses Redis `SCAN`. Test cleanup deletes only
 
 Structured startup, processing, duplicate, retry, DLQ, debug commit, and
 shutdown-summary logs contain identifiers and transport coordinates but not
-payloads, credentials, email hashes, or IP addresses. The in-memory summary
+payloads, credentials, email hashes, or IP addresses. The per-event
+`event_processed` success log is emitted at `DEBUG` (not `INFO`); see the
+"Successful-event log moved to DEBUG" entry in
+[optimization-history.md](performance/optimization-history.md) for why -
+Prometheus already exposes equivalent successful-event observability, and a
+benchmarked isolation experiment found no material throughput/CPU benefit
+either way, so the decision was operational (routine stdout volume), not a
+performance optimization. Run with `PROCESSOR_LOG_LEVEL=DEBUG` to see it.
+The in-memory summary
 tracks consumed/valid/processed/duplicate/DLQ counts, validation categories,
 event types, retries, Kafka/Redis/commit failures, latency aggregates, and
 unresolved records.

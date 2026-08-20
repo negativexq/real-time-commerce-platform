@@ -60,6 +60,8 @@ class ProcessorConfig(BaseModel):
     processor_db_log_slow_query_ms: int = Field(default=250, gt=0)
     processor_max_messages: int | None = Field(default=None, gt=0)
     processor_from_beginning: bool = False
+    processor_offset_commit_batch_size: int = Field(default=50, gt=0, le=10_000)
+    processor_offset_commit_interval_ms: int = Field(default=100, gt=0, le=60_000)
 
     @model_validator(mode="after")
     def validate_relationships(self) -> Self:
@@ -146,6 +148,12 @@ class ProcessorConfig(BaseModel):
             "PROCESSOR_REQUIRED_SCHEMA_VERSION": ("processor_required_schema_version"),
             "PROCESSOR_PERSIST_RAW_EVENT_JSON": "processor_persist_raw_event_json",
             "PROCESSOR_DB_LOG_SLOW_QUERY_MS": "processor_db_log_slow_query_ms",
+            "PROCESSOR_OFFSET_COMMIT_BATCH_SIZE": (
+                "processor_offset_commit_batch_size"
+            ),
+            "PROCESSOR_OFFSET_COMMIT_INTERVAL_MS": (
+                "processor_offset_commit_interval_ms"
+            ),
         }
         return cls.model_validate(
             {field: source[name] for name, field in names.items() if name in source}

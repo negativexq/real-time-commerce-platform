@@ -14,6 +14,7 @@ from services.event_processor.config import ProcessorConfig
 from services.event_processor.errors import FatalInfrastructureError
 from services.event_processor.logging import get_logger
 from services.event_processor.models import ConsumedMessage
+from services.event_processor.offset_tracker import OffsetCommitTracker, PartitionKey
 from shared.observability.metrics import ApplicationMetrics
 
 
@@ -45,6 +46,12 @@ class KafkaEventConsumer:
         self._logger = get_logger()
         self._revoked: set[tuple[str, int]] = set()
         self._metrics = metrics
+        self._tracker = OffsetCommitTracker(
+            config.processor_offset_commit_batch_size,
+            config.processor_offset_commit_interval_ms / 1_000,
+            self._commit_offsets,
+            metrics=metrics,
+        )
 
     @staticmethod
     def kafka_config(config: ProcessorConfig) -> dict[str, object]:
@@ -95,9 +102,26 @@ class KafkaEventConsumer:
         self, consumer: ConsumerClient, partitions: list[TopicPartition]
     ) -> None:
         del consumer
-        self._revoked.update(
+        keys: list[PartitionKey] = [
             (partition.topic, partition.partition) for partition in partitions
-        )
+        ]
+        # Synchronously flush any safe pending offsets for exactly the
+        # partitions being revoked before ownership is relinquished. A
+        # commit failure here must not be retried after the callback
+        # returns - the partition may already belong to another worker by
+        # then - so it is logged/metriced and the partition's tracker state
+        # is dropped either way.
+        try:
+            self._tracker.flush_partitions(keys, "rebalance")
+        except Exception:
+            self._logger.warning(
+                "offset_flush_on_revoke_failed",
+                partitions=[{"topic": t, "partition": p} for t, p in keys],
+            )
+        finally:
+            for key in keys:
+                self._tracker.drop_partition(key)
+        self._revoked.update(keys)
         self._logger.info(
             "partitions_revoked",
             partitions=[
@@ -138,20 +162,48 @@ class KafkaEventConsumer:
         )
 
     def commit_terminal(self, message: ConsumedMessage) -> None:
+        """Record a terminal record's offset as safe to commit, then flush
+        if the batch-size or time threshold has been reached. Never issues
+        an immediate per-record Kafka commit; see OffsetCommitTracker."""
         if (message.topic, message.partition) in self._revoked:
             raise FatalInfrastructureError("partition was revoked before commit")
-        next_offset = message.offset + 1
+        self._tracker.mark_terminal(message.topic, message.partition, message.offset)
+        self._tracker.maybe_flush()
+
+    def _commit_offsets(self, offsets: dict[PartitionKey, int]) -> None:
+        """Perform the actual synchronous Kafka commit for a batch of
+        partitions. Kept synchronous (not asynchronous=True) so a failure is
+        detected immediately and the tracker's pending state is preserved
+        rather than silently discarded."""
         self._client.commit(
-            offsets=[TopicPartition(message.topic, message.partition, next_offset)],
+            offsets=[
+                TopicPartition(topic, partition, next_offset)
+                for (topic, partition), next_offset in offsets.items()
+            ],
             asynchronous=False,
         )
         self._logger.debug(
-            "source_offset_committed",
-            topic=message.topic,
-            partition=message.partition,
-            processed_offset=message.offset,
-            committed_next_offset=next_offset,
+            "source_offsets_committed",
+            commits=[
+                {"topic": topic, "partition": partition, "next_offset": next_offset}
+                for (topic, partition), next_offset in offsets.items()
+            ],
         )
+
+    def maybe_flush_idle(self) -> None:
+        """Check the time threshold even when no new terminal record has
+        arrived to trigger it. commit_terminal() only checks thresholds when
+        called, so once the input stream goes idle (poll() keeps returning
+        None) a partial batch below the batch-size threshold would otherwise
+        never reach its time-based flush - the interval guarantee must hold
+        on wall-clock time, not on message arrival. Call this once per idle
+        poll iteration in the main loop."""
+        self._tracker.maybe_flush()
+
+    def flush_pending(self, reason: str = "shutdown") -> None:
+        """Synchronously flush every tracked partition's safe pending
+        offsets. Must be called before close() during graceful shutdown."""
+        self._tracker.flush_all(reason)
 
     def close(self) -> None:
         self._client.close()
