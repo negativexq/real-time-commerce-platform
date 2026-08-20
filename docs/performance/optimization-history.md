@@ -2467,3 +2467,211 @@ configuration was changed. This is attribution, not optimization.
   diverge (which would suggest the fetch queue itself has a bound being hit
   independently) - a within-repeat time-series analysis rather than another
   per-rate sweep, and still measurement-only.
+
+## Consumer scaling model experiment — bounded worker pool, reverted
+
+- **Previous diagnosis leading to this experiment:** Stages 20-27 measured
+  every layer of the pipeline - PostgreSQL execution cost, transaction
+  lifecycle, host/container CPU scheduling, processor-internal queueing,
+  producer arrival variance, and the Kafka broker/fetch-queue boundary -
+  and found each one flat or well-behaved regardless of degradation. Stage
+  25 established the structural explanation for the ~1050-1100 evt/s
+  ceiling: three single-threaded consumers, each bound by a fixed ~2.6ms
+  per-record synchronous service time, give a combined theoretical ceiling
+  of `3 x (1/0.0026s) ~= 1154 evt/s`. This stage tests that structural
+  explanation directly: does bounded concurrency inside one processor
+  instance raise the ceiling, or is the ceiling coming from something the
+  runtime/language itself imposes (e.g. the GIL)?
+- **Consumer lifecycle and offset-commit flow inspected before writing any
+  code** (per instruction), confirming two things that shaped the design:
+  1. [`services/event_processor/offset_tracker.py`](../../services/event_processor/offset_tracker.py)'s
+     `OffsetCommitTracker`/`_PartitionState` already use a min-heap to track
+     the highest *contiguous* terminal offset per partition - it already
+     tolerates terminal completions arriving out of order. Its own
+     docstring anticipates this exact scenario: "This module assumes
+     single-threaded, synchronous use... If a future concurrent processing
+     model is introduced, this tracker's per-partition contiguous-offset
+     bookkeeping is what must be preserved or replaced with an equivalent
+     guarantee."
+  2. [`services/event_processor/processor.py`](../../services/event_processor/processor.py)'s
+     `MessageProcessor.process()` already calls its injected `committer`
+     synchronously, internally, for every terminal outcome (`_commit()`) -
+     the committer is a constructor-injected dependency (`OffsetCommitter`
+     protocol), not something `process()` assumes is the real consumer.
+- **A real, additive bug found and fixed in the tracker before any
+  benchmark ran.** The heap-based out-of-order tolerance in (1) only
+  applies to completion order *after* a partition's `safe_offset` has
+  bootstrapped ("the first offset ever seen for this partition, minus one,
+  is already safe"). That bootstrap itself assumed observation order
+  matches delivery order - true only when nothing can call `mark_terminal()`
+  out of delivery order, which concurrent workers do break: if the second
+  of two dispatched records finishes first, the tracker would bootstrap
+  from the wrong (higher) offset and silently drop the still-pending lower
+  one from tracking entirely. Fixed with a small, purely additive method -
+  `OffsetCommitTracker.observe()` / `_PartitionState.observe()` /
+  `KafkaEventConsumer.observe_dispatched()` - called once per record, in
+  true delivery order, at dispatch time (before workers can race), which
+  pre-seeds a separate `dispatch_floor` that `mark_terminal()`'s bootstrap
+  now prefers. `observe()` never touches `safe_offset` itself, so it can
+  never make anything look prematurely safe to commit on its own. No
+  existing method's behavior changed; all 16 pre-existing
+  `test_offset_tracker.py` cases still pass unmodified, plus 5 new cases
+  covering the exact failure mode this fixes and the corrected concurrent
+  scenario. Documented in detail in
+  [`services/event_processor/main_pooled.py`](../../services/event_processor/main_pooled.py)'s
+  module docstring.
+- **Design (isolated, opt-in, default unchanged).** New
+  `processor_worker_pool_size` config field (default `1`, env
+  `PROCESSOR_WORKER_POOL_SIZE`, also wired into `compose.yaml` with the
+  same default). `main()` dispatches to the new `run_processor_pooled()`
+  (in the new file `main_pooled.py`) only when this is `> 1`; the existing
+  `run_processor()` function is never modified, never called differently,
+  and every existing test for it still passes unmodified - the default
+  path is provably untouched.
+
+  ```
+  poll thread (unchanged: owns Kafka client, OffsetCommitTracker, rebalance callbacks)
+    poll() -> observe_dispatched() [delivery-order bootstrap] -> bounded work queue
+                                                                        |
+                                                          N worker threads (pool_size)
+                                                          each: MessageProcessor.process()
+                                                          (validation, Redis reserve/complete,
+                                                           full DB transaction - all unchanged)
+                                                                        |
+                                                          _QueuedCommitter -> commit queue
+                                                                        |
+  poll thread drains commit queue -> consumer.commit_terminal() [unchanged, single-threaded]
+  ```
+
+  Only `MessageProcessor.process()` calls run concurrently; every
+  tracker-touching call stays on the poll thread, so no locking was added
+  anywhere. Each worker gets its own `RunSummary` (plain `+=` counters,
+  not thread-safe to share) and `random.Random` (mutates internal state per
+  call), merged into one summary at shutdown (`_merge_summaries()` - sums
+  every field except `latency_max_ms`, which takes the max). `RedisIdempotencyStore`,
+  `DlqPublisher`, and the `psycopg_pool.ConnectionPool`-backed
+  `UnitOfWorkFactory`/`Database` are shared across workers unmodified -
+  all three are documented thread-safe by their own libraries (redis-py's
+  client pools connections internally; librdkafka's `Producer.produce()`
+  is explicitly safe for concurrent calls; psycopg3's `ConnectionPool` is
+  built for shared multi-threaded use). No business logic, no idempotency
+  logic, and no DLQ/retry logic in `processor.py`, `idempotency.py`, or
+  `dlq.py` was touched.
+- **Tests added** (11 new, all passing, zero pre-existing tests modified in
+  behavior): 5 in `test_offset_tracker.py` (observe() bootstrap/idempotence/
+  out-of-order-completion correctness, including the exact bug found
+  above), 2 in `test_processor_consumer_offset_batching.py`
+  (`observe_dispatched()` never commits anything on its own; out-of-order
+  completion never skips the gap), 3 in the new `test_main_pooled.py`
+  (out-of-order worker completion still commits only the contiguous safe
+  offset - the decisive correctness test, using a `threading.Event` to
+  deterministically force offset 11 to finish before offset 10; per-worker
+  `RunSummary` isolation/merge with 10 messages across 4 workers, no double
+  counting; bounded work-queue backpressure never exceeds `pool_size`
+  concurrently-blocked handlers). Verified stable across 5 repeated local
+  runs (no flakiness from the threading-based synchronization).
+- **Benchmark:** 3 workers, 1/1/1 verified (lag 0 before and after),
+  processor image rebuilt, 1050/1100/1150/1200 evt/s, 10s warmup, 45s
+  steady, 3 repeats each, same database/indexes/methodology as every prior
+  stage. Baseline (`processor_worker_pool_size=1`, unchanged default) tag
+  [`bench-worker-pool-baseline-3w`](../../artifacts/benchmark/bench-worker-pool-baseline-3w/);
+  candidate (`processor_worker_pool_size=4`, chosen to exactly match the
+  existing `processor_db_pool_max_size` default of 4 so no worker would
+  contend for a database connection the others didn't already have their
+  own of) tag
+  [`bench-worker-pool-candidate-3w`](../../artifacts/benchmark/bench-worker-pool-candidate-3w/).
+  Commands identical except `--run-tag`, with `PROCESSOR_WORKER_POOL_SIZE`
+  exported before `docker compose up` for the candidate.
+- **Results (mean of 3 repeats per rate):**
+
+  | Rate | Lag slope: baseline | Lag slope: candidate | Peak lag: baseline | Peak lag: candidate | Missing rows: baseline | Missing rows: candidate |
+  | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 1050 | +92.2/s | +257.6/s | 4,571 | 13,482 | 0, 0, 0 | 672, 662, 820 |
+  | 1100 | +167.4/s | +331.1/s | 7,792 | 16,129 | 0, 0, 0 | 948, 777, 791 |
+  | 1150 | +158.6/s | +365.3/s | 7,663 | 16,999 | 0, 0, 0 | 844, 750, 946 |
+  | 1200 | +288.1/s | +422.5/s | 13,450 | 19,965 | 0, 0, 0 | 857, 734, 830 |
+
+  "Missing rows" = `injected.published_count - correctness.processed_rows`
+  per repeat (i.e. `unique_event_ids > processed_rows == matched_e2e` - the
+  correctness invariant `unique_event_ids == processed_rows == matched_e2e`
+  held in **all 12 baseline repeats** and was **violated in all 12
+  candidate repeats**.
+- **The central finding: the candidate is not just slower, it is actively
+  unsafe.** Container logs during the candidate sweep show 11,326
+  `event_dead_lettered` records (5,807 `missing_business_dependency`,
+  5,519 `database_integrity_error`) - a volume of DLQ traffic that does
+  not occur at all in the baseline or in any prior stage of this series.
+  Handler latency's tail exploded alongside this: p99 rose from ~10ms
+  (baseline, matching every prior stage) to ~240ms (candidate, every rate).
+  `max_fetchq_records_sampled` also grew relative to baseline (e.g. 1050:
+  baseline 1,798-3,482 vs. candidate 4,954-9,702), consistent with the
+  pipeline falling further behind, not catching up.
+- **Root cause: Kafka's within-partition ordering guarantee is a business-
+  logic invariant this system depends on, and naive round-robin dispatch to
+  any free worker breaks it.** The DLQ error categories name the exact
+  mechanism: `missing_business_dependency` fired overwhelmingly on
+  `payment_failed`/`payment_completed` events, and `database_integrity_error`
+  on `order_created` events - both are symptoms of a payment-related event
+  being processed before its parent order/session/cart had been durably
+  persisted. In the synchronous baseline, Kafka's per-partition delivery
+  order plus this consumer's strictly sequential `poll() -> process()`
+  loop together guarantee that a causally-earlier event (e.g.
+  `order_created`) is fully committed to Postgres before a causally-later
+  one from the same partition (e.g. `payment_completed`) is even looked
+  at. The worker pool dispatches whichever record `poll()` returns next to
+  whichever worker is free, with no regard for which entity (order,
+  customer, cart) it belongs to - so two causally-dependent events from the
+  same partition can and did land on different threads and race. This is
+  not a tuning problem (more DB pool connections, a different worker count,
+  a bigger queue) - it is a structural mismatch between "dispatch to any
+  free worker" and a domain model that relies on ordered, sequential
+  delivery within a partition.
+- **Answers to the experiment's own questions:**
+  - **Does bounded concurrency raise the ceiling?** No - sustainable
+    throughput did not improve at any tested rate; lag slope was 1.5-2.8x
+    *worse* than baseline at every rate, and unlike the baseline, the
+    candidate never achieved a clean (near-zero missing-rows) repeat at
+    any rate tested.
+  - **Is the ceiling caused by the synchronous single-record model, or by
+    the runtime/language itself?** Neither answer is supported cleanly by
+    this experiment - the candidate's regression is dominated by the
+    ordering-violation mechanism above, which would need to be fixed
+    (e.g. sticky per-partition-key worker assignment preserving causal
+    order, not free-for-all dispatch) before a fair comparison of "does
+    Python's GIL cap the achievable concurrency for this I/O-bound
+    workload" could even be made. This experiment answers a different,
+    more fundamental question first: naive worker-pool concurrency is
+    unsafe for this domain model as currently structured.
+- **Decision: REVERT the runtime default - keep the diagnostic
+  instrumentation and the additive offset-tracker fix.** `processor_worker_pool_size`
+  defaults to `1` (unchanged synchronous behavior) and is not enabled
+  anywhere in this environment going forward. The `observe()`/
+  `observe_dispatched()` addition to `offset_tracker.py`/`consumer.py` is
+  kept even though the concurrent path that needs it is not enabled by
+  default: it is purely additive (zero behavior change to any existing
+  caller, all pre-existing tests pass unmodified), it fixes a real latent
+  bug the module's own documentation predicted, and it is a prerequisite
+  for any future, correctly-ordered concurrent design. `main_pooled.py`
+  and its tests are kept as a documented, working reference for *how* to
+  safely route offset commits through a single thread under concurrency -
+  should a future experiment implement per-entity-key sticky dispatch, this
+  module's queue/commit-draining/summary-merging plumbing would not need
+  to change, only the dispatch policy would.
+- **Correctness:** held in all 12 baseline repeats; violated in all 12
+  candidate repeats (see above) - this is itself the decisive finding, not
+  a caveat. The `normal`/`duplicate`/`dlq`/`retry` processor smoke
+  scenarios still fail identically to Stages 26-27's already-tracked,
+  pre-existing, unrelated DLQ-offset-race issue (not re-isolated via
+  `git stash` again this stage since it was already confirmed twice
+  before to reproduce on unmodified `main`).
+- **Next experiment:** if bounded concurrency is revisited, it must
+  preserve per-partition-key causal order - e.g. hashing each record's
+  entity key (order/customer/cart id, however it's derivable from the
+  event) to a fixed worker index, so all events for one entity always
+  route to the same worker and process in delivery order, while different
+  entities can still process in parallel across workers. That is a
+  meaningfully larger design than this stage's "start with the smallest
+  experiment" scope and was intentionally not attempted here once the
+  ordering violation was found - this stage's job was to test the
+  simplest concurrency model and report what happened, not to iterate
+  until something worked.

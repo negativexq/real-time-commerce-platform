@@ -162,6 +162,51 @@ def run_processor(
     return (1 if summary.unresolved_records else 0), summary
 
 
+def _run_pooled(
+    config: ProcessorConfig, shutdown: ShutdownController, metrics: ApplicationMetrics
+) -> tuple[int, RunSummary]:
+    """Stage 28 diagnostic dispatch: only reached when
+    processor_worker_pool_size > 1 (never the default). Imported locally to
+    avoid a circular import - main_pooled.py imports HEALTH_FILE and
+    ShutdownController from this module."""
+    import random
+
+    from services.event_processor.main_pooled import run_processor_pooled
+    from services.event_processor.persistence import (
+        UnitOfWorkFactory,
+        default_persistence_registry,
+    )
+    from services.event_processor.processor import MessageProcessor, OffsetCommitter
+
+    instance_id = f"{config.processor_client_id}-{socket.gethostname()}"
+    store = RedisIdempotencyStore(config, metrics=metrics)
+    dlq = DlqPublisher(config)
+    consumer = KafkaEventConsumer(config, metrics=metrics)
+    database = Database(config)
+    handlers = default_persistence_registry()
+    persistence = UnitOfWorkFactory(database, config, metrics=metrics)
+
+    def build_processor(
+        summary: RunSummary, rng: random.Random, committer: OffsetCommitter
+    ) -> MessageProcessor:
+        return MessageProcessor(
+            config,
+            store,
+            dlq,
+            committer,
+            handlers,
+            summary,
+            processor_instance_id=instance_id,
+            persistence=persistence,
+            rng=rng,
+            metrics=metrics,
+        )
+
+    return run_processor_pooled(
+        config, consumer, build_processor, store, dlq, shutdown, database, metrics
+    )
+
+
 def _safe_redis_endpoint(url: str) -> str:
     """Return scheme/host/port/database without credentials."""
     from urllib.parse import urlsplit
@@ -203,15 +248,18 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
         signal.signal(signal.SIGINT, handle_signal)
         signal.signal(signal.SIGTERM, handle_signal)
-        code, _ = run_processor(
-            config,
-            KafkaEventConsumer(config, metrics=metrics),
-            RedisIdempotencyStore(config, metrics=metrics),
-            DlqPublisher(config),
-            shutdown,
-            Database(config),
-            metrics,
-        )
+        if config.processor_worker_pool_size > 1:
+            code, _ = _run_pooled(config, shutdown, metrics)
+        else:
+            code, _ = run_processor(
+                config,
+                KafkaEventConsumer(config, metrics=metrics),
+                RedisIdempotencyStore(config, metrics=metrics),
+                DlqPublisher(config),
+                shutdown,
+                Database(config),
+                metrics,
+            )
         metrics_server.stop()
         return code
     except Exception:

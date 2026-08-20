@@ -55,6 +55,26 @@ def message(offset: int, partition: int = 0) -> ConsumedMessage:
     return ConsumedMessage(TOPIC, partition, offset, None, b"key", b"value", [])
 
 
+def test_observe_dispatched_bootstraps_without_committing_anything() -> None:
+    consumer, client = make_consumer(batch_size=1000, interval_ms=60_000)
+    consumer.observe_dispatched(message(10))
+    consumer.observe_dispatched(message(11))
+    consumer.flush_pending("shutdown")
+    assert client.commit_calls == []  # nothing terminal yet
+
+
+def test_observe_dispatched_then_out_of_order_commit_never_skips_the_gap() -> None:
+    consumer, client = make_consumer(batch_size=1000, interval_ms=60_000)
+    consumer.observe_dispatched(message(10))
+    consumer.observe_dispatched(message(11))
+    consumer.commit_terminal(message(11))  # a worker finished offset 11 first
+    consumer.flush_pending("shutdown")
+    assert client.commit_calls[-1] == [TopicPartition(TOPIC, 0, 10)]
+    consumer.commit_terminal(message(10))  # offset 10 finishes second
+    consumer.flush_pending("shutdown")
+    assert client.commit_calls[-1] == [TopicPartition(TOPIC, 0, 12)]
+
+
 def test_poll_records_empty_poll_and_duration_metrics() -> None:
     from shared.observability.metrics import ApplicationMetrics
 

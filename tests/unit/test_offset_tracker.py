@@ -164,6 +164,59 @@ def test_duplicate_marks_are_idempotent() -> None:
     assert committer.calls == [{(TOPIC, 0): 7}]
 
 
+def test_mark_terminal_alone_mis_bootstraps_when_first_call_is_not_lowest() -> None:
+    """Documents the exact failure mode observe() exists to prevent: if
+    completion order can differ from delivery order (e.g. concurrent
+    workers) and mark_terminal() is the only thing ever called, the tracker
+    can bootstrap from the wrong offset and silently drop a still-pending
+    lower one. Offset 11 finishes before offset 10 ever gets a chance to."""
+    tracker, committer, _ = make_tracker(batch_size=1000, interval_seconds=1000.0)
+    tracker.mark_terminal(TOPIC, 0, 11)  # first call ever seen for this partition
+    tracker.mark_terminal(TOPIC, 0, 10)  # now treated as an already-safe duplicate
+    tracker.flush_all("shutdown")
+    # Offset 10 was silently discarded rather than tracked - only 11 committed,
+    # even though offset 10 was never actually confirmed terminal by anyone.
+    assert committer.calls == [{(TOPIC, 0): 12}]
+
+
+def test_observe_bootstraps_safe_offset_before_any_terminal_call() -> None:
+    tracker, committer, _ = make_tracker(batch_size=1000, interval_seconds=1000.0)
+    tracker.observe(TOPIC, 0, 10)
+    tracker.observe(TOPIC, 0, 11)
+    tracker.flush_all("shutdown")
+    assert committer.calls == []  # nothing terminal yet - observe never commits
+
+
+def test_observe_is_idempotent_and_does_not_override_existing_bootstrap() -> None:
+    tracker, committer, _ = make_tracker(batch_size=1000, interval_seconds=1000.0)
+    tracker.observe(TOPIC, 0, 10)
+    tracker.observe(TOPIC, 0, 10)  # replayed dispatch observation
+    tracker.mark_terminal(TOPIC, 0, 10)
+    tracker.flush_all("shutdown")
+    assert committer.calls == [{(TOPIC, 0): 11}]
+
+
+def test_observe_in_delivery_order_then_out_of_order_completion_commits_correctly() -> (
+    None
+):
+    """The concurrent-worker scenario observe() is for: dispatch (observe)
+    happens in true delivery order, but the two records' terminal
+    completions (mark_terminal) arrive in the opposite order because a
+    second worker happened to finish first."""
+    tracker, committer, _ = make_tracker(batch_size=1000, interval_seconds=1000.0)
+    tracker.observe(TOPIC, 0, 10)
+    tracker.observe(TOPIC, 0, 11)
+    tracker.mark_terminal(TOPIC, 0, 11)  # completes first
+    tracker.flush_all("shutdown")
+    # Safe boundary never advances past the still-incomplete offset 10 - a
+    # commit here is fine (it only confirms what observe() already implied),
+    # but it must not jump to 12 and falsely claim 10 is done.
+    assert committer.calls == [{(TOPIC, 0): 10}]
+    tracker.mark_terminal(TOPIC, 0, 10)  # completes second
+    tracker.flush_all("shutdown")
+    assert committer.calls[-1] == {(TOPIC, 0): 12}
+
+
 def test_metrics_record_trigger_and_batch_size_with_bounded_labels() -> None:
     from shared.observability.metrics import ApplicationMetrics
 

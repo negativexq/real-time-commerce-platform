@@ -1331,6 +1331,74 @@ broker-reported `consumer_lag` at matching timestamps within a single
 degrading repeat, to see whether the two move together throughout or
 diverge.
 
+### Stage 28 — Consumer scaling model experiment: bounded worker pool, reverted
+
+**Why?** Stages 20-27 found every layer flat or well-behaved regardless of
+degradation, and Stage 25 computed a structural ceiling (~1154 evt/s) from
+three single-threaded consumers' fixed per-record service time. This stage
+tests that explanation directly: does bounded concurrency inside one
+processor instance raise the ceiling?
+
+**Design (isolated, opt-in, default unchanged):** new
+`processor_worker_pool_size` config (default 1), only reached via a new
+`run_processor_pooled()` function - `run_processor()` itself is never
+modified, and every existing test for it still passes unmodified. One poll
+thread keeps owning the Kafka client, `OffsetCommitTracker`, and rebalance
+callbacks; N worker threads only call `MessageProcessor.process()`
+concurrently, routing their internal commit calls through a queue so every
+real offset commit still happens on the poll thread - no locking added
+anywhere. A real, additive bug was found and fixed in
+`OffsetCommitTracker` before any benchmark ran: its "first offset seen is
+safe" bootstrap assumed observation order matches delivery order, which
+concurrent workers can break. Fixed with a new `observe()`/
+`observe_dispatched()` method pair, called at dispatch time in true
+delivery order - purely additive, all 16 pre-existing offset-tracker tests
+still pass, plus 11 new tests covering the fix and the pool's queue/commit/
+summary-merge logic.
+
+**Benchmark:** 3 workers, 1/1/1, same DB/indexes/methodology, 1050/1100/
+1150/1200 evt/s, 3 repeats. Baseline (pool size 1, tag
+[`bench-worker-pool-baseline-3w`](../artifacts/benchmark/bench-worker-pool-baseline-3w/))
+vs. candidate (pool size 4, matching the existing DB pool max size, tag
+[`bench-worker-pool-candidate-3w`](../artifacts/benchmark/bench-worker-pool-candidate-3w/)).
+
+**Central finding: the candidate is not just slower, it is unsafe.**
+Lag slope was 1.5-2.8x worse than baseline at every rate (e.g. 1050:
++92.2/s baseline vs. +257.6/s candidate). The correctness invariant
+(`unique_event_ids == processed_rows == matched_e2e`) held in all 12
+baseline repeats and was **violated in all 12 candidate repeats** -
+662-948 events missing per repeat. Container logs show why: 11,326
+`event_dead_lettered` records during the candidate sweep alone
+(`missing_business_dependency` on payment events, `database_integrity_error`
+on order events) - essentially zero in the baseline or any prior stage.
+
+**Root cause: Kafka's within-partition ordering is a business-logic
+invariant this system depends on, and round-robin dispatch to any free
+worker breaks it.** The synchronous baseline's strictly sequential
+`poll() -> process()` loop guarantees a causally-earlier event (e.g.
+`order_created`) commits to Postgres before a causally-later one from the
+same partition (`payment_completed`) is even looked at. The worker pool
+dispatches to whichever thread is free, with no regard for which entity a
+record belongs to - so causally-dependent events from the same partition
+can and did race across threads. This is a structural mismatch, not a
+tuning problem: more DB connections or a different worker count would not
+fix it.
+
+**Decision: REVERT the runtime default.** `processor_worker_pool_size`
+stays at 1 (unchanged behavior) and is not enabled in this environment.
+The additive `offset_tracker.py` fix is kept (zero behavior change to any
+existing caller, fixes a real latent bug, needed by any future correct
+design). `main_pooled.py` is kept as a working reference for safely
+routing offset commits through one thread under concurrency - a future
+attempt would need per-entity-key sticky dispatch to preserve causal
+order, a meaningfully larger design intentionally not attempted in this
+"smallest experiment" stage. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#consumer-scaling-model-experiment--bounded-worker-pool-reverted).
+
+**Correctness:** see above - the violation itself is this stage's decisive
+finding. Processor smoke scenarios still fail identically to Stages
+26-27's already-tracked, pre-existing, unrelated DLQ-offset-race issue.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

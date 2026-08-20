@@ -47,14 +47,30 @@ class _PartitionState:
     records_since_commit: int = 0
     pending_heap: list[int] = field(default_factory=list)
     pending_seen: set[int] = field(default_factory=set)
+    dispatch_floor: int | None = None
+
+    def observe(self, offset: int) -> None:
+        """Record that ``offset`` has been dispatched (not yet completed),
+        the first time this partition is seen - never touches
+        ``safe_offset`` itself, so this alone can never make anything look
+        safe to commit. Only pre-seeds the value ``mark_terminal()``'s own
+        bootstrap will use, once something actually completes."""
+        if self.dispatch_floor is None:
+            self.dispatch_floor = offset - 1
 
     def mark_terminal(self, offset: int) -> None:
         if self.safe_offset is None:
-            # First record observed for this partition: Kafka only ever
-            # delivers the offset immediately after the last committed one
-            # (or the reset policy's start), so treat the offset before it
-            # as already safe.
-            self.safe_offset = offset - 1
+            # First record to reach terminal state for this partition.
+            # Prefer the floor observe() recorded at dispatch time (true
+            # delivery order); fall back to this offset's own predecessor
+            # for single-threaded callers that never call observe() - Kafka
+            # only ever delivers the offset immediately after the last
+            # committed one (or the reset policy's start), so treating the
+            # offset before the first one *delivered* as already safe is
+            # equally correct there.
+            self.safe_offset = (
+                self.dispatch_floor if self.dispatch_floor is not None else offset - 1
+            )
         if offset <= self.safe_offset or offset in self.pending_seen:
             return  # duplicate delivery of an already-safe/pending offset
         heapq.heappush(self.pending_heap, offset)
@@ -108,6 +124,24 @@ class OffsetCommitTracker:
         state = self._partitions.setdefault(key, _PartitionState())
         state.mark_terminal(offset)
         self._records_since_flush += 1
+
+    def observe(self, topic: str, partition: int, offset: int) -> None:
+        """Ensure a partition's terminal-state bootstrap will anchor on the
+        first offset ever *seen* rather than the first offset to reach
+        terminal state - without itself making anything look safe to commit
+        (see ``_PartitionState.observe()``). Single-threaded callers never
+        need this: when observation and completion happen in the same
+        order (the historical guarantee), ``mark_terminal()`` already
+        bootstraps correctly on its own. A concurrent processing model
+        where completion order can differ from delivery order must call
+        this once per record, in delivery order, at dispatch time - before
+        any of those records' ``mark_terminal()`` calls can arrive out of
+        order - or the bootstrap could anchor on the wrong (non-lowest)
+        offset. Idempotent: only the first call for a partition has any
+        effect."""
+        key = (topic, partition)
+        state = self._partitions.setdefault(key, _PartitionState())
+        state.observe(offset)
 
     def maybe_flush(self) -> None:
         """Flush every tracked partition if the batch-size or time

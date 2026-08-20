@@ -62,6 +62,7 @@ class ProcessorConfig(BaseModel):
     processor_from_beginning: bool = False
     processor_offset_commit_batch_size: int = Field(default=50, gt=0, le=10_000)
     processor_offset_commit_interval_ms: int = Field(default=100, gt=0, le=60_000)
+    processor_worker_pool_size: int = Field(default=1, ge=1, le=64)
 
     @model_validator(mode="after")
     def validate_relationships(self) -> Self:
@@ -154,6 +155,7 @@ class ProcessorConfig(BaseModel):
             "PROCESSOR_OFFSET_COMMIT_INTERVAL_MS": (
                 "processor_offset_commit_interval_ms"
             ),
+            "PROCESSOR_WORKER_POOL_SIZE": "processor_worker_pool_size",
         }
         return cls.model_validate(
             {field: source[name] for name, field in names.items() if name in source}

@@ -227,6 +227,14 @@ class KafkaEventConsumer:
         self._tracker.mark_terminal(message.topic, message.partition, message.offset)
         self._tracker.maybe_flush()
 
+    def observe_dispatched(self, message: ConsumedMessage) -> None:
+        """Tell the tracker a record has been handed off for processing, in
+        delivery order - required only by a concurrent processing model
+        where a record's terminal completion can arrive out of order (see
+        OffsetCommitTracker.observe()). The synchronous single-record loop
+        has no need to call this."""
+        self._tracker.observe(message.topic, message.partition, message.offset)
+
     def _commit_offsets(self, offsets: dict[PartitionKey, int]) -> None:
         """Perform the actual synchronous Kafka commit for a batch of
         partitions. Kept synchronous (not asynchronous=True) so a failure is
