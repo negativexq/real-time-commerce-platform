@@ -1,0 +1,16 @@
+                                                                                                                      QUERY PLAN                                                                                                                      
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=5.57..5.58 rows=1 width=8) (actual time=0.056..0.057 rows=1 loops=1)
+   Buffers: shared hit=5
+   ->  Limit  (cost=0.41..5.16 rows=33 width=12) (actual time=0.030..0.051 rows=88 loops=1)
+         Buffers: shared hit=5
+         ->  Index Only Scan using idx_orders_customer_ordered_at on orders  (cost=0.41..5.16 rows=33 width=12) (actual time=0.029..0.045 rows=88 loops=1)
+               Index Cond: ((customer_id = '2eb86251-4f7f-43c4-afaf-60ba4724c1ce'::uuid) AND (ordered_at <= '2026-09-10 21:45:25.731776+00'::timestamp with time zone) AND (ordered_at >= '2026-08-11 21:45:25.731776+00'::timestamp with time zone))
+               Heap Fetches: 0
+               Buffers: shared hit=5
+ Planning:
+   Buffers: shared hit=166
+ Planning Time: 0.314 ms
+ Execution Time: 0.073 ms
+(12 rows)
+
