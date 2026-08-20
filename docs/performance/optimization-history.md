@@ -88,4 +88,871 @@ purpose.
 - **Change:** controlled container-count changes only; no processing refactor.
 - **Result:** scaling helped, but the 3-worker transition was 750–775 evt/s.
 - **Decision:** close the performance study with the documented ceiling; no
-  further optimization was applied.
+  further optimization was applied. (Superseded below: this ceiling was a
+  property of per-event synchronous offset commits, not of horizontal
+  scaling itself.)
+
+## Bounded batched offset commits — kept
+
+- **Hypothesis:** `KafkaEventConsumer.commit_terminal()` issued one
+  synchronous `commit(asynchronous=False)` Kafka round trip per terminal
+  record. At the documented 3-worker/3-partition boundary (~750 evt/s
+  sustainable, 775 non-sustainable in all three repeats, 800 unstable), this
+  per-event commit overhead was a plausible contributor to the ceiling.
+  Batching commits into bounded windows (by record count or elapsed time,
+  whichever comes first) should reduce commit-call frequency without
+  weakening at-least-once delivery, since an offset is only ever considered
+  safe to commit once every record before it in that partition has reached a
+  terminal state.
+- **Change:** added `services/event_processor/offset_tracker.py`
+  (`OffsetCommitTracker`), a per-partition contiguous-offset accumulator
+  that flushes a single batched `commit()` call when
+  `PROCESSOR_OFFSET_COMMIT_BATCH_SIZE` (default 50) terminal records have
+  accumulated, or `PROCESSOR_OFFSET_COMMIT_INTERVAL_MS` (default 100ms) has
+  elapsed since the last flush, whichever happens first. The commit call
+  itself stayed synchronous (`asynchronous=False`) - only its frequency
+  changed - so a commit failure is still detected immediately and no pending
+  state is silently discarded. Partition revocation synchronously flushes
+  only the revoked partitions before ownership is relinquished (partitions
+  not being revoked are unaffected and keep accumulating normally), and
+  graceful shutdown synchronously flushes every remaining partition before
+  the consumer closes. A companion fix (`KafkaEventConsumer.maybe_flush_idle()`,
+  called from the main poll loop whenever `poll()` returns no message) makes
+  the interval threshold fire on wall-clock time rather than only when a new
+  terminal record arrives - without it, a partial batch below the batch-size
+  threshold at the end of a bounded run would never get committed once
+  traffic went idle, which was caught by this experiment's own benchmark
+  smoke test hanging indefinitely in `_wait_idle()`, not by a unit test.
+  Twelve new unit tests cover contiguous-gap enforcement, both threshold
+  triggers, multi-partition independence, revoke/shutdown flush scoping,
+  commit-failure state preservation, duplicate-mark idempotence, and the
+  idle-flush fix itself.
+- **Measurement:** isolated 3-worker/3-partition direct-injector sweep at
+  750/775/800 evt/s, 10s warmup, 45s steady state, 3 repeats each (same
+  methodology as the horizontal-scaling boundary sweep), artifact
+  [`bench-batched-commit-3w-boundary`](../../artifacts/benchmark/bench-batched-commit-3w-boundary/).
+
+  | Rate | Lag slope (3 repeats) | E2E p95 (3 repeats) | Correctness |
+  | ---: | --- | --- | --- |
+  | 750 | +0.74, +0.70, +2.03/s | 83.9, 64.8, 67.8 ms | unique = processed = matched in all 3 |
+  | 775 | +1.08, +0.87, +1.24/s | 60.6, 61.6, 52.5 ms | unique = processed = matched in all 3 |
+  | 800 | +1.44, +0.71, +2.03/s | 83.8, 66.2, 88.5 ms | unique = processed = matched in all 3 |
+
+  All nine repeats across 750/775/800 evt/s showed a near-zero lag slope
+  (≤+2.03/s) and drained within 14.6–17.9s, versus the prior baseline's 775
+  evt/s repeats at +52.9/+86.8/+93.4 events/s (clearly non-sustainable) and
+  800 evt/s's unstable mix of two near-zero and one +47.4 events/s repeat.
+  E2E p95 stayed in the 52–89ms range at every tested rate, compared to the
+  baseline 3-worker 750 evt/s figure of ~954ms. Handler latency (~4.8ms p95)
+  and per-call offset-commit latency (~4.75–4.79ms p95) were essentially
+  unchanged, confirming the improvement came from calling `commit()` far
+  less often, not from any single call getting faster: during the sweep,
+  Prometheus recorded 125,669 terminal events against 4,385 actual Kafka
+  commit calls (4,194 interval-triggered, 191 batch-size-triggered) - a
+  ~28.6x reduction in commit round trips. Every run's correctness triad
+  (`unique_event_ids == processed_rows == matched_e2e`) held exactly, so no
+  duplicate durable side effects or lost events were introduced.
+- **Result:** the 750 evt/s point was already near-sustainable in the
+  baseline and stayed about the same. The 775 and 800 evt/s points, which
+  were non-sustainable or unstable in the baseline, became clearly
+  sustainable with batched commits. The true new ceiling was not
+  determined - this experiment only re-tested the three previously
+  documented boundary rates, per the assigned scope.
+- **Decision:** keep the change. `PROCESSOR_OFFSET_COMMIT_BATCH_SIZE` and
+  `PROCESSOR_OFFSET_COMMIT_INTERVAL_MS` are validated, documented
+  environment variables so the batching window can be tuned or (at
+  batch_size=1, interval_ms=1) made to approximate the old per-event
+  behavior without a code change. The crash-replay window grew from
+  "at most one event" to "at most `PROCESSOR_OFFSET_COMMIT_BATCH_SIZE`
+  events or `PROCESSOR_OFFSET_COMMIT_INTERVAL_MS` of wall-clock time,
+  whichever is smaller" per partition; this does not weaken durable business
+  idempotency (Postgres uniqueness plus the Redis reservation lease still
+  make replayed events no-ops), it only changes how many already-processed
+  events a crash can cause to be redelivered.
+
+## Post-batching capacity discovery — measurement only, no code change
+
+- **Hypothesis:** the batched-offset-commit experiment above only re-tested
+  the three previously-documented boundary rates (750/775/800 evt/s); the
+  true new sustainable ceiling was unknown and likely higher.
+- **Change:** none. This was a pure capacity-discovery benchmark: same 3
+  worker / 3 partition / 1/1/1-assignment topology (verified via
+  `kafka-consumer-groups.sh --describe` immediately before each sweep, all
+  three consumer IDs distinct, lag 0 at rest), same batched-commit settings,
+  same PostgreSQL/Redis/Kafka/Docker configuration, same workload. Only the
+  requested injection rate varied.
+- **Measurement:** broad sweep at 850/900/950/1000 evt/s (10s warmup, 45s
+  steady state, 3 repeats,
+  [`bench-batched-commit-3w-ceiling-broad`](../../artifacts/benchmark/bench-batched-commit-3w-ceiling-broad/)),
+  followed by a refinement rate at 925 evt/s (same methodology,
+  [`bench-batched-commit-3w-ceiling-refinement`](../../artifacts/benchmark/bench-batched-commit-3w-ceiling-refinement/)).
+
+  | Rate | Lag slope (3 repeats, events/s) | E2E p95 (3 repeats) | Classification |
+  | ---: | --- | --- | --- |
+  | 850 | +1.59, +1.79, +3.88 | 73, 82, 125 ms | Sustainable |
+  | 900 | +1.07, +1.26, +1.77 | 152, 136, 138 ms | Sustainable (highest clean point) |
+  | 925 | +2.71, +1.28, +1.15 | 321, 1027, 1092 ms | Mixed/transition band - slope alone looks fine but E2E p95 spikes above 1000ms in 2/3 repeats |
+  | 950 | +1.74, +6.22, +9.42 | 175, 368, 343 ms | Not clearly sustainable - slope and end-of-load lag escalate repeat-over-repeat |
+  | 1000 | +11.48, +16.27, +6.09 | 356, 784, 548 ms | Non-sustainable - service rate visibly trails injected, E2E p99 up to 1210ms |
+
+  Injector-capacity check: injected rate stayed ≥99.5% of requested through
+  950 evt/s and ≥99% at 1000 evt/s (990-993 of 1000), both above this
+  project's 95% floor, so saturation at 1000 evt/s is attributed to the
+  processor/database path, not to the benchmark injector falling behind.
+  Correctness: all 15 repeats (12 broad + 3 refinement) satisfied
+  `unique_event_ids == processed_rows == matched_e2e` exactly - no duplicate
+  durable side effects, no lost events, at every tested rate including the
+  saturated ones. Resource observations: PostgreSQL container CPU rose
+  ~76% (900) → ~71-95% (950 repeats) → ~103% (1000); WAL full-page-image
+  writes rose ~4/s (900) → ~33/s (950) → ~342/s (1000), roughly an 85x jump
+  from 900 to 1000. Processor worker CPU stayed moderate throughout (36-65%
+  peak across the three workers) and never approached saturation. Kafka
+  broker CPU samples were low and did not trend upward with rate.
+- **Result:** the highest artifact-backed sustainable rate is **900 evt/s**
+  (up from 750 evt/s, a ~20% increase: `(900-750)/750×100 = 20%`).
+  Repeatable saturation begins in the **900-950 evt/s** band; 925 evt/s
+  inside that band showed mixed evidence (bounded lag slope, but E2E p95
+  latency spikes far above the 850/900 range), which is why it is reported
+  as part of the transition rather than as a new clean ceiling. 1000 evt/s
+  is unambiguously saturated.
+- **Decision:** N/A - measurement only, nothing to keep or revert. The
+  measured evidence points to **PostgreSQL as the strongest next-bottleneck
+  hypothesis** (rising CPU and WAL full-page-image rate while processor CPU
+  stays moderate and Kafka CPU does not trend upward), consistent with the
+  payment-history read cost identified in the Transaction decomposition
+  entry above, but this is a hypothesis from aggregate resource
+  measurements, not a proven root cause - a fresh transaction-level
+  instrumentation pass (mirroring the earlier Transaction decomposition
+  experiment) would be the natural next isolated experiment, followed by
+  targeted PostgreSQL investigation if that measurement confirms it.
+
+## Successful-event log moved to DEBUG — kept (operational, not a throughput win)
+
+- **Hypothesis:** `MessageProcessor.process()` emitted a structured `INFO`
+  log (`event_processed`, with 13 fields) for every successfully processed
+  record. At ~900-950 evt/s across 3 workers this is several hundred
+  structured log calls per second per worker; the cost of argument
+  construction, structlog processing, serialization, and the stdout/stderr
+  write could be measurably consuming processor CPU even if it is not the
+  primary system bottleneck.
+- **Change:** exactly one line in `services/event_processor/processor.py`:
+  `self._logger.info("event_processed", ...)` → `self._logger.debug(...)`.
+  No fields changed, no log removed, no sampling added, no async logging
+  introduced, no structlog/Docker log-driver configuration touched, no
+  global `processor_log_level` default changed. Before making the change,
+  `duplicate_event_skipped` (also `INFO`, in the same file) was checked and
+  confirmed to be a *different* code path (duplicate-skip, not normal
+  success) that fires far less often under normal load - it was left
+  unchanged, as were all `WARNING`-level retry/DLQ/integrity logs and the
+  `INFO`-level startup/shutdown/assignment/revocation logs.
+- **Measurement:** same 3-worker/3-partition/1/1/1-assignment topology
+  (re-verified before each sweep), same batched-offset-commit defaults, same
+  Postgres/Redis/Kafka/Docker configuration, same workload. Two back-to-back
+  sweeps at 900/925/950 evt/s (10s warmup, 45s steady state, 3 repeats each,
+  same rates the capacity-discovery stage used):
+  a fresh `INFO` control run
+  ([`bench-info-baseline-control-3w-boundary`](../../artifacts/benchmark/bench-info-baseline-control-3w-boundary/),
+  pre-change image) followed by the `DEBUG` experiment
+  ([`bench-debug-success-log-3w-boundary`](../../artifacts/benchmark/bench-debug-success-log-3w-boundary/),
+  rebuilt image, containers recreated so log volume could be measured from a
+  clean window).
+
+  | Metric | INFO control (9 repeats) | DEBUG experiment (9 repeats) | Delta |
+  | --- | --- | --- | --- |
+  | `event_processed` lines in the measured window | 456,181 | 0 | Eliminated |
+  | stdout+stderr bytes in the measured window (3 workers, `docker logs --since/--until`) | ~254.1 MB | ~7.0 KB | ~36,000x fewer bytes |
+  | Mean processor CPU (3 workers, `docker stats` peak samples) | ~53.4% | ~51.5% | ~2 points lower - within normal run-to-run noise |
+  | Handler/processing p95 | 4.87-4.89 ms | 4.75-4.94 ms | No material change |
+  | PostgreSQL transaction p95 | 4.81-4.83 ms | 4.85-4.86 ms | No material change |
+  | PostgreSQL CPU (peak samples) | ~62-87% (mean ~76%) | ~60-118% (mean ~82%, one 117.6% outlier) | No reduction; noise-dominated, not attributable to the log change |
+  | Lag slope range across the 18 repeats | +1.33 to +15.93/s | +1.35 to +7.30/s | Both conditions show occasional single-repeat spikes at every rate; no consistent pattern tied to the log level |
+  | E2E p95 range | 270-1541 ms | 504-1373 ms | Noisy in both directions; no systematic improvement |
+  | Correctness (`unique_event_ids == processed_rows == matched_e2e`) | held in all 9 repeats | held in all 9 repeats | Zero business-semantic effect from the log-level change |
+
+  Both sweeps showed one unusually high-lag-slope repeat scattered across
+  different rates/repeats (INFO: 900-rep2 at +15.93/s, 925-rep0 at +11.32/s,
+  950-rep2 at +14.80/s; DEBUG: 900-rep0 at +7.30/s only), consistent with
+  general run-to-run system variance (this benchmark was run back-to-back
+  after roughly 40 minutes of continuous heavy load on a MacBook Air host)
+  rather than a pattern caused by the logging change. Processor smoke tests
+  (`processor-smoke`, `-duplicate-smoke`, `-dlq-smoke`, `-retry-smoke`) and
+  the full pytest/ruff/mypy suite all passed unchanged.
+- **Result: Outcome C (negligible-to-marginal performance difference).**
+  Stdout/log volume dropped essentially to zero for the changed log line,
+  which is a real and substantial operational reduction. Processor CPU
+  dropped modestly (~2 points) but not decisively outside normal
+  measurement noise. Handler latency, PostgreSQL latency, and PostgreSQL CPU
+  showed no material change. The 900/925/950 sustainability classification
+  did **not** change: 900 evt/s remained mostly clean with an occasional
+  single-repeat spike in both conditions, 925 evt/s remained a mixed/
+  transition-band result in both conditions, and 950 evt/s remained
+  borderline in both conditions (its DEBUG sweep happened to run cleaner
+  this particular time, but with only 3 repeats per condition this is not
+  strong enough evidence to claim the boundary moved). This strengthens,
+  rather than replaces, the PostgreSQL bottleneck hypothesis: removing the
+  per-event INFO log did not move PostgreSQL CPU or transaction latency at
+  all, so the earlier Postgres CPU/WAL evidence from the capacity-discovery
+  stage is not attributable to processor-side logging overhead.
+- **Decision: kept.** Not because it changed throughput - it did not - but
+  because Prometheus already provides equivalent successful-event
+  observability (`commerce_processor_events_terminal_total`,
+  `commerce_processor_event_processing_duration_seconds`, etc.) without the
+  per-event log line, the same event-level diagnostic remains available on
+  demand by running with `PROCESSOR_LOG_LEVEL=DEBUG`, and eliminating
+  ~254 MB of routine stdout per 9-repeat benchmark window (extrapolating:
+  roughly 28 KB per 1,000 events at these field widths) is an operationally
+  meaningful reduction in log-shipping/storage cost regardless of its
+  (here, negligible) effect on throughput.
+
+## Transaction decomposition v2 — diagnosis only, no change made
+
+This stage answers a narrower question than the entries above: **which part
+of the already-instrumented transaction grows expensive as load approaches
+the 900-950 evt/s boundary identified by the ceiling-discovery and logging
+stages?** No SQL, index, schema, Kafka, Redis, worker/partition, offset
+batching, logging, pool, PostgreSQL, fraud-rule, producer, or container
+configuration was changed. This is attribution, not optimization.
+
+- **Why this run:** the ceiling-discovery stage (Stage 14) and the logging
+  stage (Stage 15) both found PostgreSQL CPU and WAL full-page-image (FPI)
+  growth near 950-1000 evt/s but stopped short of naming which query class or
+  transaction stage was responsible. Sprint 8's fraud stage adds up to 10
+  extra PostgreSQL round trips per fraud-eligible event inside the same
+  commit boundary as the business write, so it was the leading suspect.
+- **Topology:** 3 `commerce.events` partitions, 3 processor workers,
+  re-verified 1/1/1 assignment via `kafka-consumer-groups.sh --describe`
+  immediately before the sweep. Same batched offset commit defaults
+  (`PROCESSOR_OFFSET_COMMIT_BATCH_SIZE=50` / `..._INTERVAL_MS=100`), same
+  `DEBUG`-level success logging, same mixed workload, same Docker CPU/memory
+  allocation as every prior stage.
+- **Instrumentation added:** none in application code. Sprint 8/9 already
+  wrap every PostgreSQL call in `InstrumentedConnection`/`InstrumentedCursor`
+  ([`persistence/instrumentation.py`](../../services/event_processor/persistence/instrumentation.py))
+  and record per-stage histograms in
+  [`persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py)
+  (`commerce_database_stage_duration_seconds{stage}` for pool acquire,
+  `processed_events`, `business_persistence`, `fraud_context`,
+  `fraud_persistence`, `commit`, connection release, plus
+  `commerce_database_sql_duration_seconds{operation}` with the same bounded,
+  static `SQL_OPERATIONS` labels used by the v1 decomposition — never event,
+  customer, order, run ID, or raw SQL text). All of this instrumentation is
+  already active in production whenever `metrics` is passed to
+  `UnitOfWorkFactory`, which `main.py` always does. This stage only extended
+  the **benchmark tooling** (`scripts/benchmark/saturation.py`,
+  `scripts/benchmark/direct_saturation.py`) to read these existing
+  Prometheus series before/after each load window and to snapshot
+  `pg_stat_database`, `pg_stat_user_tables`, `pg_stat_wal`,
+  `pg_stat_checkpointer`, `pg_stat_activity`, and `pg_locks` — no new
+  application code path was added, so there is no new per-event application
+  overhead to isolate; the added cost is a handful of read-only Prometheus/
+  PostgreSQL queries executed once before and once after each load window,
+  never during it.
+- **`pg_stat_statements` limitation:** not enabled in this environment
+  (confirmed via `pg_extension`/`shared_preload_libraries`), and enabling it
+  requires a PostgreSQL restart, which the task rules for this stage
+  explicitly forbid. All SQL-class evidence below therefore comes from the
+  application-side `commerce_database_sql_duration_seconds{operation}`
+  histograms (already bounded/labeled by the v1 instrumentation) and from
+  always-available system views, not from `pg_stat_statements`.
+- **Benchmark:** direct Kafka injection (not the Demo API, which cannot
+  sustain 900+ evt/s cleanly — see the direct-injector stage) at 900, 925,
+  950 evt/s; 10s warmup, 45s steady state, 3 repeats per rate; artifact tag
+  [`bench-tx-decomposition-v2-3w-boundary`](../../artifacts/benchmark/bench-tx-decomposition-v2-3w-boundary/).
+  Commands:
+
+  ```bash
+  docker compose -p real-time-commerce-platform exec -T kafka \
+    /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+    --describe --group commerce-event-processor-v1
+  docker compose --profile processor --profile fraud --profile observability \
+    --profile demo up -d --scale event-processor=3 event-processor
+  python -m scripts.benchmark.direct_saturation --rates 900 925 950 \
+    --warmup-seconds 10 --steady-seconds 45 --repeats 3 \
+    --run-tag bench-tx-decomposition-v2-3w-boundary
+  ```
+
+- **Instrumentation-overhead note:** because no new application code path
+  was added (only additional before/after Prometheus reads in the benchmark
+  driver), there is no isolated "instrumented vs. uninstrumented" processor
+  build to compare in this stage — the running image is identical to Stage
+  15's `DEBUG` image. The one confound worth naming plainly: this sweep ran
+  after many hours of continuous benchmarking in the same session, so
+  `customers`/`orders`/`payments`/`product_views`/`sessions` hold far more
+  rows than Stage 15's snapshot did, against a reused, finite synthetic
+  customer pool. That inflates absolute lag-slope and E2E-p95 numbers versus
+  Stage 15 (see the table below) and is a real limitation on any *absolute*
+  before/after comparison — but it does not undermine the *relative*,
+  same-sweep findings below (which stage/query class costs more than which
+  other, and which grows from 900→950), since those are measured within the
+  same data state.
+
+  | Metric (900/925/950, 3 repeats each) | Stage 15 DEBUG sweep | This sweep |
+  | --- | --- | --- |
+  | Lag slope range | +1.35 to +7.30 evt/s | +1.37 to +42.27 evt/s |
+  | E2E p95 range | 504-1373 ms | 385-4057 ms |
+  | PostgreSQL CPU (peak samples) | ~60-118% (mean ~82%) | ~79-111% (mean ~93%) |
+  | Correctness | held in all 9 repeats | held in all 9 repeats |
+
+  The wider lag-slope/E2E spread is consistent with the accumulated-data-
+  volume confound above (worst outliers correlate with the EXPLAIN-confirmed
+  non-composite-indexed queries below, whose cost scales with per-customer
+  row count), not with anything the instrumentation itself does.
+
+- **Stage-level breakdown (mean of 9 repeats, ms, share of transaction
+  total):**
+
+  | Stage | Avg (ms) | Share of transaction total |
+  | --- | --- | --- |
+  | `fraud_context` (10 SELECTs) | 1.055 | ~49% |
+  | `business_persistence` | 0.443 | ~21% |
+  | `fraud_persistence` | 0.411 | ~19% |
+  | `commit` | 0.333 | ~16% |
+  | `processed_events_insert` | 0.151 | ~7% |
+  | `pool_acquire` | 0.018 | <1% |
+  | `connection_release` | 0.013 | <1% |
+  | **transaction_total** | **2.147** | 100% |
+  | `fraud_evaluation_cpu` (Python, not a DB stage) | 0.046 | n/a |
+
+  By rate, `transaction_total` and `fraud_context` avg (mean of 3 repeats):
+
+  | Rate | transaction_total avg (ms) | fraud_context avg (ms) | fraud_context share |
+  | --- | --- | --- | --- |
+  | 900 evt/s | 3.413 | 1.564 | ~46% |
+  | 925 evt/s | 1.511 | 0.701 | ~46% |
+  | 950 evt/s | 1.517 | 0.900 | ~59% |
+
+  `fraud_context` is the largest single DB-side stage at every rate and its
+  *share* of the transaction grows from 900→950 even where the absolute
+  transaction cost itself is noisy across repeats (a symptom of the queued/
+  saturated regime this boundary sits in, where per-event cost depends on
+  how much the pool and buffer cache are already loaded when that event
+  runs). `pool_acquire` and `connection_release` stay negligible (≤0.04 ms)
+  at every rate, and `fraud_evaluation_cpu` (pure Python rule evaluation, no
+  DB call) stays ≤0.09 ms at every rate.
+
+- **SQL-class breakdown (mean of 9 repeats, ms, calls/processed event):**
+
+  | Operation | Avg (ms) | Calls/event |
+  | --- | --- | --- |
+  | `business_payments` | 0.286 | 0.051 |
+  | `fraud_evaluation_write` | 0.265 | 0.154 |
+  | `processed_events_insert` | 0.151 | 0.358 |
+  | `fraud_context_recent_payments` | 0.126 | 0.154 |
+  | `fraud_context_product_views` | 0.108 | 0.154 |
+  | `fraud_context_prior_payments` | 0.107 | 0.154 |
+  | `fraud_evaluation_select` | 0.103 | 0.154 |
+  | `processed_events_select` | 0.100 | 0.716 |
+  | `fraud_context_recent_orders` | 0.091 | 0.154 |
+  | `fraud_context_refund_facts` | 0.090 | 0.051 |
+  | `fraud_context_order` | 0.083 | 0.154 |
+  | `fraud_context_refunds` | 0.077 | 0.154 |
+  | `fraud_context_session` | 0.076 | 0.154 |
+  | `fraud_context_order_session` | 0.068 | 0.051 |
+  | `fraud_context_customer` | 0.067 | 0.154 |
+
+  Calls/event are per *processed* event (fraud-context queries only fire for
+  the ~15% fraud-eligible share of the mixed workload, so their true
+  per-fraud-eligible-event cost is roughly 6-7x the listed calls/event
+  average). No single fraud-context query dominates — the cost is spread
+  across all ~10 bounded lookups, which matches the "share grows, no single
+  query explodes" pattern seen in the stage-level table.
+
+- **PostgreSQL resource evidence:** `pg_stat_user_tables` deltas across all
+  9 repeats show **zero sequential scans** on any of the 12 tracked tables
+  (`orders`, `product_views`, `payments`, `customers`, etc. — all activity is
+  `idx_scan`), ruling out a seq-scan regression. Buffer cache hit ratio
+  (`blks_hit / (blks_hit + blks_read)`) stayed above 97.5% at every rate,
+  ruling out cache-eviction-driven I/O growth. PostgreSQL container CPU
+  ranged 79.2-110.7% (i.e. consistently using more than one core) across all
+  9 repeats with no clean monotonic trend by rate — the highest single value
+  (110.7%) occurred at 900 evt/s, not 950, reinforcing that the system is
+  already resource-constrained at the low end of this boundary, not just at
+  its top.
+- **WAL / write-amplification evidence:** `wal.wal_fpi_per_second` ranged
+  83.9-786.4 across the 9 repeats with no clean correlation to rate or to
+  lag slope (e.g. 950-rep0 had the highest FPI rate, 786.4/s, but the
+  *lowest* lag slope of the three 950 repeats, +1.37 evt/s). This pattern -
+  large swings uncorrelated with load - is consistent with PostgreSQL
+  checkpoint timing (a checkpoint landing inside the sampling window forces
+  a burst of full-page images regardless of event rate) rather than with
+  fraud-context or business-write volume. Write amplification is **not**
+  ruled out as a contributor to the previously observed 950-1000 FPI growth,
+  but this stage's evidence does not tie it specifically to transaction
+  volume at 900-950; a checkpoint-interval-aware measurement would be needed
+  to separate the two.
+- **`EXPLAIN (ANALYZE, BUFFERS)` findings (read-only, representative
+  customer with 91 payments / ~190 orders, no index changes made):** the
+  `fraud_context_recent_payments`/`prior_payments`/`refunds` queries use the
+  composite `(customer_id, attempted_at)` index kept from the earlier
+  "Composite index" stage and resolve via `Index Cond` in 0.19-1.7 ms.
+  `fraud_context_recent_orders` (`orders`) and `fraud_context_product_views`
+  (`product_views`) have **no equivalent composite index** — both resolve
+  via a customer_id-only `Bitmap Heap Scan` with the date-range bound applied
+  as a post-scan `Filter`, not an `Index Cond`, costing 9.2 ms and 4.0 ms
+  respectively against the same representative customer, 4-20x the
+  composite-indexed queries despite firing at the identical per-fraud-
+  eligible-event frequency. This cost scales with each customer's
+  accumulated row count, which is consistent with this sweep's elevated
+  outliers (see the data-volume confound note above) and is the strongest
+  single piece of evidence produced by this stage.
+- **Event-type cost differences (mean of 9 repeats,
+  `commerce_processor_event_processing_duration_seconds{event_type}`):**
+  fraud-eligible event types (`checkout_started`, `order_created`,
+  `payment_failed`, `payment_completed`, `refund_requested`) consistently
+  cost 2-5x more handler time than non-fraud-eligible types
+  (`user_registered`, `session_started`, `product_viewed`,
+  `added_to_cart`) in every one of the 9 repeats — e.g. 900-rep1: 8.47 ms vs
+  3.23 ms; 925-rep1: 7.94 ms vs 0.78 ms. This directly ties per-event cost to
+  workload mix: a run with a higher fraud-eligible share will show worse
+  aggregate latency purely from mix, independent of any query-level
+  regression.
+- **Proven bottleneck:** the fraud-context stage (10 bounded SELECTs
+  executed inside the same transaction as the business write, before commit)
+  is the largest single database-side cost component of a fraud-eligible
+  transaction at every measured rate, and its share of transaction time
+  grows from ~46% at 900 evt/s to ~59% at 950 evt/s. Within that stage,
+  `fraud_context_recent_orders` and `fraud_context_product_views` are proven
+  (via `EXPLAIN ANALYZE BUFFERS`) to run as `Filter`-based Bitmap Heap Scans
+  rather than `Index Cond` scans, 4-20x slower per call than the
+  composite-indexed payment/refund lookups in the same stage, and their cost
+  scales with accumulated per-customer row count.
+- **Strong hypotheses (not proven by this stage alone):** (1) the missing
+  `orders`/`product_views` composite indexes are a material contributor to
+  the elevated lag-slope outliers seen in this sweep versus Stage 15,
+  because the outlier repeats correlate with cumulative data growth rather
+  than with rate; a controlled reset-and-rerun sweep would be needed to
+  isolate data volume from rate as the driver. (2) PostgreSQL CPU
+  (consistently >1 core, 79-111%) is the proximate saturation resource at
+  this boundary, given buffer cache hit ratio stays high and there are no
+  sequential scans — but this stage does not isolate which specific
+  operation(s) consume that CPU beyond the fraud-context evidence above.
+- **Ruled out:** connection pool contention (`pool_acquire` ≤0.018 ms mean,
+  `connection_release` ≤0.013 ms mean, at every rate) and fraud rule
+  evaluation CPU (`fraud_evaluation_cpu`, pure Python, ≤0.09 ms mean at
+  every rate) are not meaningful contributors to the cost growth near this
+  boundary. Sequential-scan regression and buffer-cache eviction are also
+  ruled out (zero seq scans, >97.5% hit ratio at every rate in all 9
+  repeats). Kafka-side lag growth is a *symptom* measured by this stage, not
+  a cause investigated by it — no Kafka broker/producer resource evidence
+  was collected here (out of scope for a PostgreSQL transaction
+  decomposition), so Kafka is neither implicated nor ruled out.
+- **Ranked candidate next isolated optimization experiments (not
+  implemented in this stage):**
+  1. **Add a composite `(customer_id, ordered_at)` index on `orders` and
+     `(customer_id, viewed_at)` (or equivalent timestamp column) on
+     `product_views`**, mirroring the existing `payments` composite index.
+     *Evidence:* EXPLAIN-proven `Filter`-based scans costing 4-20x the
+     composite-indexed equivalent queries in the same stage, at identical
+     call frequency. *Mechanism:* converts the date-range bound from a
+     post-scan filter to an index condition, the same mechanism that fixed
+     the `payments` lookups in the earlier "Composite index" stage.
+     *Correctness risk:* low — read-only query path, same pattern already
+     validated in production for `payments`; index write-side cost (insert/
+     update amplification, WAL) was previously measured for the payments
+     index and should be re-measured here rather than assumed identical.
+     *Expected impact:* should reduce `fraud_context` stage cost and,
+     because it's ~half of transaction time, may materially reduce
+     transaction latency and the fraud-eligible/non-fraud latency gap.
+     *Validation benchmark:* repeat this same 900/925/950 x 3 transaction
+     decomposition after the index change, comparing `fraud_context_recent_orders`/
+     `fraud_context_product_views` avg/p95 and stage share directly against
+     this stage's numbers (same data volume, ideally via the reset-and-rerun
+     control below run first).
+  2. **Reset-and-rerun control sweep** on truncated benchmark tables (scoped
+     synthetic data only) at the same 900/925/950 x 3 topology, to separate
+     the data-volume confound from the rate-driven signal before or in
+     parallel with experiment 1. *Evidence:* this stage's lag-slope/E2E
+     spread versus Stage 15 correlates with hours of accumulated benchmark
+     history, not with a documented pipeline change since Stage 15.
+     *Mechanism:* removing the confound isolates whether 925-950 evt/s is a
+     stable boundary or whether it has drifted downward purely from data
+     growth. *Correctness risk:* none to production code; only scoped
+     benchmark/synthetic rows are affected, and this must run only when the
+     stack is idle (never mid-sweep). *Expected impact:* clarifies whether
+     experiment 1 is solving today's real bottleneck or a bottleneck that
+     is partly an artifact of long-running benchmark data accumulation.
+     *Validation benchmark:* the same transaction-decomposition sweep run
+     immediately after a scoped truncate, tagged separately (e.g.
+     `bench-tx-decomposition-v2-reset-control`) so it is never mixed with
+     this stage's artifact.
+  3. **Checkpoint-interval-aware WAL/FPI measurement** (e.g. sampling
+     `pg_stat_checkpointer` deltas alongside WAL FPI rate within each
+     repeat, not just before/after) to separate checkpoint-driven FPI bursts
+     from load-driven WAL growth. *Evidence:* this stage's WAL FPI rate
+     swung 83.9-786.4/s with no clean rate correlation, plausibly explained
+     by checkpoint timing rather than by the fraud/business write volume
+     this stage set out to attribute. *Mechanism:* pure measurement change,
+     no risk. *Expected impact:* clarifies whether the ceiling-discovery
+     stage's 950-1000 FPI growth finding is transaction-volume-driven (and
+     therefore addressable by reducing per-transaction write cost) or
+     checkpoint-interval-driven (addressable only by checkpoint tuning,
+     which is out of scope for this task's constraints). *Validation
+     benchmark:* an extended sweep with per-repeat checkpoint-delta sampling
+     at the same 900/925/950 rates.
+
+## Orders composite index — kept
+
+- **Hypothesis:** Transaction decomposition v2 proved (via `EXPLAIN ANALYZE
+  BUFFERS`) that the `fraud_context_recent_orders` query - the bounded
+  history count backing `FraudContext.recent_orders` - runs as a
+  `customer_id`-only `Bitmap Heap Scan` with the `ordered_at` range applied
+  as a post-scan `Filter`, unlike the already-indexed `payments` lookups in
+  the same stage. The exact hot query, read from
+  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py):
+
+  ```sql
+  SELECT COUNT(*) FROM (
+      SELECT 1 FROM orders
+      WHERE customer_id = %s AND ordered_at <= %s AND ordered_at >= %s
+      ORDER BY ordered_at DESC LIMIT %s
+  ) bounded
+  ```
+
+  One equality predicate (`customer_id`), one range predicate
+  (`ordered_at` bounded both sides by the fraud lookback window), `ORDER BY
+  ordered_at DESC`, a bounded `LIMIT`, no join. Following the
+  equality-then-range/order principle already used for
+  `idx_payments_customer_attempted_at`, the justified column order is
+  `(customer_id, ordered_at DESC)` - equality column first, then the
+  range/sort column in the query's own sort direction. `orders` had only
+  `idx_orders_customer_id` (customer_id only); this is the single missing
+  piece relative to the payments case.
+- **Baseline EXPLAIN** (representative customer, 84 orders, fresh controlled
+  data - see below): `Bitmap Heap Scan on orders` via
+  `idx_orders_customer_id`, `Recheck Cond` on `customer_id`, `Filter` on the
+  `ordered_at` range, followed by a `Sort` (quicksort) and `Limit`. 39 shared
+  buffer hits, 0.195 ms execution time. Full plan retained at
+  [`artifacts/benchmark/bench-orders-index-explain/baseline-orders-query-explain.txt`](../../artifacts/benchmark/bench-orders-index-explain/baseline-orders-query-explain.txt).
+- **Change:** exactly one migration,
+  [`database/migrations/006_orders_customer_ordered_at.sql`](../../database/migrations/006_orders_customer_ordered_at.sql):
+  `CREATE INDEX idx_orders_customer_ordered_at ON orders (customer_id,
+  ordered_at DESC)`. No existing index removed, no query rewritten, no other
+  schema/config/worker/partition/Kafka/Redis/logging/pool change.
+- **Indexed EXPLAIN** (same query shape, a comparable representative
+  customer with 88 orders from the post-index controlled dataset):
+  `Index Only Scan using idx_orders_customer_ordered_at`, `Index Cond`
+  covers all three predicates, `Heap Fetches: 0`, no `Sort` step (the index
+  already returns rows in `ordered_at DESC` order). 5 shared buffer hits,
+  0.073 ms execution time. Full plan retained at
+  [`artifacts/benchmark/bench-orders-index-explain/indexed-orders-query-explain.txt`](../../artifacts/benchmark/bench-orders-index-explain/indexed-orders-query-explain.txt).
+  Execution time improved ~2.7x; buffer hits fell ~7.8x; the heap access and
+  sort step were both eliminated entirely.
+- **Controlled reset methodology:** the live database had accumulated over
+  2.5M `processed_events` rows and ~357K orders across many hours of prior
+  benchmarking in this session - far beyond any realistic per-customer
+  history and a direct confound for a clean A/B. Before the baseline sweep,
+  all benchmark-populated tables (`customers`, `sessions`, `product_views`,
+  `carts`, `cart_items`, `orders`, `payments`, `refunds`,
+  `fraud_evaluations`, `fraud_alerts`, `fraud_outbox`, `processed_events`)
+  were fully truncated via a new `scripts/reset-benchmark-data.sql` (no
+  existing full-reset tool covered this; the existing
+  `reset-persistence-test-data.sql` only scopes by a `persistence-smoke:`
+  run-tag, which the direct-injector benchmark path does not use).
+  `schema_migrations` and unrelated tables (`demo_runs`,
+  `demo_run_event_manifest`) were left untouched. The single-variable
+  control came from *migration ordering*, not a worktree: the baseline
+  sweep ran to completion while migration 006 did not yet exist on disk (so
+  `postgres-migrate` - which runs at every stack start via `depends_on` -
+  had nothing new to apply), then the benchmark tables were truncated a
+  second time, the migration file was added, `make db-migrate` applied it
+  (after rebuilding the `postgres-migrate` image, since
+  `database/migrations` is `COPY`-baked into it), and the indexed sweep ran
+  against that identically-reset, freshly-indexed schema. Both sweeps then
+  went through the exact same warmup/rate/repeat sequence from the same
+  empty starting volume.
+- **Baseline benchmark:** 3 workers, 3 partitions, re-verified 1/1/1
+  assignment, 900/925/950 evt/s, 10s warmup, 45s steady state, 3 repeats;
+  tag [`bench-orders-index-baseline-3w-boundary`](../../artifacts/benchmark/bench-orders-index-baseline-3w-boundary/).
+  Command: `python -m scripts.benchmark.direct_saturation --rates 900,925,950
+  --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag
+  bench-orders-index-baseline-3w-boundary`. All 9 repeats correctness-clean
+  (`unique_event_ids == processed_rows == matched_e2e`) and markedly
+  cleaner than the earlier confounded sweep (lag slope +1.2 to +6.7/s vs.
+  up to +42/s), confirming that prior sweep's data-volume hypothesis.
+- **Indexed benchmark:** identical parameters and topology; tag
+  [`bench-orders-index-3w-boundary`](../../artifacts/benchmark/bench-orders-index-3w-boundary/).
+  Same command with `--run-tag bench-orders-index-3w-boundary`. All 9
+  repeats correctness-clean; lag slope +0.6 to +2.2/s.
+- **System-level result (mean of 3 repeats per rate):**
+
+  | Rate | Lag slope: base → idx | E2E p95 (ms): base → idx | PostgreSQL CPU: base → idx |
+  | --- | --- | --- | --- |
+  | 900 | 3.06 → 1.48 (‑52%) | 230 → 120 (‑48%) | 57.8% → 56.2% (flat) |
+  | 925 | 1.83 → 1.24 (‑32%) | 140 → 98 (‑30%) | 62.1% → 60.0% (flat) |
+  | 950 | 1.84 → 1.25 (‑32%) | 246 → 181 (‑26%) | 71.7% → 77.2% (+8%, noisy) |
+
+  Lag slope and E2E p95 both improved, consistently, at every one of the
+  three rates - the strongest non-cherry-picked signal in this experiment.
+  PostgreSQL CPU showed no consistent direction (flat-to-noisy), and
+  processor CPU was unchanged (~129-142% summed across 3 workers in both
+  conditions), as expected for a database-only change. Transaction-total
+  and `fraud_context` stage averages (Prometheus histogram means, n=3 per
+  rate) were noisy in both directions at the sub-2ms scale these stages
+  operate at and did not show a clean trend - the EXPLAIN evidence above is
+  the reliable signal for the query-level effect; the histogram averages
+  are not precise enough at this sample size to resolve a sub-millisecond
+  per-query change buried inside an 8-10-query stage. This is reported
+  plainly rather than obscured: the system-level (lag slope, E2E) effect is
+  real and consistent; the stage-level histogram effect is not resolvable
+  from this data.
+- **Write-cost check:** `ORDER_CREATED` handler latency, `business_persistence`
+  stage duration, `orders` insert counts, commit duration, and WAL
+  records/sec all showed no consistent regression between baseline and
+  indexed runs (differences were small and inconsistent in direction across
+  the three rates - e.g. WAL records/s: 12734→12956, 13385→13058,
+  13937→13547). WAL FPI/s was likewise noisy in both directions (consistent
+  with the checkpoint-timing dominance already established in Transaction
+  decomposition v2), not a clean function of the new index. No measurable
+  write-amplification cost was found for maintaining this index at this
+  data volume and workload mix.
+- **Boundary interpretation:** 900 evt/s remained clean and the control
+  point; both conditions' 925 evt/s repeats stayed in the same
+  low-single-digit lag-slope range as before (transition band, not
+  reclassified); at 950 evt/s, all three indexed repeats were clean
+  (+0.9, +1.4, +1.4/s) and materially better than the already-cleaner fresh
+  baseline (+1.3 to +2.4/s). Per this experiment's own success criteria:
+  **the index materially improved behavior at the previous 950 evt/s
+  transition boundary.** This does **not** establish a new sustainable
+  ceiling above 950 evt/s; that would require a separate ceiling-discovery
+  sweep at higher rates.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e` held
+  in all 18 repeats (9 baseline + 9 indexed). All four processor smoke
+  scenarios (normal, duplicate, DLQ, retry) passed cleanly against the
+  post-index schema, using the established procedure (stop the shared
+  production consumer briefly so it cannot double-consume the smoke tests'
+  shared-topic poison messages, run the four scenarios, restart it).
+- **Decision: kept.** This is Outcome A - the query plan improved
+  (`Bitmap Heap Scan` + `Filter` + `Sort` → `Index Only Scan`, zero heap
+  fetches, no sort), and a consistent system-level improvement followed at
+  every measured rate (lower lag slope, lower E2E p95), with no measurable
+  write-cost or PostgreSQL-CPU regression. The migration
+  (`006_orders_customer_ordered_at.sql`) is retained.
+
+## Product-views composite index — kept
+
+- **Hypothesis:** Stage 16 found `fraud_context_product_views` running the
+  same `customer_id`-only Bitmap-Heap-Scan-plus-Filter pattern as the
+  pre-index `orders` lookup. The exact hot query, from
+  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py):
+
+  ```sql
+  SELECT COUNT(*) FROM (
+      SELECT 1 FROM product_views
+      WHERE customer_id = %s AND viewed_at <= %s AND viewed_at >= %s
+      ORDER BY viewed_at DESC LIMIT %s
+  ) bounded
+  ```
+
+  One equality predicate (`customer_id`), one range predicate on
+  `viewed_at` (upper bound the event time, lower bound the current
+  session's `started_at` when known, otherwise the same 30-day fraud
+  lookback), `ORDER BY viewed_at DESC`, bounded `LIMIT`, no join - the same
+  shape as the `orders` query. `product_views` had only
+  `idx_product_views_customer_id` (customer_id only) plus
+  `idx_product_views_session_id`, neither aligned with this predicate. Same
+  equality-then-range/order principle as the `orders` and `payments`
+  indexes: `(customer_id, viewed_at DESC)`.
+- **Baseline EXPLAIN** (representative customer, 177 product views, fresh
+  controlled data): `Bitmap Heap Scan on product_views` via
+  `idx_product_views_customer_id`, `Recheck Cond` on `customer_id`,
+  `Filter` on the `viewed_at` range, `Sort` (quicksort), `Limit`. 60 shared
+  buffer hits, 0.613 ms execution time. Retained at
+  [`artifacts/benchmark/bench-product-views-index-explain/baseline-product-views-query-explain.txt`](../../artifacts/benchmark/bench-product-views-index-explain/baseline-product-views-query-explain.txt).
+- **Change:** exactly one migration,
+  [`database/migrations/007_product_views_customer_viewed_at.sql`](../../database/migrations/007_product_views_customer_viewed_at.sql):
+  `CREATE INDEX idx_product_views_customer_viewed_at ON product_views
+  (customer_id, viewed_at DESC)`. The `orders` and `payments` composite
+  indexes, all fraud SQL, and every other configuration variable were left
+  untouched - the single performance variable in this experiment.
+- **Indexed EXPLAIN** (comparable customer, 175 product views, same
+  post-index controlled dataset): `Index Only Scan using
+  idx_product_views_customer_viewed_at`, `Index Cond` covers all three
+  predicates, `Heap Fetches: 0`, no `Sort`. 5 shared buffers (4 hit + 1
+  read), 0.172 ms execution time. Retained at
+  [`artifacts/benchmark/bench-product-views-index-explain/indexed-product-views-query-explain.txt`](../../artifacts/benchmark/bench-product-views-index-explain/indexed-product-views-query-explain.txt).
+  Execution time improved ~3.6x; buffer usage fell ~12x; heap access and
+  sort both eliminated - directionally the same mechanism as the `orders`
+  index, though the `orders` EXPLAIN improved by a larger relative margin
+  (2.7x vs 3.6x is actually larger here, but from a smaller absolute base:
+  0.613→0.172 ms vs 0.195→0.073 ms; product-views buffers fell further in
+  absolute terms, 60→5 vs 39→5, because the representative customer's
+  history was larger and less of it matched the filter).
+- **Controlled reset methodology, mirroring the orders-index experiment:**
+  all benchmark-populated tables truncated via
+  `scripts/reset-benchmark-data.sql` before the baseline sweep (0 rows
+  confirmed); baseline sweep ran while migration 007 did not yet exist;
+  truncated again (0 rows confirmed); migration 007 added,
+  `postgres-migrate` image rebuilt (`database/migrations` is `COPY`-baked
+  into it) and applied; indexed sweep ran from the identically-reset,
+  freshly-indexed schema. 1/1/1 partition assignment and lag=0
+  re-verified immediately before both sweeps. The representative customer
+  used for each EXPLAIN had a comparable row count (177 vs 175 product
+  views) - a valid apples-to-apples comparison, not a repeat of the earlier
+  accumulated-data-volume confound.
+- **Baseline benchmark:** 3 workers/3 partitions/1/1/1, 900/925/950 evt/s,
+  10s warmup, 45s steady, 3 repeats; tag
+  [`bench-product-views-index-baseline-3w-boundary`](../../artifacts/benchmark/bench-product-views-index-baseline-3w-boundary/).
+  All 9 repeats correctness-clean; lag slope +0.56 to +4.79/s.
+- **Indexed benchmark:** identical parameters; tag
+  [`bench-product-views-index-3w-boundary`](../../artifacts/benchmark/bench-product-views-index-3w-boundary/).
+  All 9 repeats correctness-clean; lag slope +1.20 to +2.21/s.
+- **System-level result (mean of 3 repeats per rate):**
+
+  | Rate | Lag slope base→idx | E2E p95 base→idx | fraud_context base→idx | Processor CPU base→idx |
+  | --- | --- | --- | --- | --- |
+  | 900 | +3.06→+1.20/s (‑61%) | 263→113 ms (‑57%) | 1.03→0.87 ms (‑15%) | 147→128% (‑13%) |
+  | 925 | +1.59→+1.37/s (‑14%) | 132→132 ms (flat) | 0.82→0.86 ms (+5%) | 133→144% (+8%) |
+  | 950 | +2.33→+1.84/s (‑21%) | 139→163 ms (+17%, noisy) | 1.12→0.86 ms (‑24%) | 132→146% (+10%) |
+
+  900 evt/s shows a clear, consistent win across every metric, similar in
+  character to the `orders` result. 925 evt/s is a wash - small
+  directional improvements and regressions that cancel out, within normal
+  run-to-run noise for this transition band. 950 evt/s is mixed: lag slope
+  and peak lag improved in the aggregate and in most individual repeats,
+  but mean E2E p95 was pulled higher by one especially clean baseline
+  repeat (64 ms) against three more typically-noisy indexed repeats
+  (124-228 ms); per-repeat peak lag was lower in 2 of 3 indexed repeats.
+  This is reported as noise-dominated at 950, not a systematic regression -
+  `product_views` insert counts, `PRODUCT_VIEWED` handler latency, and WAL
+  records/s all moved within ±2% or in the *improving* direction at 950
+  (see write-cost check below), which is inconsistent with a genuine
+  system-level regression from the index.
+- **Write-cost check:** `product_views` insert counts (±1% at every rate),
+  WAL records/s (±2% at every rate), and `business_persistence` duration
+  showed no consistent regression at any rate. `PRODUCT_VIEWED` handler
+  latency was mixed (+24% at 900, +7% at 925, -37% at 950) - noisy, not a
+  one-directional write-cost signal. WAL FPI/s swung by large relative
+  amounts (e.g. +63% at 900, -72% at 925) but from small absolute values
+  (5-34/s), consistent with the checkpoint-timing dominance already
+  established for this table family rather than with index-maintenance
+  cost. No measurable write-amplification cost was found.
+- **Boundary interpretation:** 900 evt/s remained clean and materially
+  better indexed. 925 evt/s remained a transition band in both conditions,
+  essentially unchanged by the index (not reclassified). 950 evt/s stayed
+  borderline-noisy in both conditions; unlike the `orders` experiment, not
+  all three indexed 950 repeats were unambiguously cleaner than baseline,
+  so per this experiment's own criteria **no boundary-improvement claim is
+  made at 950 evt/s** for this index specifically - the improvement here is
+  concentrated at 900 evt/s.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e` held
+  in all 18 repeats (9 baseline + 9 indexed). All four processor smoke
+  scenarios (normal, duplicate, DLQ, retry) passed cleanly against the
+  post-index schema using the established procedure (stop the shared
+  production consumer, run the four scenarios, restart it).
+- **Comparison with the `orders` index:**
+  - **Larger EXPLAIN improvement:** `product_views` improved execution
+    time by a larger relative factor (3.6x vs 2.7x) and a larger absolute
+    buffer-count drop (60→5 vs 39→5), though both eliminated heap access
+    and sort entirely and reached an `Index Only Scan`.
+  - **Larger system-level lag/E2E improvement:** the `orders` index, which
+    improved lag slope and E2E p95 consistently at *all three* rates
+    (900/925/950). The `product_views` index only showed a clean win at
+    900 evt/s; 925 was a wash and 950 was noise-dominated with no clear
+    direction.
+  - **Larger write/WAL maintenance cost:** neither index showed a
+    measurable write-cost or WAL regression in this workload/data volume;
+    the two are comparable (both "no cost found").
+  - **Remaining `fraud_context` cost after both indexes:** `fraud_context`
+    still spans ~8 additional lookups per fraud-eligible event beyond
+    `recent_orders`/`product_views` (customer, session, order,
+    recent/prior payments, refunds, refund-facts), all already
+    composite-indexed except the two now-fixed lookups and the
+    single-row-by-primary-key lookups (customer, session, order) which
+    cannot benefit from a composite index. The remaining `fraud_context`
+    cost is spread evenly across this set (Stage 16's SQL-class table
+    showed no query dominating), not concentrated in a single remaining
+    unindexed hot path.
+- **Decision: kept.** No rate showed a measurable write-cost or
+  PostgreSQL-CPU regression, the query-plan improvement is real and
+  substantial (EXPLAIN-proven), and 900 evt/s showed a clear system-level
+  win. 925/950 evt/s showed no clear win but also no regression - this is
+  Outcome A at 900 evt/s and Outcome B (neutral, no downside) at 925/950,
+  not Outcome C. The trade-off favors keeping: a real read benefit with no
+  identified write cost. The migration
+  (`007_product_views_customer_viewed_at.sql`) is retained.
+
+## Post-index capacity discovery — measurement only, no code change
+
+- **Why:** with both the `orders` and `product_views` composite indexes
+  retained, the previous ~900/925/950/1000 evt/s sustainability boundary
+  (from the batched-offset-commit era, before either index) was stale. This
+  stage re-establishes the actual boundary under the current retained
+  configuration - no optimization, pure measurement.
+- **Schema/index state verified before benchmarking:** all 7 migrations
+  applied (`schema_migrations` max version 7); `idx_payments_customer_attempted_at`,
+  `idx_orders_customer_ordered_at`, and `idx_product_views_customer_viewed_at`
+  all present via `pg_indexes`. No index modified.
+- **Clean-reset methodology:** `scripts/reset-benchmark-data.sql` run once
+  before the entire sweep (not between repeats, per the established
+  methodology) - `customers`/`orders`/`payments`/`product_views`/
+  `processed_events` all confirmed at 0 rows immediately before starting.
+  Consumer lag was 0 at reset time.
+- **Topology:** scaled to 3 workers, 1/1/1 assignment re-verified via
+  `kafka-consumer-groups.sh --describe` before the broad sweep.
+- **Broad sweep** (950/1000/1050/1100 evt/s, 10s warmup, 45s steady, 3
+  repeats; tag
+  [`bench-post-index-3w-ceiling-broad`](../../artifacts/benchmark/bench-post-index-3w-ceiling-broad/)):
+
+  | Rate | Repeats clean | Lag slope range | E2E p95 range | Peak PG CPU |
+  | --- | --- | --- | --- | --- |
+  | 950 | 2/3 (1 elevated: slope 19.3, E2E p95 1743ms) | +2.0 to +19.3/s | 129-1743ms | 110% |
+  | 1000 | 3/3 | +0.7 to +1.7/s | 145-283ms | 77% |
+  | 1050 | 3/3 (bounded, one repeat's PG CPU hit 100%) | +1.1 to +2.5/s | 152-583ms | 100% |
+  | 1100 | 1/3 (2 degraded: slope 11.6/24.9, E2E p95 2101/2474ms) | +1.8 to +24.9/s | 439-2474ms | 132% |
+
+  Injector kept pace at 99.4-99.9% of requested rate at every single repeat
+  through 1100 evt/s - the degradation above 1000 evt/s is genuine
+  processor/PostgreSQL saturation, not an injector limitation.
+- **Refinement** (1075 evt/s, same 10s/45s/3-repeat methodology; tag
+  [`bench-post-index-3w-ceiling-refinement`](../../artifacts/benchmark/bench-post-index-3w-ceiling-refinement/)):
+  slope +10.0, +3.0, +34.8/s across the 3 repeats; E2E p95 407/552/2275ms.
+  2 of 3 repeats show meaningful degradation (slope >9/s, one severely so)
+  - the same "one clean repeat, two degraded" pattern the methodology
+  flags as non-sustainable, not a clean result. Injector still kept pace
+  (99.8-99.9% of requested).
+- **Boundary:** 1000 evt/s and 1050 evt/s are the highest rates where all 3
+  repeats stayed bounded (lag slope <3/s, E2E p95 under ~600ms, drain
+  predictable). 1075 evt/s is the first rate with a repeatable (2/3)
+  non-sustainable pattern, and 1100 evt/s confirms it more severely (also
+  2/3 degraded, worse E2E). Transition interval: **~1050-1075 evt/s**, a
+  25 evt/s window - within the task's acceptable 10-25 evt/s range, so no
+  further refinement was performed.
+- **Resource trend (measured):** PostgreSQL CPU rose the most sharply and
+  the most monotonically across the sweep (mean/max: 950 evt/s 75%/110%,
+  1000 evt/s 64%/77%, 1050 evt/s 81%/100%, 1100 evt/s 110%/132%). Processor
+  CPU (summed across 3 workers) also rose but stayed well short of its
+  ~600% ceiling (137-169% mean), leaving headroom per worker. Per-
+  transaction cost (`transaction_total`, `fraud_context` Prometheus
+  histogram averages) stayed essentially flat across all four rates
+  (~1.5-1.6ms / ~0.82-0.85ms) - the marginal transaction is not getting
+  more expensive as rate rises; there are simply more of them contending
+  for the same PostgreSQL capacity. WAL FPI/s trended upward with rate
+  (19.6→47.2→37.5→86.4, noisy but broadly increasing) alongside WAL
+  records/s (13910→14854→15410→16724, cleanly monotonic).
+- **Hypothesis:** PostgreSQL CPU is the most likely next bottleneck for any
+  further capacity increase - it is the resource that grew most
+  consistently as the system moved from sustainable (1000) through
+  transition (1050-1075) toward saturated (1100), while per-transaction
+  cost itself did not change, pointing at contention/scheduling under
+  concurrent load rather than any single expensive query. This is a
+  hypothesis, not a proven causal claim - no further isolation was
+  performed in this measurement-only stage.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e` held
+  in all 15 repeats (12 broad + 3 refinement). All four processor smoke
+  scenarios passed against the current (post-both-index) schema using the
+  established procedure.
+- **Capacity comparison:**
+  - vs. the previous post-batching boundary (~900 evt/s):
+    `(1050 - 900) / 900 = +16.7%`.
+  - vs. the earlier pre-batched-commit boundary (~750 evt/s):
+    `(1050 - 750) / 750 = +40.0%`.
+  - These improvements are **not** attributable to a single change. Batched
+    Kafka offset commits moved the boundary from ~750 to ~900 evt/s
+    (Stage 14). The `orders` and `product_views` composite indexes (Stages
+    17-18) were then followed by this fresh capacity sweep, which
+    establishes the new ~1000-1050 evt/s boundary. Each experiment's
+    contribution is kept distinct; this stage does not attribute the full
+    750→1050 change to the two indexes alone.
+- **No implementation changes were made in this stage** - reset, topology
+  verification, and benchmarking only. Environment restored to 1 worker,
+  lag 0, after completion.

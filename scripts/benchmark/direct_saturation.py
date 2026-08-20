@@ -17,6 +17,10 @@ from scripts.benchmark.kafka_replay import (
 from scripts.benchmark.pg import query_all
 from scripts.benchmark.prom import PrometheusClient
 from scripts.benchmark.saturation import (
+    SQL_OPERATIONS,
+    _histogram_average,
+    _label_average,
+    _label_quantiles,
     _postgres_snapshot,
     _runtime_snapshot,
     _wait_idle,
@@ -45,6 +49,154 @@ def _quantiles(
         else value * 1000
         for key, q in (("p50", 0.5), ("p95", 0.95), ("p99", 0.99))
     }
+
+
+EVENT_TYPES = (
+    "user_registered",
+    "session_started",
+    "product_viewed",
+    "added_to_cart",
+    "checkout_started",
+    "order_created",
+    "payment_completed",
+    "payment_failed",
+    "refund_requested",
+)
+FRAUD_ELIGIBLE_EVENT_TYPES = frozenset(
+    {
+        "checkout_started",
+        "order_created",
+        "payment_failed",
+        "payment_completed",
+        "refund_requested",
+    }
+)
+
+
+def _sql_statement_counts(prom: PrometheusClient) -> dict[str, float]:
+    return {
+        operation: prom.instant(
+            f'sum(commerce_database_sql_statement_count_total{{operation="{operation}"}})'
+        )
+        or 0.0
+        for operation in SQL_OPERATIONS
+    }
+
+
+def _transaction_breakdown(prom: PrometheusClient, window: int) -> dict[str, Any]:
+    """Stage-level and SQL-class-level cost using the already-active
+    production instrumentation (InstrumentedConnection + database_stage_duration),
+    reading it through Prometheus rather than adding any new instrumentation."""
+    breakdown: dict[str, dict[str, float | None]] = {
+        "transaction_total": {
+            "avg": _histogram_average(
+                prom, "commerce_database_transaction_duration_seconds", window, 1000
+            ),
+            **{
+                k: None if v is None else v
+                for k, v in _label_quantiles(
+                    prom,
+                    "commerce_database_transaction_duration_seconds_bucket",
+                    "result",
+                    "committed",
+                    window,
+                    1000,
+                ).items()
+            },
+        },
+        "pool_acquire": {
+            "avg": _histogram_average(
+                prom, "commerce_database_pool_acquire_duration_seconds", window, 1000
+            ),
+        },
+        "connection_release": {
+            "avg": _histogram_average(
+                prom,
+                "commerce_database_connection_release_duration_seconds",
+                window,
+                1000,
+            ),
+        },
+        "fraud_evaluation_cpu": {
+            "avg": _histogram_average(
+                prom, "commerce_fraud_evaluation_duration_seconds", window, 1000
+            ),
+        },
+    }
+    for name, stage in (
+        ("processed_events_insert", "processed_events"),
+        ("business_persistence", "business_persistence"),
+        ("fraud_context", "fraud_context"),
+        ("fraud_persistence", "fraud_persistence"),
+        ("commit", "commit"),
+    ):
+        breakdown[name] = {
+            "avg": _label_average(
+                prom,
+                "commerce_database_stage_duration_seconds",
+                "stage",
+                stage,
+                window,
+                1000,
+            ),
+        }
+    for operation in SQL_OPERATIONS:
+        breakdown[operation] = {
+            "avg": _label_average(
+                prom,
+                "commerce_database_sql_duration_seconds",
+                "operation",
+                operation,
+                window,
+                1000,
+            ),
+            **{
+                k: None if v is None else v
+                for k, v in _label_quantiles(
+                    prom,
+                    "commerce_database_sql_duration_seconds_bucket",
+                    "operation",
+                    operation,
+                    window,
+                    1000,
+                ).items()
+            },
+        }
+    return breakdown
+
+
+def _event_type_handler_latency(
+    prom: PrometheusClient, window: int
+) -> dict[str, float | dict[str, float | None] | None]:
+    per_type = {
+        event_type: _label_average(
+            prom,
+            "commerce_processor_event_processing_duration_seconds",
+            "event_type",
+            event_type,
+            window,
+            1000,
+        )
+        for event_type in EVENT_TYPES
+    }
+    fraud_eligible = [
+        v
+        for k, v in per_type.items()
+        if k in FRAUD_ELIGIBLE_EVENT_TYPES and v is not None
+    ]
+    non_fraud = [
+        v
+        for k, v in per_type.items()
+        if k not in FRAUD_ELIGIBLE_EVENT_TYPES and v is not None
+    ]
+    result: dict[str, float | dict[str, float | None] | None] = dict(per_type)
+    result["_fraud_eligible_mean_ms"] = (
+        sum(fraud_eligible) / len(fraud_eligible) if fraud_eligible else None
+    )
+    result["_non_fraud_mean_ms"] = (
+        sum(non_fraud) / len(non_fraud) if non_fraud else None
+    )
+    return result
 
 
 def _run_one(
@@ -78,6 +230,7 @@ def _run_one(
     )
     _wait_idle(config, prom)
     before_pg = _postgres_snapshot(config)
+    before_sql_counts = _sql_statement_counts(prom)
     before_processed = _counter(
         prom, "commerce_processor_events_terminal_total", '{result="processed"}'
     )
@@ -159,6 +312,11 @@ def _run_one(
         time.sleep(1)
     drain_time = time.monotonic() - load_end
     after_pg = _postgres_snapshot(config)
+    after_sql_counts = _sql_statement_counts(prom)
+    sql_call_deltas = {
+        operation: after_sql_counts[operation] - before_sql_counts.get(operation, 0.0)
+        for operation in SQL_OPERATIONS
+    }
     after_processed = _counter(
         prom, "commerce_processor_events_terminal_total", '{result="processed"}'
     )
@@ -254,6 +412,16 @@ def _run_one(
         "postgres_rates": {
             key: value for key, value in _postgres_rates(before_pg, after_pg).items()
         },
+        "postgres_table_deltas": _postgres_table_deltas(before_pg, after_pg),
+        "postgres_bgwriter_delta": _postgres_bgwriter_delta(before_pg, after_pg),
+        "postgres_locks_after": after_pg.get("locks", {}),
+        "sql_call_deltas": sql_call_deltas,
+        "sql_calls_per_processed_event": {
+            operation: (delta / len(rows) if rows else None)
+            for operation, delta in sql_call_deltas.items()
+        },
+        "transaction_breakdown_ms": _transaction_breakdown(prom, window),
+        "event_type_handler_latency_ms": _event_type_handler_latency(prom, window),
         "correctness": {
             "unique_event_ids": len(set(event_ids)),
             "processed_rows": len(rows),
@@ -272,6 +440,32 @@ def _postgres_rates(before: dict[str, Any], after: dict[str, Any]) -> dict[str, 
             if isinstance(value, (int, float)) and isinstance(old, (int, float)):
                 result[f"{section}.{key}_per_second"] = (value - old) / seconds
     return result
+
+
+def _postgres_table_deltas(
+    before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, dict[str, int]]:
+    result: dict[str, dict[str, int]] = {}
+    for table, after_stats in after.get("tables", {}).items():
+        before_stats = before.get("tables", {}).get(table, {})
+        result[table] = {
+            key: int(value) - int(before_stats.get(key) or 0)
+            for key, value in after_stats.items()
+            if key != "relname" and isinstance(value, (int, float))
+        }
+    return result
+
+
+def _postgres_bgwriter_delta(
+    before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, float]:
+    before_bg = before.get("bgwriter", {})
+    after_bg = after.get("bgwriter", {})
+    return {
+        key: float(value) - float(before_bg.get(key) or 0)
+        for key, value in after_bg.items()
+        if isinstance(value, (int, float))
+    }
 
 
 def main() -> int:

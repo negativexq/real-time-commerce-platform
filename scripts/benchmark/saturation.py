@@ -169,12 +169,30 @@ def _histogram_average(
     return None if raw is None else raw * scale
 
 
+TX_DECOMPOSITION_TABLES = (
+    "processed_events",
+    "customers",
+    "sessions",
+    "product_views",
+    "carts",
+    "cart_items",
+    "orders",
+    "payments",
+    "refunds",
+    "fraud_evaluations",
+    "fraud_alerts",
+    "fraud_outbox",
+)
+
+
 def _postgres_snapshot(config: Any) -> dict[str, Any]:
     database = query_all(
         config.postgres_dsn,
         """
         SELECT xact_commit, xact_rollback, blks_read, blks_hit,
-               temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time
+               temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time,
+               tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted,
+               conflicts
         FROM pg_stat_database WHERE datname = current_database()
         """,
     )[0]
@@ -203,11 +221,46 @@ def _postgres_snapshot(config: Any) -> dict[str, Any]:
         WHERE name IN ('synchronous_commit', 'fsync', 'full_page_writes')
         """,
     )
+    # Read-only, always-available views (no pg_stat_statements dependency):
+    # per-table scan/tuple activity, to distinguish index scans from
+    # sequential scans and to see per-table write volume.
+    tables = query_all(
+        config.postgres_dsn,
+        """
+        SELECT relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch,
+               n_tup_ins, n_tup_upd, n_tup_del, n_live_tup, n_dead_tup
+        FROM pg_stat_user_tables
+        WHERE relname = ANY(%s)
+        """,
+        (list(TX_DECOMPOSITION_TABLES),),
+    )
+    bgwriter = query_all(
+        config.postgres_dsn,
+        """
+        SELECT num_timed AS checkpoints_timed, num_requested AS checkpoints_requested,
+               buffers_written AS checkpoint_buffers_written
+        FROM pg_stat_checkpointer
+        """,
+    )
+    locks = query_all(
+        config.postgres_dsn,
+        """
+        SELECT mode, count(*) AS count
+        FROM pg_locks
+        WHERE database = (
+            SELECT oid FROM pg_database WHERE datname = current_database()
+        )
+        GROUP BY mode
+        """,
+    )
     return {
         "database": database,
         "wal": wal,
         "activity": activity,
         "settings": {row["name"]: row["setting"] for row in settings},
+        "tables": {row["relname"]: row for row in tables},
+        "bgwriter": bgwriter[0] if bgwriter else {},
+        "locks": {row["mode"]: row["count"] for row in locks},
         "captured_at": time.time(),
     }
 

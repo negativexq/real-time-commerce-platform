@@ -36,3 +36,14 @@ dist/
 .cache/
 # AI agent instructions
 AGENTS.md
+
+# High-volume local benchmark telemetry.
+# direct-saturation.json holds full per-repeat sample series and
+# injector-<rate>-<repeat>.json holds full per-event injector output from
+# scripts/benchmark/direct_saturation.py and direct_injector.py; both are
+# useful locally for analysis but make commits/history unnecessarily large.
+# Compact evidence (README rows, summaries, EXPLAIN output, migration
+# artifacts) stays tracked - only these two raw telemetry filenames are
+# excluded.
+artifacts/benchmark/**/direct-saturation.json
+artifacts/benchmark/**/injector-*.json
