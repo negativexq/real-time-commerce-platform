@@ -1641,3 +1641,95 @@ configuration was changed. This is attribution, not optimization.
   later experiment once (and if) further fraud-context round-trip
   reductions are exhausted.
 
+## Post fraud-context optimization capacity discovery — measurement only, no code change
+
+- **Previous boundary:** ~1050 evt/s clearly sustainable, ~1075 evt/s
+  transition/degraded (established pre-Stage-22, unchanged in the README/
+  CV claim per this stage's explicit instruction not to revise it without
+  a dedicated stable conclusion).
+- **Optimization applied (unchanged for this sweep):** Stage 22's
+  fraud-context `customers`+`orders` round-trip reduction (10→9 calls per
+  fraud-eligible event) - kept, running, not modified in this stage.
+- **Methodology:** same deterministic direct-saturation sweep used
+  throughout this series - 3 workers, 3 partitions, 1/1/1 re-verified, 10s
+  warmup, 45s steady, 3 repeats - extended to six rates: 1000 (known safe),
+  1050 (previous boundary), 1075 (previous transition), 1100 (previously
+  unstable), 1125/1150 (new, to test whether the boundary moved). No
+  reset was performed before this sweep (task instruction: "do not reset
+  back" - measuring the system in its current, already-benchmarked
+  state). Tag
+  [`bench-post-fraud-context-ceiling-3w`](../../artifacts/benchmark/bench-post-fraud-context-ceiling-3w/).
+  Command:
+  `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100,1125,1150 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-post-fraud-context-ceiling-3w`.
+- **Rate table (mean/range across 3 repeats):**
+
+  | Rate | Lag slope range | Peak lag range | E2E p95 range | PG CPU range | Classification |
+  | --- | --- | --- | --- | --- | --- |
+  | 1000 | +1.25 to +1.72/s | 180-419 | 127-296ms | 57-91% | **Sustainable** |
+  | 1050 | +0.86 to +1.71/s | 91-420 | 357-637ms | 78-122% | Sustainable, elevated tail |
+  | 1075 | +2.36 to +4.75/s | 319-624 | 211-823ms | 71-120% | **Transition** |
+  | 1100 | +1.29 to +15.94/s | 123-732 | 353-2063ms | 80-99% | **Transition** |
+  | 1125 | +7.68 to +93.52/s | 403-4318 | 848-7440ms | 83-86% | **Non-sustainable** |
+  | 1150 | +141.85 to +307.39/s | 6540-14348 | 11648-25807ms | 85-96% | **Non-sustainable** |
+
+  1000 evt/s remained cleanly bounded in every repeat. 1050 evt/s kept lag
+  slope low and bounded in all 3 repeats, but its E2E p95/p99 (357-637ms /
+  533-1008ms) was materially higher than 1000's - the same "bounded lag,
+  inflated tail" pattern documented since Stage 19, now visible at 1050
+  specifically. 1075 and 1100 evt/s both show the established mixed
+  signature: some repeats clean, one repeat per rate clearly elevated
+  (1075 rep2: slope +4.75, E2E p99 1057ms; 1100 rep1: slope +15.94, peak
+  lag 732, E2E p99 4821ms). 1125 evt/s crossed into repeatable
+  non-sustainability - even its "best" repeats show slope +7.68/s, and one
+  repeat spiked to +93.52/s with a 7.9-second E2E p99. 1150 evt/s was
+  unambiguously non-sustainable in **all three** repeats - lag slopes of
+  +142 to +307 events/second, peak lag reaching 14,348, and E2E p50 itself
+  landing in the **seconds** (1.6-9.3s), with p95/p99 in the tens of
+  seconds. Actual service rate at 1150 (830-997/s) fell visibly below the
+  injected rate (1129-1138/s) in every repeat - the system was genuinely
+  unable to keep up, not merely showing a noisy tail.
+- **Resource behavior:** processor CPU (summed across 3 workers) rose with
+  rate - 138%→156%→152%→180%→172%→194% mean across 1000→1150 - consistent
+  with more concurrent work, still with headroom relative to a 3×100%
+  ceiling. PostgreSQL CPU stayed in a similar 57-122% band across all six
+  rates with no clean monotonic trend distinguishing 1125/1150 from
+  1000-1100 - the *lag/latency* behavior, not PostgreSQL CPU, is what
+  cleanly separates sustainable from non-sustainable here. WAL records/sec
+  rose with rate through 1125 (14,642→15,419→16,358→15,686→15,765) then
+  **fell** at 1150 (12,302) - consistent with the collapsed actual service
+  rate at 1150 (genuinely less work got done, not more).
+- **`fraud_context_customer_order` calls/event** (the Stage 22
+  consolidated query) stayed in the same ~0.11-0.15 range through 1125,
+  confirming the optimization remained active and unchanged throughout
+  this sweep; 1150's collapsed figure (0.022) reflects the same
+  service-rate collapse as the WAL figure above, not a change in the
+  query path itself.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e`
+  held in all 18 repeats, including all three catastrophically-lagged 1150
+  repeats - durable correctness was never compromised even under severe
+  backlog. All four processor smoke scenarios passed using the
+  established procedure.
+- **Whether the capacity boundary moved: not established by this sweep.**
+  1075 and 1100 evt/s still show the same mixed, repeat-dependent
+  character observed pre-optimization (some clean repeats, some clearly
+  degraded), rather than becoming uniformly clean the way Stage 22's own
+  narrower 1000/1050/1075 A/B sweep happened to show for 1075. 1125 evt/s
+  is repeatably non-sustainable and 1150 evt/s is severely so in every
+  repeat. This is reported honestly as **post-optimization observed
+  behavior**, not a new capacity claim: the documented boundary (~1050
+  sustainable, ~1075 transition) is unchanged, since a single 3-repeat
+  sweep with mixed 1075/1100 results does not meet the bar for a "stable
+  dedicated conclusion" this task explicitly requires before any claim
+  revision.
+- **Next experiment:** if a revised capacity claim is wanted, a dedicated
+  ceiling-discovery sweep with more repeats specifically bracketing
+  1075-1100 evt/s (the mixed zone) is needed, ideally following the same
+  clean-reset methodology used in earlier ceiling stages (this sweep
+  deliberately skipped the reset per instruction, which is a valid choice
+  for "measure the system as currently benchmarked" but is a confound for
+  a *definitive* boundary claim, consistent with the data-volume lessons
+  already documented in this history). Otherwise, the next isolated
+  optimization experiment remains Stage 22's own recommendation: apply
+  the same round-trip-consolidation methodology to the two independent
+  bounded `COUNT(*)` subqueries in `fraud_context`.
+

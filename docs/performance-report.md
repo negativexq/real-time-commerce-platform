@@ -1023,6 +1023,69 @@ methodology to the two independent bounded `COUNT(*)` subqueries
 (recent-orders, product-view counts).
 
 
+### Stage 23 — Post fraud-context optimization capacity discovery
+
+**Why?** Stage 22 kept a fraud-context round-trip reduction with strong
+system-level evidence at 1000/1050/1075 evt/s. This stage tests whether
+that change moved the sustainable throughput boundary, extending the
+sweep to 1100/1125/1150 evt/s. Pure measurement - no code, config, index,
+or Kafka change.
+
+**Method.** Same 3-worker/3-partition/1/1/1 topology, current kept code
+(fraud-context optimization active), 10s warmup, 45s steady, 3 repeats,
+rates 1000-1150 evt/s (tag
+[`bench-post-fraud-context-ceiling-3w`](../artifacts/benchmark/bench-post-fraud-context-ceiling-3w/)).
+No data reset was performed before this sweep (accumulated data from the
+immediately preceding Stage 22 sweeps) - noted as a confound for a
+*definitive* boundary claim, though not for the qualitative classification
+below.
+
+| Rate | Lag slope range | E2E p95 range | PG CPU range | Classification |
+| --- | --- | --- | --- | --- |
+| 1000 | +1.25 to +1.72/s | 127-296ms | 57-91% | Sustainable |
+| 1050 | +0.86 to +1.71/s | 357-637ms | 78-122% | Sustainable, elevated tail |
+| 1075 | +2.36 to +4.75/s | 211-823ms | 71-120% | Transition |
+| 1100 | +1.29 to +15.94/s | 353-2063ms | 80-99% | Transition |
+| 1125 | +7.68 to +93.52/s | 848-7440ms | 83-86% | Non-sustainable |
+| 1150 | +141.85 to +307.39/s | 11648-25807ms | 85-96% | Non-sustainable |
+
+1150 evt/s was unambiguously non-sustainable in **all three** repeats -
+E2E p50 itself landing in the seconds (1.6-9.3s), actual service rate
+(830-997/s) falling visibly below the injected rate (1129-1138/s). 1125
+evt/s was repeatably non-sustainable. 1075 and 1100 evt/s both retained
+the same mixed, repeat-dependent character seen before the optimization -
+some clean repeats, one clearly elevated repeat each - rather than
+becoming uniformly clean.
+
+**Resource behavior.** Processor CPU rose steadily with rate (138%→194%
+mean, 3 workers summed) with headroom remaining. PostgreSQL CPU stayed in
+a 57-122% band with no clean trend distinguishing sustainable from
+non-sustainable rates - lag/latency behavior is what separates them here,
+not PostgreSQL CPU alone. WAL records/sec rose through 1125 then fell at
+1150, tracking the collapsed actual service rate (less real work got
+done, not more). The Stage 22 consolidated query's call rate stayed
+stable through 1125, confirming the optimization remained active and
+unchanged throughout.
+
+**Conclusion: capacity boundary not established by this sweep.** 1075/1100
+evt/s still show the same mixed character as before the optimization,
+rather than becoming cleanly sustainable. This is reported as
+**post-optimization observed behavior**, not a new capacity claim - the
+documented boundary (**~1050 evt/s sustainable, ~1075 evt/s transition,
+unchanged**) stands, since a single 3-repeat sweep with mixed 1075/1100
+results does not meet the bar for a stable dedicated conclusion. Full
+detail in
+[`optimization-history.md`](performance/optimization-history.md#post-fraud-context-optimization-capacity-discovery--measurement-only-no-code-change).
+
+**Correctness** held in all 18 repeats, including the three severely
+lagged 1150 repeats; all four processor smoke scenarios passed.
+**Recommended next step:** a dedicated ceiling sweep with more repeats
+specifically bracketing 1075-1100 evt/s, from a clean reset, if a revised
+capacity claim is wanted; otherwise Stage 22's own next recommendation
+(consolidating the two independent bounded `COUNT(*)` subqueries) remains
+the next isolated optimization experiment.
+
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |
