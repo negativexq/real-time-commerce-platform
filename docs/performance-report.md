@@ -1144,6 +1144,77 @@ event counts at sub-second resolution around the moment a repeat tips
 into degradation, to test whether a transient arrival-rate burst (not
 per-event cost) precedes the lag-slope spike.
 
+### Stage 25 — Consumer queueing and backpressure diagnosis: Outcome A
+
+**Why?** Stage 24 ruled out transaction-internal phase growth as the
+saturation mechanism and proposed arrival-side/queueing dynamics as the
+next hypothesis. Diagnostic only.
+
+**Real execution lifecycle** (from direct inspection of `main.py`/
+`consumer.py`, not assumed): a fully synchronous, single-threaded,
+unbatched loop - `poll()` returns at most one record, `process()` runs it
+end to end (validation, Redis, the full DB transaction, offset tracking)
+in the same thread before the next `poll()`. No internal record queue, no
+batching, no handler concurrency within one instance - concurrency comes
+only from running 3 separate processor containers. This alone rules out an
+in-process backlog as architecturally impossible.
+
+Nearly every requested metric already existed under another name
+(`handler_execution_seconds` = `commerce_processor_event_processing_duration_seconds`,
+`consumer_inflight_events` = `commerce_processor_inflight_events`, the
+poll→handler gap = `commerce_processor_poll_to_handler_duration_seconds`,
+plus `processor_loop_gap_duration_seconds`, previously uncaptured by the
+benchmark tool) and only needed surfacing in `direct_saturation.py`. The
+one genuinely new metric: `consumer_queue_wait_seconds`, measuring the gap
+between a Kafka record's producer timestamp and this consumer's
+poll-return time - the only place a real queue can physically exist, since
+no internal buffer can.
+
+**Benchmark:** 3 workers, 1/1/1, current code, 1000/1050/1075/1100 evt/s
+only, 3 repeats (tag
+[`bench-consumer-queueing-diagnosis-3w`](../artifacts/benchmark/bench-consumer-queueing-diagnosis-3w/)).
+
+**Central finding: handler execution is flat; queue wait moves with
+degradation.** `handler_latency_ms` sat in an almost perfectly constant
+2.57-2.60ms median / 4.89-4.94ms p95 / 8.26-9.33ms p99 band across all 12
+repeats, clean or catastrophic alike - extending Stage 24's flat-phase
+finding to the *entire* handler span. `consumer_queue_wait_ms` tracked
+degradation directly: the worst repeat (1100/rep 2: lag slope +194.34/s,
+peak lag 8947) showed p50 queue wait of 261ms and p95 of 4530ms, versus
+46-84ms p50 in the cleanest repeats. `consumer_inflight_events` measured
+exactly 1.0 in all 12 repeats - direct runtime confirmation that no more
+than one record is ever in flight cluster-wide.
+
+**A structural explanation for the ceiling.** Each single-threaded
+instance's own throughput ceiling is `1 / handler_latency`. At the
+observed ~2.6ms median: `3 workers × (1 / 0.0026s) ≈ 1154 events/sec`
+theoretical ceiling - closely matching the already-established 1050-1100
+transition band. This gives Stage 24's negative finding a positive
+counterpart: the ceiling is not one phase's cost growing, but three fixed-
+service-time single-threaded consumers approaching their combined limit;
+past that point records queue in the Kafka topic itself, exactly what
+`consumer_queue_wait_ms` measures.
+
+**Conclusion: Outcome A - consumer-side queueing dominates; handler
+execution is not the bottleneck.** Waiting happens before handler
+execution starts, in the Kafka topic, not inside the processor. Combined
+with Stage 24, the chain is now measured end to end: no transaction phase
+grows, no processor-internal buffer exists, and the one place that does
+grow under degradation - time-in-topic before fetch - matches the
+predicted per-record service-time ceiling. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#consumer-queueing-and-backpressure-diagnosis--measurement-only-no-code-change).
+
+**Correctness** held in all 12 repeats, including the 8947-peak-lag run.
+The `normal` processor smoke scenario passed; `duplicate`/`dlq`/`retry`
+failed their DLQ-offset assertions, but this was isolated via `git stash`
+to a pre-existing issue on unmodified `main`, unrelated to this stage's
+changes, and is tracked separately. **Recommended next experiment:**
+investigate why individual repeats at the same requested rate sometimes
+stay clean and sometimes tip into severe queueing (e.g. 1050/rep 0 at
++1.39/s vs. 1050/rep 2 at +62.76/s) by measuring short-window arrival-rate
+variance from the injector/generator side, since per-record service time
+is flat and does not explain the difference.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

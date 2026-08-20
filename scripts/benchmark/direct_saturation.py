@@ -453,6 +453,14 @@ def _run_one(
         "poll_to_handler_ms": _quantiles(
             prom, "commerce_processor_poll_to_handler_duration_seconds_bucket", window
         ),
+        "consumer_queue_wait_ms": _quantiles(
+            prom,
+            "commerce_processor_consumer_queue_wait_duration_seconds_bucket",
+            window,
+        ),
+        "loop_gap_ms": _quantiles(
+            prom, "commerce_processor_loop_gap_duration_seconds_bucket", window
+        ),
         "offset_commit_ms": _quantiles(
             prom, "commerce_processor_offset_commit_duration_seconds_bucket", window
         ),

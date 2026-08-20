@@ -124,6 +124,11 @@ class ApplicationMetrics:
             "processor_loop_gap_duration_seconds",
             "Time from one terminal process return to the next Kafka poll.",
         )
+        self.processor_consumer_queue_wait_duration = histogram(
+            "processor_consumer_queue_wait_duration_seconds",
+            "Kafka record timestamp through poll() return - time a record "
+            "spent waiting in the topic before this consumer fetched it.",
+        )
         self.processor_validation_duration = histogram(
             "processor_validation_duration_seconds", "Contract validation latency."
         )

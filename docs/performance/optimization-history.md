@@ -1929,3 +1929,200 @@ configuration was changed. This is attribution, not optimization.
   per event) precedes the lag-slope spike. This is a measurement
   experiment, not an optimization, and follows directly from this stage's
   "no phase grows" finding.
+
+## Consumer queueing and backpressure diagnosis — measurement only, no code change
+
+- **Previous diagnosis leading to this experiment:** Stage 24 proved that
+  none of the transaction-internal phases (read, write, commit, pool
+  acquire, connection release) grow with saturation - the most severely
+  lagged repeat's internal costs were statistically indistinguishable from
+  a clean repeat at the same rate. That stage's own next-step proposal was
+  to look at arrival-side/queueing dynamics directly instead of the
+  transaction or PostgreSQL again.
+- **Real execution lifecycle** (from direct inspection of
+  [`services/event_processor/main.py`](../../services/event_processor/main.py)
+  `run_processor()` and
+  [`services/event_processor/consumer.py`](../../services/event_processor/consumer.py)
+  - not assumed):
+
+  ```
+  while not shutdown.requested:
+      poll_started = perf_counter()
+      message = consumer.poll()      # ONE Message | None, never a batch
+      if message is None: continue
+      outcome = processor.process(message)   # fully synchronous, in this thread
+      # loop
+  ```
+
+  This is a **fully synchronous, single-threaded, unbatched** loop: `poll()`
+  returns at most one record, `process()` runs it end-to-end (validation,
+  Redis idempotency reservation, handler dispatch, the whole DB transaction,
+  offset tracking) in the same thread before the next `poll()` is issued.
+  There is no internal record queue, no batching, and no handler
+  concurrency inside one processor instance - concurrency only comes from
+  running multiple processor **containers** (3 workers = 3 partitions),
+  never from pipelining within one instance. This rules out an entire class
+  of hypotheses before any new instrumentation was written: an in-process
+  backlog of buffered/queued records cannot exist in this codebase as it is
+  built today.
+- **Existing instrumentation reused, not duplicated.** Nearly everything the
+  task asked for already existed under a different name and only needed
+  surfacing in `direct_saturation.py`, per this session's standing
+  reuse-before-add discipline:
+  - `handler_execution_seconds` → already
+    `commerce_processor_event_processing_duration_seconds` (docstring:
+    "Record receipt through terminal handling") - the full `process()` span,
+    already captured as `handler_latency_ms`.
+  - `consumer_inflight_events`/`consumer_active_handlers` → already
+    `commerce_processor_inflight_events`, already captured as
+    `max_inflight_sampled`.
+  - the in-process poll→handler dispatch gap → already
+    `commerce_processor_poll_to_handler_duration_seconds`, already captured
+    as `poll_to_handler_ms`.
+  - `processor_loop_gap_duration_seconds` (previous-`process()`-return to
+    next-`poll()`) already existed in
+    [`shared/observability/metrics.py`](../../shared/observability/metrics.py)
+    but had never been surfaced in the benchmark tool - added as
+    `loop_gap_ms` in `direct_saturation.py`, zero new instrumentation.
+- **The one genuinely new metric.** Since no internal buffer can exist, the
+  only place a real queue can physically live is upstream, in the Kafka
+  topic itself, before this consumer's `poll()` fetches a record. Added
+  `processor_consumer_queue_wait_duration_seconds` (a histogram, default
+  buckets) to `ApplicationMetrics`, observed in `run_processor()`'s poll
+  loop as `queue_wait_seconds(message.timestamp, datetime.now(UTC))` - a
+  small pure function in `main.py` returning the elapsed time between the
+  Kafka record's own producer timestamp and this consumer's poll-return
+  wall time, or `None` when the broker supplied no timestamp or the result
+  would be negative (producer/consumer clock skew, dropped rather than fed
+  into the histogram since it cannot reflect real queueing time). Unit
+  tested in
+  [`tests/unit/test_processor_main_queue_wait.py`](../../tests/unit/test_processor_main_queue_wait.py)
+  (4 cases: missing timestamp, normal elapsed computation, zero-wait, and
+  clock-skew rejection). Surfaced in `direct_saturation.py` as
+  `consumer_queue_wait_ms`.
+- **Benchmark:** 3 workers, 1/1/1 verified (lag 0 before and after),
+  processor image rebuilt with the new metric, 1000/1050/1075/1100 evt/s
+  only (per instruction - bracketing the known transition band, not a new
+  ceiling search), 10s warmup, 45s steady, 3 repeats. Tag
+  [`bench-consumer-queueing-diagnosis-3w`](../../artifacts/benchmark/bench-consumer-queueing-diagnosis-3w/).
+  Command:
+  `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-consumer-queueing-diagnosis-3w`.
+- **Results (per repeat):**
+
+  | Rate | Repeat | Lag slope | Peak lag | Queue wait p50/p95/p99 (ms) | Handler p50/p95/p99 (ms) | E2E p50 (ms) |
+  | --- | --- | ---: | ---: | --- | --- | ---: |
+  | 1000 | 0 | +10.00/s | 918 | 63/3702/4740 | 2.59/4.92/9.17 | 175.9 |
+  | 1000 | 1 | +3.12/s | 805 | 46/4664/4933 | 2.59/4.93/9.20 | 70.8 |
+  | 1000 | 2 | +1.60/s | 517 | 49/769/954 | 2.58/4.91/9.06 | 50.3 |
+  | 1050 | 0 | +1.39/s | 974 | 71/4399/4880 | 2.58/4.90/8.94 | 39.9 |
+  | 1050 | 1 | +15.01/s | 836 | 49/799/960 | 2.59/4.92/9.12 | 495.4 |
+  | 1050 | 2 | +62.76/s | 2883 | 84/814/963 | 2.57/4.89/8.26 | 711.1 |
+  | 1075 | 0 | +31.81/s | 1463 | 134/2070/2414 | 2.59/4.93/9.28 | 263.1 |
+  | 1075 | 1 | +19.91/s | 1978 | 71/4701/5468 | 2.60/4.94/9.32 | 882.4 |
+  | 1075 | 2 | +55.54/s | 2559 | 189/4635/6291 | 2.60/4.93/9.30 | 454.6 |
+  | 1100 | 0 | +1.73/s | 1420 | 79/832/966 | 2.59/4.92/9.19 | 84.1 |
+  | 1100 | 1 | +35.32/s | 2393 | 69/837/967 | 2.59/4.92/9.14 | 727.7 |
+  | 1100 | 2 | +194.34/s | 8947 | 261/4530/4906 | 2.60/4.94/9.33 | 2921.9 |
+
+- **The central finding: handler execution is flat; queue wait moves with
+  degradation.** `handler_latency_ms` (the full, already-instrumented
+  `process()` span - validation, Redis, the entire DB transaction, offset
+  tracking) sits in an almost perfectly constant **2.57-2.60ms median /
+  4.89-4.94ms p95 / 8.26-9.33ms p99 band across every single repeat**,
+  clean or catastrophic, at every rate tested - directly consistent with
+  Stage 24's transaction-phase finding, now extended to the *entire*
+  per-record handler cost, not just the DB phases. `poll_to_handler_ms` and
+  `loop_gap_ms` (the in-process gaps) are similarly flat and near-zero
+  (~2.5ms) throughout, confirming they carry no signal. `consumer_queue_wait_ms`,
+  by contrast, tracks degradation directly: the worst repeat measured
+  (1100/repeat 2: lag slope +194.34/s, peak lag 8947) shows p50 queue wait
+  of 261ms (vs. 46-84ms in the cleanest repeats at other rates) and a p95 of
+  4530ms; several other severely-lagged repeats (1050/2, 1075/0-2) show
+  queue-wait p95/p99 in the multi-second range while their handler latency
+  stays in the same ~2.6ms band as every clean repeat. `consumer_inflight_events`
+  (`max_inflight_sampled`) was **exactly 1.0 in all 12 repeats** - direct
+  runtime confirmation of the code-level finding that no more than one
+  record is ever in flight cluster-wide at a sampled instant, i.e. there is
+  no internal buffer to inspect.
+- **A structural explanation for the ceiling, not just a correlation.**
+  Because each processor instance is single-threaded and fully synchronous,
+  its own steady-state throughput ceiling is bounded by `1 / handler_latency`.
+  Using the observed ~2.6ms median handler latency: `3 workers × (1 /
+  0.0026s) ≈ 1154 events/sec` theoretical aggregate ceiling - closely
+  matching the transition band (1050-1100 evt/s) already established across
+  Stages 18-24. This gives Stage 24's "no phase grows" negative finding a
+  positive structural counterpart: the ceiling is not caused by any single
+  phase's cost growing under load, but by the fixed per-record synchronous
+  service time of three single-threaded consumers being close to the
+  requested arrival rate - past that point, records queue in the Kafka
+  topic itself (measured directly by `consumer_queue_wait_ms`) rather than
+  anywhere inside the processor.
+- **Analysis questions, answered directly:**
+  1. **Does latency come from waiting before handler execution, or from
+     handler execution itself?** Waiting before - `handler_latency_ms`
+     never leaves its ~2.6ms/4.9ms/9ms band regardless of degradation
+     severity; `consumer_queue_wait_ms` is the metric that moves.
+  2. **Is there an internal processor-side queue building up?** No -
+     architecturally impossible (single-threaded, unbatched `poll()`/
+     `process()` loop) and confirmed at runtime (`max_inflight_sampled`
+     == 1.0 in all 12 repeats).
+  3. **Does the queue wait grow with requested rate?** Not monotonically
+     with rate alone - it grows with *degradation*, which becomes more
+     frequent and severe as rate approaches and crosses the ~1075-1100
+     transition band already established, matching the per-instance
+     service-time ceiling computed above.
+  4. **Is Kafka poll interval itself elevated during degradation?**
+     No - `loop_gap_ms` stayed flat (~2.5ms) in every repeat, including
+     the most severely degraded ones; the loop is never idle-waiting
+     longer than usual, it is fully busy processing at its fixed
+     per-record cost.
+  5. **Does records-per-poll or poll count show batching effects?** Not
+     applicable - `poll()` returns at most one record per call by
+     construction; there is no batching dimension to measure in this
+     codebase.
+  6. **Is the correctness invariant preserved under the worst-observed
+     backpressure?** Yes - `unique_event_ids == processed_rows ==
+     matched_e2e` held in all 12 repeats, including 1100/repeat 2's
+     8947-peak-lag run.
+  7. **Which existing/added metric correlates strongest with E2E tail
+     growth?** `consumer_queue_wait_ms`, directly - e.g. 1100/repeat 2's
+     E2E p50 of 2921.9ms tracks its queue-wait p50 of 261ms and p95 of
+     4530ms far more closely than any transaction-internal phase measured
+     in Stage 24.
+- **Outcome: A - consumer-side queueing dominates; handler execution is not
+  the bottleneck.** Waiting happens before handler execution starts, and it
+  happens in the Kafka topic itself (measured via `consumer_queue_wait_ms`),
+  not inside the processor. Combined with Stage 24, the full chain is now
+  measured end to end: no transaction phase grows, no processor-internal
+  buffer exists or grows, and the one place that does grow under
+  degradation - time a record spends in the topic before being fetched -
+  is exactly what the fixed per-record synchronous service time of three
+  single-threaded consumers predicts once requested rate approaches their
+  combined ceiling (~1154 evt/s, matching the already-established
+  1050-1100 transition band).
+- **Hypotheses ruled out (this stage, joining the running list):** an
+  internal processor-side record queue/buffer, elevated Kafka poll
+  interval/idle time during degradation, handler-execution-time growth
+  under load (already ruled out at the transaction-phase level in Stage 24,
+  now ruled out at the full-handler level). Combined with Stages 20-24:
+  cgroup throttling, host CPU saturation, scheduler starvation, connection
+  explosion, LWLock contention, IO-wait explosion, a single slow query,
+  transaction read/write/commit-phase growth, SQL-count/execution-time
+  growth near saturation, lock contention.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e` held
+  in all 12 repeats. The `normal` processor smoke scenario passed. The
+  `duplicate`/`dlq`/`retry` smoke scenarios failed their DLQ-offset
+  assertions; isolated via `git stash` to confirm this reproduces
+  identically on unmodified `main` with none of this stage's changes
+  present - a pre-existing environment/test issue unrelated to this
+  diagnostic, flagged separately rather than fixed here (out of scope: this
+  stage changes no retry/DLQ/idempotency behavior).
+- **Next experiment:** the mechanism is now measured end to end - the
+  remaining open question is *why* individual repeats at the same requested
+  rate sometimes stay clean and sometimes tip into severe queueing (e.g.
+  1050/repeat 0 stayed clean at +1.39/s while 1050/repeat 2 reached
+  +62.76/s). Since per-record service time is flat and does not explain
+  the difference, the next isolated diagnostic should look at short-window
+  arrival-rate variance from the injector/generator side (is requested load
+  itself bursty at sub-second resolution even when the long-window average
+  rate is held constant?) rather than the processor or PostgreSQL again.

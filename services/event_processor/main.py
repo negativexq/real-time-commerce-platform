@@ -5,6 +5,7 @@ import signal
 import socket
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from time import monotonic, perf_counter
@@ -27,6 +28,19 @@ from shared.observability import ApplicationMetrics, MetricsConfig, MetricsServe
 from shared.schemas import EVENT_PAYLOAD_REGISTRY
 
 HEALTH_FILE = Path("/tmp/event-processor-healthy")
+
+
+def queue_wait_seconds(
+    produced_at: datetime | None, observed_at: datetime
+) -> float | None:
+    """Time a record spent sitting in the Kafka topic before this consumer's
+    poll() returned it. None when the broker supplied no record timestamp;
+    negative values (producer/consumer clock skew) are dropped rather than
+    fed into the histogram, since they cannot reflect real queueing time."""
+    if produced_at is None:
+        return None
+    wait = (observed_at - produced_at).total_seconds()
+    return wait if wait >= 0 else None
 
 
 class ShutdownController:
@@ -122,6 +136,9 @@ def run_processor(
                 metrics.processor_poll_to_handler_duration.observe(
                     perf_counter() - poll_started
                 )
+                wait = queue_wait_seconds(message.timestamp, datetime.now(UTC))
+                if wait is not None:
+                    metrics.processor_consumer_queue_wait_duration.observe(wait)
             outcome = processor.process(message)
             previous_process_end = perf_counter()
             if not outcome.terminal:
