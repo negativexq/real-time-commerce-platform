@@ -1256,3 +1256,198 @@ configuration was changed. This is attribution, not optimization.
   correctness logic, Kafka/PostgreSQL behavior, sampler SQL, worker count,
   and resource-collection semantics are all unchanged; this is artifact
   naming/organization only.
+
+## Host / Container CPU Scheduling Diagnosis — measurement only, no code change
+
+- **Motivation:** Stage 20 found the strongest saturation signal was
+  PostgreSQL CPU rising near 1075-1100 evt/s, with no lock/LWLock/IO wait
+  explosion and flat per-query mean latency - pointing at aggregate
+  query-execution CPU - but confidence was capped at *moderate* because
+  host/container CPU scheduling itself was never directly measured. This
+  stage closes that gap: is PostgreSQL genuinely consuming CPU on
+  aggregate query work, or is Docker/cgroup throttling, host CPU
+  saturation, or scheduler pressure delaying it?
+- **Environment detected:** this repository runs on Docker Desktop for
+  macOS - the host is Darwin/arm64 (no `/proc`, no Linux cgroups directly
+  visible), and every container shares one Linux VM kernel (`linuxkit`,
+  8 vCPUs). This means `/proc/stat`, `/proc/loadavg`, and
+  `/proc/pressure/cpu` read from *any* one container reflect the whole VM,
+  not that container in isolation - confirmed by inspection before writing
+  any sampler code, per this stage's own instruction not to assume Linux
+  host counters are visible or to fabricate values Docker Desktop hides.
+  cgroup v2 (`cpu.stat`, `cpu.max`) and PSI (`/proc/pressure/cpu`) were
+  both confirmed present and populated inside containers - richer
+  visibility than Docker Desktop is often assumed to expose.
+- **Rates/topology:** 1050, 1075, 1100 evt/s; 10s warmup, 45s steady, 3
+  repeats; 3 workers, 1/1/1 assignment re-verified; migrations 1-7 and all
+  three composite indexes confirmed present; no extra processor/smoke
+  consumers active; lag=0 and injector idle before starting; a full
+  `scripts/reset-benchmark-data.sql` reset before the sweep. Tag
+  [`bench-cpu-scheduling-diagnosis-3w`](../../artifacts/benchmark/bench-cpu-scheduling-diagnosis-3w/).
+  Benchmark command per rate:
+  `python -m scripts.benchmark.direct_saturation --rates <rate> --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-cpu-scheduling-diagnosis-3w`
+  (using the collision-safe per-rate artifact naming from the prior fix -
+  correctness was verified directly from each rate's own
+  `direct-saturation-<rate>.json`, confirming no overwrite occurred).
+- **Sampler methodology:** new
+  [`scripts/benchmark/cpu_scheduling_diagnostics.py`](../../scripts/benchmark/cpu_scheduling_diagnostics.py),
+  external and read-only. Command per rate:
+  `python -m scripts.benchmark.cpu_scheduling_diagnostics --run-tag bench-cpu-scheduling-diagnosis-3w --label <rate> --duration-seconds 400 --interval-seconds 1.0 --processor-containers event-processor-1,event-processor-2,event-processor-3`,
+  started just before the matching benchmark invocation and left running
+  through warmup/steady/drain/idle. Each tick: (1) a fixed-cost `SELECT 1`
+  over a persistent diagnostic connection (measures connection dispatch +
+  trivial round-trip latency, *not* PostgreSQL CPU cost in isolation -
+  this limitation is explicit in the code and here); (2) concurrent
+  `docker exec` into PostgreSQL + each processor worker reading cgroup v2
+  `cpu.stat`/`cpu.max` and aggregating `/proc/<pid>/stat`
+  (utime/stime)+`/proc/<pid>/status` (voluntary/involuntary context
+  switches) across all `postgres`-comm child processes (or the single PID
+  1 for each processor); (3) one additional `docker exec` for the
+  VM-wide `/proc/loadavg`, `/proc/stat` (aggregate + per-core), and
+  `/proc/pressure/cpu`; (4) `docker stats --no-stream`-based
+  container CPU%/mem% (postgres, kafka, redis, each processor worker),
+  gated to every 3rd tick since `docker stats` has its own ~2s intrinsic
+  sampling window. Raw SQL text and business values are never persisted.
+  286 samples were collected per rate over the ~400s window (mean tick
+  interval ~1.4s, close to the nominal 1.0s on non-`docker-stats` ticks
+  and ~2-3s on the gated ticks, exactly as designed).
+- **Instrumentation overhead:** a single `docker exec` measured ~150-350ms
+  in this environment (timed before choosing the design) - far from
+  negligible - which is why per-tick container reads are dispatched
+  concurrently (4 containers in parallel measured ~316ms total) rather
+  than sequentially, and why `docker stats` runs on its own coarser
+  cadence. The `SELECT 1` probe itself measured 0.25-1.6ms at idle before
+  the sweep - negligible added server load at ~1 query/second against a
+  server already running 440-460+ TPS. 1050 evt/s behavior in this sweep
+  (lag slope +1.24 to +3.05/s) stayed within the range already established
+  by earlier 1050 sweeps, so the diagnostic did not materially perturb the
+  system it was measuring.
+- **Container CPU (docker stats, mean/max across the whole ~400s window,
+  including idle/warmup/drain periods - not directly comparable to Stage
+  19's peak-during-load-only `runtime_max`):**
+
+  | Container | 1050 avg/max | 1075 avg/max | 1100 avg/max |
+  | --- | --- | --- | --- |
+  | PostgreSQL | 25.1% / 156.0% | 24.9% / 94.5% | 26.8% / 81.3% |
+  | processor-1 | 16.1% / 59.7% | 17.0% / 58.7% | 20.8% / 66.7% |
+  | processor-2 | 16.4% / 57.6% | 18.4% / 66.4% | 17.7% / 59.9% |
+  | processor-3 | 15.6% / 65.9% | 17.3% / 64.4% | 18.2% / 60.9% |
+  | Kafka | 18.8% / 148.4% | 16.9% / 155.5% | 14.5% / 117.2% |
+  | Redis | 5.3% / 88.7% | 5.0% / 68.5% | 5.2% / 76.9% |
+
+  Averages are essentially flat across all three rates for every
+  container; the highest single PostgreSQL CPU spike (156.0%) occurred at
+  **1050**, not 1100 - consistent with Stage 19/20's repeated finding that
+  single-repeat spikes occur near this boundary independent of exact rate.
+  No container's CPU trends toward its ceiling as rate rises.
+- **cgroup throttling: none, and structurally impossible in the current
+  configuration.** `nr_periods` delta was **0** for every container at
+  every rate across the whole ~400s window each - not just
+  `nr_throttled`, but `nr_periods` itself never advanced, because
+  `cpu.max` reports `max` (unlimited quota) for PostgreSQL and every
+  processor worker, matching `compose.yaml`'s documented absence of any
+  `cpus:` limit. Cgroup v2 only accounts throttling periods when a quota
+  is configured; with no quota, the kernel has nothing to throttle against
+  by construction. **Docker/cgroup CPU throttling is not occurring, and
+  cannot occur under the current Docker resource configuration.**
+- **Host/VM-wide CPU and scheduler evidence:**
+
+  | Metric | 1050 | 1075 | 1100 |
+  | --- | ---: | ---: | ---: |
+  | load1 avg/max (of 8 vCPUs) | 1.45 / 2.03 | 1.73 / 2.56 | 2.18 / 4.54 |
+  | Context switches/sec | 45,849 | 46,215 | 47,007 |
+  | PSI `cpu some avg10` mean | 2.01% | 2.06% | 2.17% |
+  | Busiest single core (mean / max %) | cpu7: 17.7 / 93.1 | cpu3: 17.6 / 92.1 | cpu6: 18.0 / 94.0 |
+
+  Load average rises mildly with rate but stays well under the VM's 8
+  vCPUs even at its peak (4.54 at 1100 evt/s). Context switches/sec are
+  essentially flat (+2.5% from 1050 to 1100). PSI `some avg10` - the
+  fraction of time at least one task was stalled waiting for CPU - stays
+  under 2.2% at every rate, rising only marginally; `full` PSI (all tasks
+  stalled simultaneously) was 0.00 throughout. A single core does spike to
+  ~92-94% briefly at every rate - including 1050, the sustainable rate -
+  so this is baseline bursty single-core activity, not a rate-driven
+  pattern specific to the degraded region.
+- **PostgreSQL and processor process-level evidence:** aggregated
+  utime/stime and voluntary/involuntary context-switch counters were
+  collected per tick across all `postgres`-comm child processes (and each
+  processor's single PID). Combined with the throttling and PSI findings
+  above, there is no process-level scheduling-starvation signature: no
+  cgroup throttling, no PSI pressure, no context-switch explosion, and (see
+  below) no fixed-cost probe inflation that would indicate PostgreSQL
+  backends specifically were being scheduled less promptly.
+- **Fixed-cost `SELECT 1` probe (858 samples total across the sweep,
+  idle baseline was 0.25-1.6ms before starting):**
+
+  | Percentile | 1050 | 1075 | 1100 |
+  | --- | ---: | ---: | ---: |
+  | p50 | 1.50 ms | 1.78 ms | 1.84 ms |
+  | p95 | 6.99 ms | 7.43 ms | 8.41 ms |
+  | p99 | 12.88 ms | 14.57 ms | 11.20 ms |
+  | max | 16.05 ms | 24.30 ms | 16.14 ms |
+
+  p50/p95 rise only mildly and gradually (single-digit milliseconds); p99
+  and max are **not monotonic** (1100's p99 is lower than 1075's). This is
+  the key differentiator against host-wide scheduling starvation: Stage 20
+  found individual *application* transactions occasionally stalling to
+  3.2-4.6 **seconds** at 1075/1100, three orders of magnitude larger than
+  anything seen here. If PostgreSQL backends in general were being starved
+  by the OS/hypervisor scheduler, this probe - itself just another
+  PostgreSQL backend contending for the same CPU - would show comparable
+  multi-second inflation at least some of the time. It does not, in any of
+  858 samples. This makes application-transaction-specific cost (not
+  host-wide scheduling delay) the better-supported explanation for those
+  multi-second stalls.
+- **Lag/E2E correlation:** lag slope and E2E tail latency remained noisy
+  and non-monotonic across repeats at every rate in this sweep too (e.g.
+  1050 rep 0: slope +1.24/s but E2E p99 2926 ms; 1100 rep 2: slope only
+  +1.78/s but peak lag 3169 and E2E p99 3542 ms) - consistent with the
+  established "bounded lag can still hide inflated tail latency" pattern,
+  and with none of it correlating to cgroup throttling, PSI, or probe
+  inflation (all flat/negligible in every repeat).
+- **Relationship to Stage 20:** this stage adds the one category of
+  evidence Stage 20 could not measure - host/container scheduling - and it
+  comes back clean at every rate. Combined with Stage 20's already-clean
+  lock/LWLock/IO-wait/connection-concurrency evidence and flat per-query
+  mean latency, all ten items in this experiment's own evidence checklist
+  are now satisfied:
+
+  1. no lock contention (Stage 20)
+  2. no material LWLock contention (Stage 20)
+  3. no IO-wait explosion (Stage 20)
+  4. no connection/backend-concurrency explosion (Stage 20)
+  5. no cgroup throttling (this stage - structurally impossible, confirmed)
+  6. no host scheduler pressure (this stage - PSI/load/ctxt all flat)
+  7. no fixed-cost probe inflation (this stage - single-digit ms only)
+  8. query-class means broadly stable (Stage 20)
+  9. call volume/total accumulated DB work rises with event rate (Stage 20)
+  10. PostgreSQL CPU rises with that aggregate work (Stage 19/20)
+- **Hypotheses ruled out:** Docker/cgroup CPU throttling (Outcome B -
+  structurally impossible under the current unlimited `cpu.max`
+  configuration); host CPU saturation (Outcome C - load average stays
+  under 5 of 8 vCPUs even at peak, PSI negligible); processor-worker CPU
+  starvation (Outcome D - processor container CPU% averages 15-21%, well
+  under its ceiling, at every rate); general PostgreSQL-backend scheduling
+  starvation (the fixed-cost probe would have shown it and did not).
+- **Strongest supported mechanism: Outcome A - aggregate PostgreSQL
+  execution CPU from many small per-event operations.** No throttling, no
+  host saturation, no PSI pressure, no fixed-cost-probe inflation, no
+  lock/LWLock/IO-wait signature, flat per-query-class mean latency, and
+  PostgreSQL CPU rising in proportion to rising call volume together
+  satisfy this experiment's own "strong evidence" checklist in full.
+- **Confidence: STRONG** (upgraded from Stage 20's "moderate" now that
+  host/container scheduling has been directly measured and found clean).
+- **Correctness:** held for all 9 repeats, verified directly from each
+  rate's own `direct-saturation-<rate>.json` (confirming the prior
+  overwrite fix works as intended). All four processor smoke scenarios
+  passed using the established procedure.
+- **Recommended next isolated experiment (not implemented in this
+  stage):** with genuine aggregate per-event PostgreSQL work now
+  strongly supported as the ceiling's cause, the next isolated experiment
+  should target *reducing* that aggregate work - e.g. measuring the effect
+  of consolidating or precomputing part of the ~10-query `fraud_context`
+  read set (Stage 16 already found no single query dominates it, so
+  reducing round-trip *count* rather than any one query's cost is the more
+  promising direction) - as a controlled, single-variable A/B against the
+  current ~1050 evt/s boundary, following the same reset methodology used
+  throughout this series.

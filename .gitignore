@@ -39,15 +39,19 @@ AGENTS.md
 
 # High-volume local benchmark telemetry.
 # direct-saturation-<rate>.json holds full per-repeat sample series,
-# injector-<rate>-<repeat>.json holds full per-event injector output, and
+# injector-<rate>-<repeat>.json holds full per-event injector output,
 # postgres-diagnostics-raw-<label>.json holds full per-tick pg_stat_activity/
-# pg_locks sample series - from scripts/benchmark/direct_saturation.py,
-# direct_injector.py, and postgres_diagnostics.py respectively. All three
-# are useful locally for analysis but make commits/history unnecessarily
-# large. Compact evidence (README rows, postgres-diagnostics-summary-*.json,
+# pg_locks sample series, and cpu-scheduling-raw-<label>.json holds full
+# per-tick cgroup/proc/PSI/probe sample series - from
+# scripts/benchmark/direct_saturation.py, direct_injector.py,
+# postgres_diagnostics.py, and cpu_scheduling_diagnostics.py respectively.
+# All are useful locally for analysis but make commits/history
+# unnecessarily large. Compact evidence (README rows,
+# postgres-diagnostics-summary-*.json, cpu-scheduling-summary-*.json,
 # EXPLAIN output, migration artifacts) stays tracked - only these raw
 # telemetry filenames are excluded.
 artifacts/benchmark/**/direct-saturation.json
 artifacts/benchmark/**/direct-saturation-*.json
 artifacts/benchmark/**/injector-*.json
 artifacts/benchmark/**/postgres-diagnostics-raw-*.json
+artifacts/benchmark/**/cpu-scheduling-raw-*.json

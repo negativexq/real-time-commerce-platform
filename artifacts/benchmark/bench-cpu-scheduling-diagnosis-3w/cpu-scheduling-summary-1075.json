@@ -1,0 +1,85 @@
+{
+  "run_tag": "bench-cpu-scheduling-diagnosis-3w",
+  "label": "1075",
+  "interval_seconds": 1.0,
+  "stats_every": 3,
+  "processor_containers": [
+    "event-processor-1",
+    "event-processor-2",
+    "event-processor-3"
+  ],
+  "sample_count": 286,
+  "summary": {
+    "sample_count": 286,
+    "probe_latency_ms": {
+      "p50": 1.7849999712780118,
+      "p95": 7.43287499062717,
+      "p99": 14.571000006981194,
+      "max": 24.300041957758367,
+      "count": 286,
+      "error_count": 0
+    },
+    "container_cpu_percent": {
+      "real-time-commerce-platform-event-processor-3": {
+        "avg": 17.25,
+        "max": 64.4
+      },
+      "real-time-commerce-platform-event-processor-2": {
+        "avg": 18.445729166666666,
+        "max": 66.36
+      },
+      "real-time-commerce-platform-event-processor-1": {
+        "avg": 17.0365625,
+        "max": 58.7
+      },
+      "real-time-commerce-platform-postgres-1": {
+        "avg": 24.920625,
+        "max": 94.5
+      },
+      "real-time-commerce-platform-redis-1": {
+        "avg": 4.9675,
+        "max": 68.49
+      },
+      "real-time-commerce-platform-kafka-1": {
+        "avg": 16.876458333333336,
+        "max": 155.49
+      }
+    },
+    "cgroup_throttling": {
+      "event-processor-1": {
+        "periods_delta": 0,
+        "throttled_periods_delta": 0,
+        "throttled_usec_delta": 0,
+        "throttled_period_ratio": null
+      },
+      "event-processor-2": {
+        "periods_delta": 0,
+        "throttled_periods_delta": 0,
+        "throttled_usec_delta": 0,
+        "throttled_period_ratio": null
+      },
+      "event-processor-3": {
+        "periods_delta": 0,
+        "throttled_periods_delta": 0,
+        "throttled_usec_delta": 0,
+        "throttled_period_ratio": null
+      },
+      "postgres-1": {
+        "periods_delta": 0,
+        "throttled_periods_delta": 0,
+        "throttled_usec_delta": 0,
+        "throttled_period_ratio": null
+      }
+    },
+    "psi_cpu_some_avg10_mean": 2.0579020979020983,
+    "psi_available": true,
+    "load1_avg": 1.7306643356643359,
+    "load1_max": 2.56,
+    "ctxt_per_second": 46215.49933098067,
+    "busiest_core": {
+      "core": "cpu3",
+      "mean_percent": 17.618169865477235,
+      "max_percent": 92.07920792079209
+    }
+  }
+}

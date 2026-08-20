@@ -892,6 +892,71 @@ reflects OS/hypervisor scheduling delay rather than PostgreSQL-internal
 cost, before considering any reduction in per-event PostgreSQL read/write
 volume.
 
+### Stage 21 — Host/container CPU scheduling diagnosis: ruling in genuine DB work
+
+**Why?** Stage 20 pointed at aggregate PostgreSQL execution CPU as the
+1050→1075/1100 bottleneck mechanism, but capped confidence at *moderate*
+because host/container CPU scheduling was never directly measured. This
+stage measures it: is PostgreSQL genuinely spending CPU on query work, or
+is Docker/cgroup throttling, host CPU saturation, or scheduler pressure
+delaying it?
+
+**Method.** New `scripts/benchmark/cpu_scheduling_diagnostics.py` samples
+cgroup v2 `cpu.stat`/`cpu.max`, VM-wide `/proc/stat` (aggregate + 8
+per-core), `/proc/loadavg`, `/proc/pressure/cpu` (PSI), per-process
+utime/stime and context switches, `docker stats` container CPU%, and a
+fixed-cost `SELECT 1` probe - at 1050/1075/1100 evt/s × 3 repeats (tag
+[`bench-cpu-scheduling-diagnosis-3w`](../artifacts/benchmark/bench-cpu-scheduling-diagnosis-3w/)),
+concurrently with the usual saturation sweep.
+
+**cgroup throttling: none, and structurally impossible.** `nr_periods`
+itself never advanced for PostgreSQL or any processor worker at any rate -
+`cpu.max` reports unlimited quota for every container, matching
+`compose.yaml`'s documented absence of a `cpus:` limit, so cgroup v2 has
+nothing to throttle against.
+
+**Host/scheduler evidence:**
+
+| Metric | 1050 | 1075 | 1100 |
+| --- | ---: | ---: | ---: |
+| load1 avg/max (of 8 vCPUs) | 1.45 / 2.03 | 1.73 / 2.56 | 2.18 / 4.54 |
+| PSI `cpu some avg10` mean | 2.01% | 2.06% | 2.17% |
+| Context switches/sec | 45,849 | 46,215 | 47,007 |
+| Busiest single core (max %) | 93.1% | 92.1% | 94.0% |
+| Fixed-cost `SELECT 1` p50/p95 | 1.50/6.99ms | 1.78/7.43ms | 1.84/8.41ms |
+
+Load average, PSI, and context switches are all essentially flat across
+the boundary. A single core does spike to ~92-94% - but equally at 1050
+(the sustainable rate) as at 1075/1100, so it's baseline bursty activity,
+not a rate-driven pattern. The fixed-cost probe rises only mildly and
+non-monotonically (single-digit ms) - the key differentiator against
+host-wide scheduling starvation, since Stage 20 found individual
+*application* transactions occasionally stalling to 3.2-4.6 **seconds** at
+these same rates. If PostgreSQL backends generally were being starved by
+the OS scheduler, this probe - itself just another backend - would show
+comparable inflation. It never does, across 858 samples.
+
+**Diagnosis.** All ten items in this experiment's own strong-evidence
+checklist are now satisfied: no lock/LWLock/IO-wait/connection-concurrency
+issues (Stage 20), no cgroup throttling, no host scheduler pressure, no
+fixed-cost probe inflation (this stage), flat per-query-class mean latency
+and call-volume-proportional total DB work (Stage 20), PostgreSQL CPU
+rising with that work (Stage 19/20). **Strongest supported mechanism:
+Outcome A - aggregate PostgreSQL execution CPU from many small per-event
+operations. Confidence: STRONG** (upgraded from Stage 20's moderate).
+Ruled out: Docker/cgroup throttling, host CPU saturation, processor-worker
+starvation, general PostgreSQL-backend scheduling starvation. Full detail
+in
+[`optimization-history.md`](performance/optimization-history.md#host--container-cpu-scheduling-diagnosis--measurement-only-no-code-change).
+
+**Correctness** held for all 9 repeats (verified directly from each
+rate's own collision-safe artifact file); all four processor smoke
+scenarios passed. **No optimization was made in this stage.** Recommended
+next isolated experiment: a controlled A/B reducing per-event PostgreSQL
+round-trip *count* in the `fraud_context` read set (not any single query's
+cost, since no one query dominates it), against the current ~1050 evt/s
+boundary.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |
