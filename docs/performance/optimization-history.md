@@ -2675,3 +2675,145 @@ configuration was changed. This is attribution, not optimization.
   ordering violation was found - this stage's job was to test the
   simplest concurrency model and report what happened, not to iterate
   until something worked.
+
+## Kafka partition scaling experiment — partition count ruled out
+
+- **Previous diagnosis leading to this experiment:** Stage 25 established a
+  structural ceiling formula from three single-threaded consumers' fixed
+  ~2.6ms per-record service time (`3 x (1/0.0026s) ~= 1154 evt/s`). Stage 28
+  tried to raise that ceiling with *intra*-partition concurrency (a worker
+  pool behind one consumer) and found it unsafe - naive dispatch breaks
+  Kafka's within-partition ordering guarantee, which this domain model
+  depends on, and was reverted. This stage tests the other lever the same
+  formula implies: more partitions, each with its own dedicated
+  single-threaded consumer (the *safe* way to add concurrency, since each
+  consumer still processes its own partition strictly in order - no
+  ordering guarantee is touched). If partition-level parallelism is really
+  the limiting factor, doubling partition/consumer count should
+  meaningfully raise the ceiling; if not, something shared downstream
+  (PostgreSQL, the host) is.
+- **Isolated topic and group, production topic never touched.** Created
+  `commerce.events.scale6` (6 partitions) and `commerce.events.scale6.dlq`
+  (1 partition, matching the production DLQ topic's config) via
+  `kafka-topics.sh --create`, alongside the existing `commerce.events`
+  (3 partitions) - `infrastructure/kafka/init-topics.sh` was not touched.
+  The event-processor containers pointed at the new topic used a dedicated
+  consumer group, `commerce-event-processor-scale6-v1`, so the production
+  group and topic were provably unaffected for the whole experiment
+  (confirmed before and after: `commerce-event-processor-v1` on
+  `commerce.events` sat at 3/3/1/1/1, lag 0, throughout).
+- **Minimal, backward-compatible benchmark tooling additions** (no
+  production code touched): `direct_injector.py`'s `inject_messages()`
+  gained a `topic: str = "commerce.events"` parameter (default preserves
+  every prior stage's exact behavior) plumbed through a new
+  `--events-topic` CLI flag; `direct_saturation.py` gained matching
+  `--events-topic`/`--consumer-group` flags (defaulting to the existing
+  hardcoded values), applied via `dataclasses.replace()` on the already-
+  frozen `BenchmarkConfig` and threaded into both `direct_injector.py`
+  subprocess invocations (warmup and steady-state). All existing 330 tests
+  pass unmodified; these are argument-default-preserving additions, not
+  behavior changes to the default path.
+- **Benchmark:** 6 event-processor containers, 1/1/1/1/1/1 verified (each
+  owning exactly one of the 6 partitions), unmodified processor image (no
+  production code changed this stage), same database/indexes/methodology
+  as every prior stage. Rates chosen to bracket both the known 3-partition
+  ceiling (1050, as a sanity check) and the *theoretical* 6-consumer
+  ceiling the Stage 25 formula would predict (`6 x (1/0.0026s) ~= 2308
+  evt/s`): 1050, 1500, 2000, 2300 evt/s, 10s warmup, 45s steady, 3 repeats.
+  Tag
+  [`bench-partition-scaling-6p-6w`](../../artifacts/benchmark/bench-partition-scaling-6p-6w/).
+  Command:
+  `python -m scripts.benchmark.direct_saturation --rates 1050,1500,2000,2300 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-partition-scaling-6p-6w --events-topic commerce.events.scale6 --consumer-group commerce-event-processor-scale6-v1`.
+  A 12-partition run was in scope ("if environment allows") but was not
+  attempted once the 6-partition results showed processor-side CPU
+  already approaching its ceiling (see below) - adding six more containers
+  to the same shared host would very likely worsen contention rather than
+  reveal new capacity, and would not change this stage's answer to its own
+  question. Documented as a deliberate scope decision, not an omission.
+- **Results (mean of 3 repeats per rate):**
+
+  | Requested rate | Mean lag slope | Mean service rate | Mean E2E p99 (ms) |
+  | --- | ---: | ---: | ---: |
+  | 1050 | +61.9/s | 977.4 | 7,026 |
+  | 1500 | +402.8/s | 1,065.6 | 37,577 |
+  | 2000 | +974.5/s | 985.2 | 154,897 |
+  | 2300 | +1,021.7/s | 1,232.6 | 84,950 |
+
+  Correctness (`unique_event_ids == processed_rows == matched_e2e`) held
+  in **all 12 repeats**, at every rate including 2300 evt/s - unlike Stage
+  28's worker pool, adding partitions (each still consumed by exactly one
+  single-threaded consumer) never violates Kafka's ordering guarantee, so
+  no business-dependency or integrity DLQ failures occurred anywhere in
+  this sweep.
+- **The central finding: the ceiling did not move.** Mean *service* rate
+  (what the pipeline actually sustains) stayed pinned in the same
+  977-1,233 evt/s band across the *entire* tested range, from a requested
+  1050 evt/s all the way to a requested 2300 evt/s (2.2x the old ceiling,
+  approaching the 6-consumer theoretical ceiling) - essentially
+  indistinguishable from the 3-partition baseline's ~1,050-1,150 evt/s
+  range established across Stages 18-28. Doubling the partition and
+  consumer count from 3 to 6 produced no meaningful increase in
+  sustainable throughput.
+- **PostgreSQL was not CPU-saturated - ruling out the database as the new
+  constraint too.** `postgres` container CPU stayed flat at 108-155% (of
+  800% available on the host's 8 vCPUs) across every rate and repeat, with
+  no trend as requested rate rose from 1050 to 2300 - well below
+  saturation. Heavyweight-lock evidence stayed exactly as clean as every
+  prior stage (`{AccessShareLock: 1}` - the benchmark's own snapshot query
+  - at nearly every sample). `handler_latency_ms` p50 stayed in a tight
+  3.0-3.9ms band at every rate (a modest ~20-40% increase over the
+  3-partition baseline's ~2.6ms, plausibly from six containers now sharing
+  the same Postgres connection/statement throughput more intensely, but
+  not a runaway growth that would explain a ceiling this flat).
+- **The suggestive (not yet confirmed) new signal: host CPU
+  oversubscription.** Summed processor CPU across all 6 containers grew
+  with rate, reaching ~505-533% (of a possible 600%) at 2000 evt/s -
+  combined with Postgres's own steady ~110-155%, that is routinely
+  650-700%+ of simultaneous CPU demand from just these two service groups
+  alone, on an 8-vCPU Docker Desktop VM that is *also* running Kafka,
+  Redis, Prometheus, three exporters, and the demo-control-api throughout.
+  This is consistent with genuine host-level CPU contention becoming the
+  binding constraint once 6 (not 3) processor containers compete for the
+  same shared vCPU pool - but this stage did not run a dedicated
+  cgroup/PSI/scheduler diagnostic (the Stage 21 methodology) at 6-consumer
+  scale to confirm it rigorously, so it is reported as the most plausible
+  remaining explanation, not a proven mechanism.
+- **`max_fetchq_records_sampled` and `consumer_queue_wait_ms` confirm
+  genuine, sustained saturation, not measurement noise:** fetch-queue
+  depth grew from a few hundred records at 1050 evt/s to 12,000-16,000 at
+  2000-2300 evt/s, and queue-wait p50/p99 repeatedly hit the known 10,000ms
+  histogram-bucket ceiling (the same limitation noted in Stage 26) at the
+  higher rates - both point the same direction as the lag-slope and E2E
+  latency figures: the pipeline is falling further behind at 2000-2300
+  than at 1050, not scaling to absorb it.
+- **Decision criteria, answered directly:** throughput did **not** scale
+  significantly with partition count (service rate stayed flat across a
+  2.2x requested-rate range) - Kafka partition count is **ruled out** as
+  the main bottleneck, per this experiment's own stated decision rule.
+- **Hypotheses ruled out (this stage, joining the running list):**
+  partition-level consumer parallelism as the limiting factor; PostgreSQL
+  CPU saturation at 6-consumer scale (still flat, still well below
+  capacity); heavyweight lock contention at 6-consumer scale. Combined
+  with Stages 20-28: cgroup throttling, host CPU saturation *at 3-consumer
+  scale*, scheduler starvation, connection explosion, LWLock contention,
+  IO-wait explosion, a single slow query, transaction phase growth,
+  SQL-count/execution-time growth, an application-level processor-internal
+  record queue, elevated poll interval/idle time, handler-execution-time
+  growth under load, producer-side arrival bursts, broker/fetch-queue
+  delay as the sole mechanism, and (separately, Stage 28) naive
+  intra-partition worker-pool concurrency.
+- **Correctness:** held in all 12 repeats at every rate tested, including
+  2300 evt/s - the cleanest correctness record of any stage that pushed
+  requested rate this far past the known ceiling. The
+  `normal`/`duplicate`/`dlq`/`retry` processor smoke scenarios still fail
+  identically to Stages 26-28's already-tracked, pre-existing, unrelated
+  DLQ-offset-race issue (this stage changed no production code, so it was
+  not re-isolated via `git stash` again).
+- **Next experiment:** confirm or rule out host CPU oversubscription
+  directly, by re-running the Stage 21 cgroup/PSI/scheduler-starvation
+  methodology at 6-consumer scale (it was only ever run at 3-consumer
+  scale) - if host contention is confirmed, the natural follow-up question
+  becomes whether this ceiling is an artifact of this specific
+  single-host Docker Desktop VM (8 shared vCPUs across every service) or
+  would persist on dedicated hardware per consumer, which this local
+  environment cannot answer on its own.

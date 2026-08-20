@@ -135,11 +135,15 @@ def inject_messages(
     rate: float,
     duration_seconds: float,
     seed: int,
+    topic: str = "commerce.events",
     sample: Callable[[], None] | None = None,
     producer: DirectProducer | None = None,
     close_producer: bool = True,
 ) -> dict[str, Any]:
-    """Publish prebuilt messages at a monotonic fixed rate."""
+    """Publish prebuilt messages at a monotonic fixed rate. ``topic``
+    defaults to the standard production topic - every prior benchmark stage
+    keeps behaving identically; only a caller that explicitly passes an
+    isolated topic (e.g. a partition-scaling experiment) diverges."""
     target_count = max(1, int(rate * duration_seconds * 1.05))
     messages = prepare_messages(
         bootstrap=bootstrap,
@@ -150,6 +154,7 @@ def inject_messages(
     producer_config = GeneratorConfig(
         kafka_bootstrap_servers=bootstrap,
         kafka_client_id=f"direct-injector-{config_tag}",
+        kafka_events_topic=topic,
         generator_seed=seed,
     )
     owned_producer = producer is None
@@ -222,6 +227,7 @@ def main() -> int:
     parser.add_argument("--duration-seconds", type=float, default=10)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--events-topic", default="commerce.events")
     args = parser.parse_args()
     configure_logging("WARNING")
     config = load_config(args.run_tag)
@@ -231,6 +237,7 @@ def main() -> int:
         rate=args.rate,
         duration_seconds=args.duration_seconds,
         seed=args.seed or derive_seed(args.run_tag, "direct-injector", str(args.rate)),
+        topic=args.events_topic,
     )
     result["run_tag"] = args.run_tag
     result["seed"] = args.seed or derive_seed(

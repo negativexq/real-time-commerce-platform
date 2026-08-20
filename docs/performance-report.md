@@ -1399,6 +1399,70 @@ order, a meaningfully larger design intentionally not attempted in this
 finding. Processor smoke scenarios still fail identically to Stages
 26-27's already-tracked, pre-existing, unrelated DLQ-offset-race issue.
 
+### Stage 29 — Kafka partition scaling experiment: partition count ruled out
+
+**Why?** Stage 25's ceiling formula (`3 x (1/handler_latency)`) implies two
+levers: intra-partition concurrency (Stage 28, reverted - unsafe) or more
+partitions, each with its own dedicated single-threaded consumer (safe -
+no ordering guarantee is touched). This stage tests the second lever.
+
+**Design:** isolated topic `commerce.events.scale6` (6 partitions) and
+dedicated consumer group `commerce-event-processor-scale6-v1` - the
+production topic/group were provably untouched throughout (verified
+3/3/1/1/1, lag 0, before and after). Minimal, default-preserving CLI
+additions to `direct_injector.py`/`direct_saturation.py`
+(`--events-topic`/`--consumer-group`); no production code changed.
+
+**Benchmark:** 6 workers, 1/1/1/1/1/1, same DB/indexes/methodology,
+1050/1500/2000/2300 evt/s (bracketing both the old 3-partition ceiling and
+the theoretical 6-consumer ceiling, ~2308 evt/s), 3 repeats (tag
+[`bench-partition-scaling-6p-6w`](../artifacts/benchmark/bench-partition-scaling-6p-6w/)).
+A 12-partition run was in scope but skipped once 6-partition results
+showed processor CPU already approaching its ceiling - a deliberate scope
+decision, not an omission.
+
+**Central finding: the ceiling did not move.** Mean service rate stayed
+pinned in the same 977-1,233 evt/s band across the *entire* range tested,
+from 1050 through 2300 evt/s requested (2.2x) - indistinguishable from the
+3-partition baseline's ~1,050-1,150 evt/s established across Stages
+18-28. Doubling partitions and consumers from 3 to 6 produced no
+meaningful throughput increase.
+
+**PostgreSQL was not the new constraint either.** DB CPU stayed flat at
+108-155% (of 800% available) across every rate, with no upward trend as
+requested rate rose - well below saturation, and lock evidence stayed as
+clean as every prior stage. Handler latency stayed in a tight 3.0-3.9ms
+band (a modest increase over the 3-partition baseline's ~2.6ms, not a
+runaway).
+
+**Suggestive (not confirmed) signal: host CPU oversubscription.** Summed
+processor CPU across 6 containers reached ~505-533% (of 600% possible) at
+2000 evt/s; combined with Postgres's own ~110-155%, that's 650-700%+ of
+simultaneous demand on an 8-vCPU host also running Kafka, Redis,
+Prometheus, and three exporters. Consistent with genuine host contention
+becoming the binding constraint at 6-consumer scale, but this stage did
+not run the Stage 21 cgroup/PSI diagnostic at this scale to confirm it
+rigorously - reported as the most plausible remaining explanation, not a
+proven mechanism. `max_fetchq_records_sampled` (up to 12,000-16,000 at
+2000-2300 evt/s, from a few hundred at 1050) and `consumer_queue_wait_ms`
+(repeatedly hitting the known 10s histogram ceiling) both confirm genuine
+sustained saturation at the higher rates, not measurement noise.
+
+**Conclusion: Kafka partition count is ruled out as the main bottleneck**,
+per this experiment's own decision rule - throughput did not scale
+significantly with partition count. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#kafka-partition-scaling-experiment--partition-count-ruled-out).
+
+**Correctness** held in all 12 repeats at every rate, including 2300
+evt/s - the cleanest record of any stage that pushed this far past the
+known ceiling, confirming per-partition ordering was never at risk (unlike
+Stage 28's worker pool). Processor smoke scenarios still fail identically
+to Stages 26-28's already-tracked, pre-existing, unrelated DLQ-offset-race
+issue. **Recommended next experiment:** re-run Stage 21's cgroup/PSI/
+scheduler-starvation methodology at 6-consumer scale (only ever run at
+3-consumer scale) to confirm or rule out host CPU oversubscription
+directly.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

@@ -1,6 +1,7 @@
 """Isolated Kafka -> processor saturation benchmark without Demo Control API."""
 
 import argparse
+import dataclasses
 import json
 import os
 import subprocess
@@ -277,6 +278,8 @@ def _run_one(
             str(rate),
             "--duration-seconds",
             str(warmup_seconds),
+            "--events-topic",
+            config.events_topic,
         ],
         check=True,
         env={
@@ -339,6 +342,8 @@ def _run_one(
             str(derive_seed(config.run_tag, "direct-load", str(rate), str(repeat))),
             "--output",
             str(injector_output),
+            "--events-topic",
+            config.events_topic,
         ],
         env={
             **dict(os.environ),
@@ -598,9 +603,16 @@ def main() -> int:
     parser.add_argument("--warmup-seconds", type=int, default=10)
     parser.add_argument("--steady-seconds", type=int, default=30)
     parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--events-topic", default="commerce.events")
+    parser.add_argument("--consumer-group", default="commerce-event-processor-v1")
     args = parser.parse_args()
     configure_logging("WARNING")
     config = load_config(args.run_tag)
+    config = dataclasses.replace(
+        config,
+        events_topic=args.events_topic,
+        primary_consumer_group=args.consumer_group,
+    )
     prom = PrometheusClient(config.prometheus_url)
     rates = [int(value) for value in args.rates.split(",")]
     results_by_rate: dict[int, list[dict[str, Any]]] = {rate: [] for rate in rates}
