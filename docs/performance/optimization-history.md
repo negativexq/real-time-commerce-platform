@@ -1200,3 +1200,59 @@ configuration was changed. This is attribution, not optimization.
   precomputed/rolling fraud-context state) as a throughput-focused
   follow-up. No optimization was made or recommended for implementation
   in this stage.
+
+## Benchmark artifact reliability — overwrite fix, tooling only
+
+- **Bug:** the PostgreSQL saturation diagnosis stage above was run as
+  three sequential single-rate `direct_saturation.py` invocations under
+  one shared `--run-tag`. Each invocation wrote its full results to the
+  same unconditional path, `<run-tag>/direct-saturation.json` - so the
+  1075 evt/s invocation silently overwrote 1050's complete results, and
+  the 1100 evt/s invocation overwrote 1075's, leaving only 1100's data
+  recoverable from that file (Stage 20 above closed the resulting gap by
+  recomputing correctness/E2E for 1050/1075 from retained
+  `injector-<rate>-<repeat>.json` and `processed_events` data).
+- **Fix (benchmark tooling only, no load-generation/timing/correctness
+  semantics changed):** `direct_saturation.py` now writes one file per
+  rate - `rate_artifact_path()`/`rate_artifact_filename()` produce
+  `direct-saturation-<rate>.json` - so any rate's results always land in
+  their own file, whether all rates are passed in one `--rates` call or
+  across several sequential single-rate invocations under the same run
+  tag. Rerunning the *same* rate under the same tag still overwrites that
+  rate's own file, which is intentional (mirrors `--repeats` already being
+  bundled inside one rate's file, not a naming defect).
+- **`postgres_diagnostics.py` had the same class of gap** (its raw sample
+  series and compact summary were combined into one
+  `postgres-diagnostics-<label>.json`, which also made it impossible to
+  git-ignore the high-volume raw part without also ignoring the compact
+  summary). Fixed by splitting output into
+  `postgres-diagnostics-raw-<label>.json` (per-tick samples, git-ignored)
+  and `postgres-diagnostics-summary-<label>.json` (aggregate summary plus
+  the small, duration-independent `pg_stat_io`/`pg_stat_checkpointer`
+  before/after snapshots, tracked). The now-unused `--output` CLI flag was
+  removed since both paths are always derived from `--run-tag`/`--label`.
+- **Existing Stage 20 artifacts migrated losslessly** (no re-benchmarking)
+  from the old combined/single-rate-collision-prone filenames to the new
+  convention: `direct-saturation.json` (1100 evt/s only, the surviving
+  data from the overwrite bug) → `direct-saturation-1100.json`;
+  `postgres-diagnostics-{1050,1075,1100}.json` → split into
+  `postgres-diagnostics-{raw,summary}-{1050,1075,1100}.json`. No sample or
+  metric was altered or dropped during migration.
+- **`.gitignore`** updated: `artifacts/benchmark/**/direct-saturation.json`
+  (retained, for any not-yet-migrated historical directory still using the
+  pre-fix name) plus a new
+  `artifacts/benchmark/**/direct-saturation-*.json` and
+  `artifacts/benchmark/**/postgres-diagnostics-raw-*.json`.
+  `postgres-diagnostics-summary-*.json` is deliberately **not** matched by
+  any ignore rule and stays versionable.
+- **Tests:** `tests/unit/test_direct_saturation_artifacts.py` (6 tests) and
+  three new cases in `tests/unit/test_postgres_diagnostics.py` verify
+  different rates/labels always produce distinct paths, the same
+  rate/label intentionally reuses one path, raw and summary filenames can
+  never collide with each other, and path construction stays scoped to the
+  given phase directory - without running any real sampling or load.
+- **No benchmark execution semantics changed:** event injection pacing,
+  rate calculations, warmup/steady-state timing, repeat counts,
+  correctness logic, Kafka/PostgreSQL behavior, sampler SQL, worker count,
+  and resource-collection semantics are all unchanged; this is artifact
+  naming/organization only.

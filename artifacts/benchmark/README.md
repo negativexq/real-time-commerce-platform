@@ -1,13 +1,23 @@
 # Benchmark Artifact Index
 
-High-volume `direct-saturation.json` and `injector-<rate>-<repeat>.json`
-telemetry (full per-repeat/per-event sample series from
-`scripts/benchmark/direct_saturation.py` and `direct_injector.py`) is
-retained locally and excluded from Git via `.gitignore`. Repository
-artifacts preserve compact, report-backed benchmark evidence, summaries,
-EXPLAIN outputs, and other small reproducibility artifacts. Directories
-committed before this policy keep their historical raw JSON in Git history
-unchanged; only newly generated raw telemetry is excluded going forward.
+High-volume generated telemetry is kept **locally only** and excluded from
+Git via `.gitignore`: `direct-saturation-<rate>.json` (full per-repeat
+sample series, `scripts/benchmark/direct_saturation.py`),
+`injector-<rate>-<repeat>.json` (full per-event injector output,
+`direct_injector.py`), and `postgres-diagnostics-raw-<label>.json` (full
+per-tick `pg_stat_activity`/`pg_locks` sample series,
+`postgres_diagnostics.py`). Not all raw benchmark JSON is preserved in Git.
+What Git **does** retain: compact, report-backed benchmark evidence -
+`postgres-diagnostics-summary-<label>.json` and equivalent small aggregate/
+summary files, EXPLAIN outputs, benchmark methodology, and other small
+reproducibility artifacts. Directories committed before this policy keep
+their historical raw JSON in Git history unchanged; only newly generated
+raw telemetry is excluded going forward. (Earlier tooling wrote one shared
+`direct-saturation.json`/`postgres-diagnostics-<label>.json` per rate or
+run; both tools now always produce rate/label-scoped filenames so a later
+invocation under the same `--run-tag` can never silently overwrite an
+earlier rate's results - see the "Benchmark artifact reliability" entry in
+[`optimization-history.md`](../../docs/performance/optimization-history.md).)
 The entries below are the experiments used by the performance-engineering
 report; exploratory and intermediate directories remain available beside
 them.
@@ -38,6 +48,7 @@ them.
 | [`bench-product-views-index-3w-boundary`](bench-product-views-index-3w-boundary/) | Same controlled sweep after adding `idx_product_views_customer_viewed_at (customer_id, viewed_at DESC)` | Clear win at 900 evt/s (+3.06→+1.20/s, 263→113 ms); wash at 925; noise-dominated at 950; EXPLAIN plan changed to Index Only Scan, ~3.6x faster, no write-cost regression at any rate | Product-views composite index |
 | [`bench-post-index-3w-ceiling-broad`](bench-post-index-3w-ceiling-broad/) | Fresh-reset ceiling sweep at 950/1000/1050/1100 evt/s with both new indexes retained | 1000/1050 evt/s clean (3/3 repeats); 1100 evt/s non-sustainable (1/3 clean); injector kept pace at 99.4-99.9% throughout | Post-index capacity discovery |
 | [`bench-post-index-3w-ceiling-refinement`](bench-post-index-3w-ceiling-refinement/) | Refinement at 1075 evt/s to bracket the transition interval | 2/3 repeats degraded (slope +10.0/+3.0/+34.8/s) - confirms transition interval ~1050-1075 evt/s | Post-index capacity discovery |
+| [`bench-postgres-saturation-diagnosis-3w`](bench-postgres-saturation-diagnosis-3w/) | External `pg_stat_activity`/`pg_locks`/`pg_stat_io` sampling at 1050/1075/1100 evt/s (`postgres-diagnostics-summary-<rate>.json`, tracked; `postgres-diagnostics-raw-<rate>.json`, local-only) alongside the usual saturation sweep | No lock/LWLock/IO wait contention at any rate; active backends nearly flat; longest active-query age grows 0.66s→3.21s→4.55s; query-class mean latency flat - aggregate call-volume-driven CPU is the strongest supported mechanism | PostgreSQL saturation diagnosis |
 
 The broader reliability run
 [`bench-fixed-rate-final-20260807T151000Z`](bench-fixed-rate-final-20260807T151000Z/)

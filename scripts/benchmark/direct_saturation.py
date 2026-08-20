@@ -468,6 +468,26 @@ def _postgres_bgwriter_delta(
     }
 
 
+def rate_artifact_filename(rate: int, prefix: str = "direct-saturation") -> str:
+    """Deterministic, rate-scoped artifact filename.
+
+    A shared ``direct-saturation.json`` name let a later single-rate
+    invocation under the same ``--run-tag`` silently overwrite an earlier
+    rate's complete results (discovered in the Stage 20 PostgreSQL
+    saturation diagnosis - see optimization-history.md). Every rate now
+    gets its own file so no invocation can destroy another rate's output,
+    whether rates are passed together in one ``--rates`` call or across
+    several sequential single-rate invocations.
+    """
+    return f"{prefix}-{rate}.json"
+
+
+def rate_artifact_path(
+    phase_dir: str, rate: int, prefix: str = "direct-saturation"
+) -> Path:
+    return Path(phase_dir) / rate_artifact_filename(rate, prefix)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-tag", required=True)
@@ -479,14 +499,15 @@ def main() -> int:
     configure_logging("WARNING")
     config = load_config(args.run_tag)
     prom = PrometheusClient(config.prometheus_url)
-    results: list[dict[str, Any]] = []
-    for rate in (int(value) for value in args.rates.split(",")):
+    rates = [int(value) for value in args.rates.split(",")]
+    results_by_rate: dict[int, list[dict[str, Any]]] = {rate: [] for rate in rates}
+    for rate in rates:
         for repeat in range(args.repeats):
             print(f"rate={rate} repeat={repeat} starting", flush=True)
             result = _run_one(
                 config, prom, rate, repeat, args.warmup_seconds, args.steady_seconds
             )
-            results.append(result)
+            results_by_rate[rate].append(result)
             print(
                 json.dumps(
                     {
@@ -500,22 +521,24 @@ def main() -> int:
                 ),
                 flush=True,
             )
-    output = Path(config.phase_dir())
-    output.mkdir(parents=True, exist_ok=True)
-    (output / "direct-saturation.json").write_text(
-        json.dumps(
-            {
-                "run_tag": config.run_tag,
-                "rates": [int(value) for value in args.rates.split(",")],
-                "warmup_seconds": args.warmup_seconds,
-                "steady_seconds": args.steady_seconds,
-                "repeats": args.repeats,
-                "results": results,
-            },
-            indent=2,
+    output_dir = Path(config.phase_dir())
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for rate in rates:
+        path = rate_artifact_path(config.phase_dir(), rate)
+        path.write_text(
+            json.dumps(
+                {
+                    "run_tag": config.run_tag,
+                    "rate": rate,
+                    "warmup_seconds": args.warmup_seconds,
+                    "steady_seconds": args.steady_seconds,
+                    "repeats": args.repeats,
+                    "results": results_by_rate[rate],
+                },
+                indent=2,
+            )
         )
-    )
-    print(f"wrote {output / 'direct-saturation.json'}")
+        print(f"wrote {path}")
     return 0
 
 
