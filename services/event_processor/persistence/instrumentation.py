@@ -99,6 +99,8 @@ def _classify(query: str, phase: str) -> tuple[str, str]:
     if phase == "fraud_context":
         if kind != "select":
             return "fraud_context_other", kind
+        if "home_country" in normalized and "billing_country" in normalized:
+            return "fraud_context_customer_order", kind
         if "home_country" in normalized:
             return "fraud_context_customer", kind
         if "select session_id from orders" in normalized:

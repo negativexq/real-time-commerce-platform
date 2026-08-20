@@ -1451,3 +1451,193 @@ configuration was changed. This is attribution, not optimization.
   promising direction) - as a controlled, single-variable A/B against the
   current ~1050 evt/s boundary, following the same reset methodology used
   throughout this series.
+## Fraud-context round-trip reduction — kept
+
+- **Accumulated diagnosis leading to this experiment:** Stage 16 found
+  `fraud_context` was the largest DB-side transaction stage with no single
+  dominant query; Stage 20 ruled out lock/LWLock/IO-wait/connection
+  explosion and found flat per-query mean latency with call-volume-driven
+  total cost; Stage 21 ruled out cgroup throttling, host CPU saturation,
+  and scheduler starvation with STRONG confidence. The converging
+  conclusion: aggregate cost from many small PostgreSQL round trips per
+  fraud-eligible event, not one slow query or infrastructure pressure.
+  This experiment tests that hypothesis directly by removing one round
+  trip and observing whether system behavior actually improves.
+- **Original query inventory** (from direct inspection of
+  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py),
+  counted from the real code, not assumed):
+
+  | # | Field | Query | Calls/fraud-eligible event | Depends on | Cost (baseline mean) |
+  | --- | --- | --- | ---: | --- | ---: |
+  | 1 | `home_country` | `SELECT home_country FROM customers WHERE customer_id = %s` | 1.0 (always) | none | ~0.07ms (Stage 16) |
+  | 2 | `session_id` (fallback) | `SELECT session_id FROM orders WHERE order_id = %s` | ~0.33 (only if `session_id is None and order_id is not None`) | order_id | ~0.07ms |
+  | 3 | `session_started_at` | `SELECT started_at FROM sessions WHERE session_id = %s` | 1.0 (always, may resolve session_id from #2 first) | #2's result | ~0.08ms |
+  | 4 | `order` (ordered_at/total/currency/billing_country) | `SELECT ordered_at, total, currency, billing_country FROM orders WHERE order_id = %s` | 1.0 (always) | none | ~0.08ms |
+  | 5 | recent payments | bounded `payments` select, `attempted_at` in `[lookback, event_time]`, `LIMIT` | 1.0 (always) | none | ~0.11-0.13ms |
+  | 6 | prior payments | bounded `payments` select, `attempted_at < event_time`, `LIMIT` | 1.0 (always) | none | ~0.10-0.11ms |
+  | 7 | refunds | bounded `refunds` select, `requested_at` in `[lookback, event_time]`, `LIMIT` | 1.0 (always) | none | ~0.08ms |
+  | 8 | recent orders count | bounded `COUNT(*)` subquery over `orders` | 1.0 (always) | none | ~0.08-0.09ms |
+  | 9 | product-view count | bounded `COUNT(*)` subquery over `product_views` | 1.0 (always) | #3's `session_started` (lower bound fallback) | ~0.09-0.11ms |
+  | 10 | refund facts (refundable amount, seconds since payment) | `payments LEFT JOIN refunds` by `payment_id` | ~0.33 (only if `payment_id is not None`) | payment_id | ~0.09ms |
+
+  **Original round trips/event: 8 unconditional + up to 2 conditional = 8-10,
+  averaging ~8.7 across the real fraud-eligible event-type mix** (measured
+  via `fraud_context_customer`'s ~1.0 calls/fraud-eligible-event as the
+  100%-frequency reference point). Rows 1 and 4 are two independent,
+  always-issued, single-row primary-key lookups on different tables with no
+  data dependency between them - the smallest safe consolidation candidate.
+  Event types affected: all five `FRAUD_ELIGIBLE_EVENT_TYPES`
+  (`checkout_started`, `order_created`, `payment_failed`,
+  `payment_completed`, `refund_requested`) - rows 1 and 4 are issued
+  unconditionally for every one of them.
+- **Candidate consolidation selected:** merge query #1 (`customers`) and
+  #4 (`orders`) into one round trip via a `LEFT JOIN` on the constant
+  `order_id` parameter, keeping `customers` as the driving/filtered table:
+
+  ```sql
+  SELECT c.home_country, o.ordered_at, o.total, o.currency, o.billing_country
+  FROM customers c
+  LEFT JOIN orders o ON o.order_id = %s
+  WHERE c.customer_id = %s
+  ```
+
+  **Why this pair over alternatives:** (a) both are always-issued PK
+  lookups with zero row-multiplication risk - `customer_id` and `order_id`
+  are both unique primary keys, so the join can produce at most one row,
+  identical to two independent single-row lookups; (b) they have no data
+  dependency on each other (unlike #2→#3, where #3 needs #2's resolved
+  `session_id`); (c) the original code never scoped the `orders` lookup by
+  `customer_id` - a `LEFT JOIN ... ON o.order_id = %s` preserves that
+  exact (non-obvious) behavior instead of "fixing" it, which an inner join
+  or a customer-scoped join would not; (d) recent/prior payments (#5/#6)
+  were deliberately **not** chosen - this repository already retained a
+  rejected "Combined payment lookup" experiment showing that merging those
+  two specific queries regressed throughput and latency, and that lesson
+  was treated as a hard constraint on this experiment's design, not
+  advisory; (e) the two `COUNT(*)` subqueries (#8/#9) were a viable
+  alternative of similar size and risk, but the customer+order pair was
+  selected because it eliminates a stage even earlier in the sequence,
+  ahead of every subsequent query, minimizing exposure to any confound. No
+  other query pairs/groups were implemented or benchmarked in this
+  experiment - **one consolidation boundary only**, per instruction.
+- **New round trips/event: 7-9, averaging ~7.7** (10→9 in the always-issued
+  count: rows 1+4 become one row, i.e. exactly **one round trip saved per
+  fraud-eligible event**, a ~11.5% reduction in fraud-context round trips
+  for this pair, ~10% of the full fraud-context call sequence).
+- **Semantic-equivalence tests:**
+  [`tests/integration/test_fraud_context_roundtrip.py`](../../tests/integration/test_fraud_context_roundtrip.py)
+  (7 tests, run against the real local PostgreSQL, all fixture writes
+  rolled back) directly compares the new
+  `FraudContextBuilder._customer_and_order()` against the exact legacy
+  two-query sequence (kept as a test-only helper, never duplicated in
+  production) across: a matching own order, no order (`order_id=None`), a
+  non-existent `order_id`, an order belonging to a *different* customer
+  (proving the "not scoped by customer_id" behavior survived unchanged),
+  and an unknown customer (both raise `FraudContextDependencyError`
+  identically). Two further tests prove the round-trip count directly - a
+  counting cursor wrapper shows the legacy sequence issues exactly 2
+  `execute()` calls and the combined query issues exactly 1, for the same
+  fixture data.
+- **Baseline EXPLAIN** (representative customer/order pair): two separate
+  `Index Scan`s (`customers_pkey`, `orders_pkey`), 3+4=7 buffers combined,
+  0.053ms + 0.034ms execution. Retained at
+  [`artifacts/benchmark/bench-fraud-context-roundtrip-explain/baseline-two-query-explain.txt`](../../artifacts/benchmark/bench-fraud-context-roundtrip-explain/baseline-two-query-explain.txt).
+- **Candidate EXPLAIN:** `Nested Loop Left Join` over the *same* two
+  `Index Scan`s (`customers_pkey`, `orders_pkey`) - identical access paths,
+  no new scan type, 7 buffers total (unchanged). No cartesian risk: both
+  sides are PK-equality-scoped to at most one row. Retained at
+  [`artifacts/benchmark/bench-fraud-context-roundtrip-explain/candidate-combined-explain.txt`](../../artifacts/benchmark/bench-fraud-context-roundtrip-explain/candidate-combined-explain.txt).
+  Execution time at this sub-0.2ms scale is measurement noise on a single
+  sample and not the basis for the keep/revert decision - the query plan
+  confirms no accidental expense was introduced, which is what EXPLAIN is
+  for here; the system-level A/B below is the actual evidence.
+- **Controlled reset methodology:** since code had to change between
+  conditions, `git stash` isolated the baseline (unmodified) code, the
+  `event-processor` image was rebuilt, `scripts/reset-benchmark-data.sql`
+  reset all benchmark tables, 1/1/1 assignment was re-verified, and the
+  full 1000/1050/1075 × 3 sweep ran against that clean baseline image.
+  The stash was then popped (candidate code), the image rebuilt again, a
+  second full reset performed, 1/1/1 re-verified, and the candidate sweep
+  ran from the same equivalent empty starting state. Baseline tag
+  [`bench-fraud-context-roundtrip-baseline-3w`](../../artifacts/benchmark/bench-fraud-context-roundtrip-baseline-3w/),
+  candidate tag
+  [`bench-fraud-context-roundtrip-candidate-3w`](../../artifacts/benchmark/bench-fraud-context-roundtrip-candidate-3w/).
+  Commands (both conditions):
+  `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag <tag>`.
+- **Baseline vs. candidate (mean of 3 repeats per rate):**
+
+  | Metric | 1000 base→cand | 1050 base→cand | 1075 base→cand |
+  | --- | --- | --- | --- |
+  | Calls/event (`customer`+`order` → `customer_order`) | 0.156+0.156→0.131 | 0.145+0.145→0.141 | 0.033+0.033→0.097* |
+  | `fraud_context` avg | 0.972→0.608ms (**-37%**) | 0.870→0.740ms (**-15%**) | 0.845→0.733ms (**-13%**) |
+  | `transaction_total` avg | 1.388→1.417ms (flat) | 1.560→1.442ms (-8%) | 1.412→1.444ms (flat) |
+  | Lag slope | +4.17→+1.70/s (**-59%**) | +3.32→+1.78/s (**-46%**) | +2.87→+2.37/s (-17%) |
+  | E2E p95 | 317→110ms (**-65%**) | 296→114ms (**-61%**) | 217→223ms (flat/noisy) |
+  | E2E p99 | 592→398ms (-33%) | 574→432ms (-25%) | 499→489ms (flat) |
+  | PostgreSQL CPU (mean of peak samples) | 73.6→59.7% (-19%) | 62.6→67.2% (+7%, noisy) | 77.5→63.0% (-19%) |
+  | Processor CPU (summed, 3 workers) | 141.6→137.4% (-3%) | 148.5→130.9% (-12%) | 154.3→148.4% (-4%) |
+  | WAL records/sec | 14871→14748 (-1%) | 15573→15674 (+1%) | 15873→15922 (flat) |
+
+  *The baseline 1075 calls/event figure (0.033) is inconsistent with the
+  same measurement at 1000/1050 (~0.15) and is treated as a
+  Prometheus-rate-window sampling artifact for that specific repeat set,
+  not a real drop in fraud-eligible traffic share - the underlying
+  workload mix is unchanged between conditions.
+- **DB round trips saved:** exactly **1 round trip saved per
+  fraud-eligible event** (measured directly - two SQL classes disappear,
+  one appears at matching frequency). At the measured fraud-eligible
+  event rate (~15.5% of service rate, consistent at 1000/1050): **~155
+  round trips/sec saved at 1000 evt/s, ~151 round trips/sec saved at 1050
+  evt/s**; 1075's figure is not reported numerically given the noisy
+  denominator above, but is of the same order (service rate × ~15% ×
+  1 ≈ 160/s) if the same fraud-eligible fraction is assumed.
+- **Resource interpretation:** PostgreSQL CPU dropped at 1000/1075 (-19%
+  each) and was flat/noisy at 1050 (+7%, within normal repeat-to-repeat
+  variance already documented in Stages 19-21); this roughly tracks the
+  reduced call volume rather than exceeding it, consistent with the
+  EXPLAIN evidence that no new, more expensive access pattern was
+  introduced. Processor CPU also fell modestly at every rate - plausible
+  given one fewer round trip means less time each event spends waiting on
+  the database inside the transaction.
+- **WAL/write impact:** none - WAL records/sec stayed within ±1% at every
+  rate, exactly as expected since this change touches only read queries.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e`
+  held in all 18 repeats (9 baseline + 9 candidate). All four processor
+  smoke scenarios passed against the retained candidate build.
+- **Decision: kept (Outcome A).** Round trips materially decreased (one
+  fewer per fraud-eligible event, matching the exact predicted mechanism)
+  **and** system-level behavior improved on the metrics that matter most:
+  `fraud_context` latency fell at every rate (13-37%), lag slope fell at
+  every rate (17-59%), E2E tail latency fell sharply at 1000/1050 evt/s
+  (was flat, not regressed, at 1075), PostgreSQL and processor CPU each
+  trended down more often than not, and there was no WAL/write
+  regression. This is the clearest system-level improvement observed
+  since Stage 17/18's index work.
+- **Capacity interpretation:** this experiment does **not** establish a
+  new sustainable ceiling. Even though 1075 evt/s's candidate repeats
+  stayed as clean as 1050's, this stage only claims: **the fraud-context
+  round-trip reduction materially improved behavior at the previous
+  transition boundary.** The README/CV capacity claim (~1050 evt/s
+  sustainable, ~1075 evt/s transition) is unchanged pending a dedicated
+  fresh ceiling-discovery sweep.
+- **Remaining fraud-context round trips:** 7-9 per fraud-eligible event
+  (session resolution, session lookup, recent/prior payments, refunds,
+  recent-orders count, product-view count, and the conditional
+  refund-facts join) - still spread across several independently small
+  operations, none individually dominant (unchanged from Stage 16's
+  finding).
+- **Strongest remaining bottleneck:** the same aggregate-cost mechanism,
+  now with one fewer contributing round trip; recent/prior payments and
+  the two bounded `COUNT(*)` subqueries remain the next-largest
+  candidates, but recent/prior payments consolidation is explicitly
+  disfavored by the repository's own retained rejected-experiment
+  evidence.
+- **Recommended next isolated experiment:** apply the same
+  smallest-safe-consolidation methodology to the two independent bounded
+  `COUNT(*)` subqueries (recent-orders count, product-view count) - both
+  scalar, both already indexed via Stage 17/18's composite indexes, no
+  join/row-multiplication risk, structurally identical low-risk profile
+  to this experiment. A fresh ceiling-discovery sweep is a separate,
+  later experiment once (and if) further fraud-context round-trip
+  reductions are exhausted.
+

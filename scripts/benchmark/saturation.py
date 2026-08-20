@@ -25,6 +25,7 @@ SQL_OPERATIONS = (
     "processed_events_select",
     "business_payments",
     "fraud_context_customer",
+    "fraud_context_customer_order",
     "fraud_context_order_session",
     "fraud_context_session",
     "fraud_context_order",

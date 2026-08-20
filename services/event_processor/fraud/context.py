@@ -109,16 +109,9 @@ class FraudContextBuilder:
         )
         limit = self.config.fraud_max_history_records
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT home_country FROM customers WHERE customer_id = %s",
-                (customer_id,),
+            home_country, order = self._customer_and_order(
+                cursor, customer_id, order_id
             )
-            customer = cursor.fetchone()
-            if customer is None:
-                raise FraudContextDependencyError(
-                    "customer fraud context is unavailable"
-                )
-            home_country = str(customer[0])
             if session_id is None and order_id is not None:
                 cursor.execute(
                     "SELECT session_id FROM orders WHERE order_id = %s", (order_id,)
@@ -131,14 +124,6 @@ class FraudContextBuilder:
             )
             row = cursor.fetchone()
             session_started = cast(datetime | None, row[0] if row else None)
-            cursor.execute(
-                """
-                SELECT ordered_at, total, currency, billing_country
-                FROM orders WHERE order_id = %s
-                """,
-                (order_id,),
-            )
-            order = cursor.fetchone()
             order_time = cast(datetime | None, order[0] if order else None)
             order_matches = (
                 order is None
@@ -293,6 +278,38 @@ class FraudContextBuilder:
     def _decimal(payload: object, name: str) -> Decimal | None:
         value = getattr(payload, name, None)
         return value if isinstance(value, Decimal) else None
+
+    @staticmethod
+    def _customer_and_order(
+        cursor: psycopg.Cursor[tuple[object, ...]],
+        customer_id: UUID,
+        order_id: UUID | None,
+    ) -> tuple[str, tuple[object, ...] | None]:
+        """One round trip for two independent PK lookups that were
+        previously two separate queries. ``orders`` is joined on the
+        constant ``order_id`` parameter only (never on ``customer_id`` -
+        the original code never scoped the order lookup by customer either,
+        and this preserves that exactly), so at most one order row can ever
+        match and the LEFT JOIN cannot multiply the single customer row.
+        ``ordered_at`` is NOT NULL on ``orders``, so its presence reliably
+        distinguishes "order matched" from "no such order" after the join.
+        """
+        cursor.execute(
+            """
+            SELECT c.home_country, o.ordered_at, o.total, o.currency,
+                   o.billing_country
+            FROM customers c
+            LEFT JOIN orders o ON o.order_id = %s
+            WHERE c.customer_id = %s
+            """,
+            (order_id, customer_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise FraudContextDependencyError("customer fraud context is unavailable")
+        home_country = str(row[0])
+        order = row[1:] if row[1] is not None else None
+        return home_country, order
 
     @staticmethod
     def _refund_facts(

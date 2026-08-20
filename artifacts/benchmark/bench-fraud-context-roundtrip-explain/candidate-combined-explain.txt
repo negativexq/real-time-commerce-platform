@@ -1,0 +1,16 @@
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=0.70..16.74 rows=1 width=24) (actual time=0.093..0.094 rows=1 loops=1)
+   Buffers: shared hit=7
+   ->  Index Scan using customers_pkey on customers c  (cost=0.28..8.29 rows=1 width=3) (actual time=0.035..0.035 rows=1 loops=1)
+         Index Cond: (customer_id = 'de1d03a6-e4f5-406b-8409-6361b524b5c2'::uuid)
+         Buffers: shared hit=3
+   ->  Index Scan using orders_pkey on orders o  (cost=0.42..8.44 rows=1 width=21) (actual time=0.055..0.056 rows=1 loops=1)
+         Index Cond: (order_id = 'e8225b07-bca3-4545-aa98-639c5c936c23'::uuid)
+         Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=151
+ Planning Time: 0.625 ms
+ Execution Time: 0.126 ms
+(12 rows)
+

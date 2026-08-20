@@ -1,0 +1,22 @@
+                                                        QUERY PLAN                                                        
+--------------------------------------------------------------------------------------------------------------------------
+ Index Scan using customers_pkey on customers  (cost=0.28..8.29 rows=1 width=3) (actual time=0.028..0.029 rows=1 loops=1)
+   Index Cond: (customer_id = 'de1d03a6-e4f5-406b-8409-6361b524b5c2'::uuid)
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=64
+ Planning Time: 0.196 ms
+ Execution Time: 0.053 ms
+(7 rows)
+
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Index Scan using orders_pkey on orders  (cost=0.42..8.44 rows=1 width=21) (actual time=0.026..0.026 rows=1 loops=1)
+   Index Cond: (order_id = 'e8225b07-bca3-4545-aa98-639c5c936c23'::uuid)
+   Buffers: shared hit=4
+ Planning:
+   Buffers: shared hit=76
+ Planning Time: 0.112 ms
+ Execution Time: 0.034 ms
+(7 rows)
+

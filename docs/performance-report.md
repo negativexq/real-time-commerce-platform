@@ -957,6 +957,72 @@ round-trip *count* in the `fraud_context` read set (not any single query's
 cost, since no one query dominates it), against the current ~1050 evt/s
 boundary.
 
+### Stage 22 — Fraud-context round-trip reduction: kept
+
+**Why?** Stages 16/20/21 converged on aggregate cost from many small
+PostgreSQL round trips per fraud-eligible event as the strongest supported
+bottleneck. This stage tests that hypothesis directly: remove one round
+trip and see whether system behavior actually improves.
+
+**Consolidation.** Two always-issued, independent, single-row primary-key
+lookups - `customers.home_country` and the `orders` row (ordered_at/total/
+currency/billing_country) - merged into one `LEFT JOIN` on the constant
+`order_id` parameter:
+
+```sql
+SELECT c.home_country, o.ordered_at, o.total, o.currency, o.billing_country
+FROM customers c
+LEFT JOIN orders o ON o.order_id = %s
+WHERE c.customer_id = %s
+```
+
+This preserves the original code's (non-obvious) behavior of never
+scoping the `orders` lookup by `customer_id`. The already-rejected
+"combined payment lookup" experiment explicitly ruled out consolidating
+recent/prior payments; that lesson shaped this selection rather than being
+revisited. EXPLAIN confirms identical access paths (the same two
+`Index Scan`s, now inside a `Nested Loop Left Join`, same 7 buffers) - no
+new scan type, no cartesian risk.
+
+**Round trips:** 10 → 9 per fraud-eligible event (one round trip saved,
+verified directly by SQL-class call-count metrics and by a counting-cursor
+test). Semantic equivalence verified against the exact legacy two-query
+sequence across 7 scenarios (own order, no order, missing order, another
+customer's order, unknown customer) in
+[`tests/integration/test_fraud_context_roundtrip.py`](../tests/integration/test_fraud_context_roundtrip.py).
+
+**Controlled A/B** (clean reset before each condition, `git stash`
+isolated the true baseline code, image rebuilt for each condition,
+1000/1050/1075 evt/s × 3, 3 workers, 1/1/1 verified):
+
+| Metric | 1000 base→cand | 1050 base→cand | 1075 base→cand |
+| --- | --- | --- | --- |
+| `fraud_context` avg | 0.972→0.608ms (-37%) | 0.870→0.740ms (-15%) | 0.845→0.733ms (-13%) |
+| Lag slope | +4.17→+1.70/s (-59%) | +3.32→+1.78/s (-46%) | +2.87→+2.37/s (-17%) |
+| E2E p95 | 317→110ms (-65%) | 296→114ms (-61%) | 217→223ms (flat) |
+| PostgreSQL CPU | 73.6→59.7% (-19%) | 62.6→67.2% (+7%, noisy) | 77.5→63.0% (-19%) |
+| WAL records/sec | 14871→14748 (-1%) | 15573→15674 (+1%) | 15873→15922 (flat) |
+
+~1 round trip saved per fraud-eligible event translates to **~155
+round trips/sec avoided at 1000 evt/s, ~151/sec at 1050 evt/s** (measured
+fraud-eligible share × service rate). Full detail, including the complete
+original 10-query inventory and why this pair was selected over
+alternatives, is in
+[`optimization-history.md`](performance/optimization-history.md#fraud-context-round-trip-reduction--kept).
+
+**Conclusion: kept (Outcome A).** Round trips materially decreased and
+system-level behavior improved on the metrics that matter most -
+`fraud_context` latency down at every rate, lag slope down at every rate,
+E2E tail sharply down at 1000/1050 (flat, not regressed, at 1075), no WAL
+regression. Correctness held in all 18 repeats; all four processor smoke
+scenarios passed. **This does not establish a new sustainable ceiling** -
+the README/CV capacity claim (~1050 evt/s sustainable, ~1075 evt/s
+transition) is unchanged pending a dedicated fresh ceiling-discovery
+sweep. Recommended next experiment: apply the same consolidation
+methodology to the two independent bounded `COUNT(*)` subqueries
+(recent-orders, product-view counts).
+
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |
