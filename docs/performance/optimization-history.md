@@ -2126,3 +2126,156 @@ configuration was changed. This is attribution, not optimization.
   arrival-rate variance from the injector/generator side (is requested load
   itself bursty at sub-second resolution even when the long-window average
   rate is held constant?) rather than the processor or PostgreSQL again.
+
+## Injector arrival variance diagnosis — measurement only, no code change
+
+- **Previous diagnosis leading to this experiment:** Stage 25 proved
+  waiting happens before handler execution, in the Kafka topic itself
+  (`consumer_queue_wait_seconds`), not inside the processor - and that no
+  internal buffer can exist (single-threaded, unbatched `poll()`/`process()`
+  loop, `max_inflight_sampled` == 1.0 in every repeat). Its open question:
+  why does the same requested rate sometimes stay clean and sometimes tip
+  into severe queueing? The proposed hypothesis was that the injector's
+  long-window average rate hides short-lived arrival bursts that a
+  single-threaded consumer cannot absorb.
+- **Existing tooling reused, not duplicated.**
+  [`scripts/benchmark/direct_injector.py`](../../scripts/benchmark/direct_injector.py)
+  already paces publishes with a monotonic fixed-rate loop
+  (`next_deadline`/`time.sleep()`) and already records `scheduler_drift_ms`/
+  `missed_deadlines`/`publish_latency_ms` per run. It did not yet record a
+  raw per-event send-timestamp series, which is required to compute
+  inter-arrival gaps and short-window arrival rates - everything else
+  (percentile helper `scripts/benchmark/stats.py:percentiles()`, the
+  subprocess-per-repeat orchestration in `direct_saturation.py`, the
+  gitignored `injector-<rate>-<repeat>.json` raw artifact) was reused
+  unchanged.
+- **What was added (benchmark tooling only, no production code):** in
+  `direct_injector.py`, `inject_messages()` now also appends each publish's
+  `perf_counter()` timestamp to a local `send_timestamps` list (the
+  publish-attempt instant already being measured for `publish_latency_ms`,
+  simply also retained). Three small pure functions compute the diagnostic
+  view from that list, unit-tested in
+  [`tests/unit/test_injector_arrival_variance.py`](../../tests/unit/test_injector_arrival_variance.py)
+  (7 cases):
+  - `inter_arrival_gaps(timestamps)` - consecutive send-to-send gaps.
+  - `sliding_window_rates(timestamps, window_seconds)` - events/sec in each
+    consecutive, non-overlapping bin of the requested width.
+  - `arrival_variance_summary(timestamps)` - gap percentiles (p50/p95/p99/
+    max) plus window-rate percentiles/max/min at 100ms, 500ms, and 1s,
+    reusing `percentiles()`.
+  This is a **benchmark-tool-side computation only** - no new Prometheus
+  metric, no new production instrumentation, nothing observed by the
+  processor or generator services. The result is written into the same
+  already-gitignored `injector-<rate>-<repeat>.json` raw artifact (`event_ids`
+  was already excluded from `direct_saturation.py`'s embedded summary the
+  same way; `send_timestamps` now gets the identical treatment).
+- **Benchmark:** 3 workers, 1/1/1 verified (lag 0 before and after),
+  unmodified processor image (no production code touched this stage),
+  1050/1075/1100 evt/s only (per instruction), 10s warmup, 45s steady, 3
+  repeats. Tag
+  [`bench-injector-arrival-variance-3w`](../../artifacts/benchmark/bench-injector-arrival-variance-3w/).
+  Command:
+  `python -m scripts.benchmark.direct_saturation --rates 1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-injector-arrival-variance-3w`.
+- **Results (per repeat):**
+
+  | Rate | Repeat | Lag slope | Peak lag | Gap p50/p95/p99/max (ms) | Window-rate max: 100ms/500ms/1s (evt/s) | Queue wait p50 (ms) |
+  | --- | --- | ---: | ---: | --- | --- | ---: |
+  | 1050 | 0 | +19.34/s | 2043 | 0.95/1.14/1.71/14.74 | 1060/1050/1050 | 677.6 |
+  | 1050 | 1 | +91.99/s | 4224 | 0.95/1.29/1.61/13.47 | 1060/1052/1049 | 681.8 |
+  | 1050 | 2 | +98.15/s | 6753 | 0.95/1.31/1.83/57.32 | 1060/1052/1050 | 708.8 |
+  | 1075 | 0 | +62.22/s | 2915 | 0.93/1.28/1.67/15.65 | 1090/1076/1075 | 752.4 |
+  | 1075 | 1 | +23.25/s | 2144 | 0.93/1.28/1.60/13.46 | 1080/1076/1075 | 1164.5 |
+  | 1075 | 2 | +184.65/s | 8894 | 0.93/1.26/1.42/25.39 | 1080/1076/1075 | 861.5 |
+  | 1100 | 0 | +131.27/s | 6071 | 0.91/1.28/2.01/42.32 | 1110/1102/1096 | 789.5 |
+  | 1100 | 1 | +88.25/s | 4108 | 0.91/1.21/1.37/12.99 | 1110/1100/1100 | 725.8 |
+  | 1100 | 2 | +80.18/s | 4309 | 0.91/1.20/1.38/28.84 | 1110/1102/1100 | 719.8 |
+
+  (Requested-rate reciprocal for reference: 1/1050 ≈ 0.952ms, 1/1075 ≈
+  0.930ms, 1/1100 ≈ 0.909ms - matching the observed gap p50 at every rate
+  almost exactly.)
+- **The central finding: injector pacing is tight and does not distinguish
+  clean-ish from severely-degraded repeats at the same rate.** Inter-arrival
+  gap p50 tracks the requested rate's reciprocal almost exactly at every
+  rate (0.91-0.95ms), with a tight p95/p99 (1.14-2.01ms) regardless of how
+  badly that repeat went on to degrade. The occasional large single gap
+  (max column, 13-57ms) is rare - one or two occurrences per ~45,000-51,000
+  published events per repeat - and does not correlate with lag slope: 1050/
+  repeat 2 (the worst of the three 1050 repeats, +98.15/s) has the largest
+  max gap (57.32ms) of the three, but 1075/repeat 2 (the worst 1075 repeat,
+  +184.65/s) has one of the *smallest* max gaps (25.39ms) of its group,
+  smaller than 1075/repeat 0's (+62.22/s, 15.65ms) - no consistent
+  direction. **Sliding-window arrival rate never exceeds the requested rate
+  by more than ~1-1.5% in any window size at any rate**, and - critically -
+  the window-rate maxima are close to identical across all three repeats at
+  a given rate regardless of how differently those repeats degraded (e.g.
+  1050's three repeats all show a 100ms-window max of 1060 evt/s, while
+  their lag slopes range from +19.34/s to +98.15/s). There is no
+  short-window burst hiding in the average: the producer's pacing loop is
+  doing exactly what it is built to do at every rate and every repeat.
+- **Correctness:** `unique_event_ids == processed_rows == matched_e2e` held
+  in all 9 repeats, including the most severely degraded one (1075/repeat
+  2, peak lag 8894).
+- **A data-collection limitation, noted for transparency, not fixed here:**
+  `consumer_queue_wait_ms` p99 hit a 10,000ms ceiling in every repeat of
+  this sweep. `processor_consumer_queue_wait_duration_seconds` (added in
+  Stage 25) uses `Histogram.DEFAULT_BUCKETS`, whose highest finite boundary
+  is 10.0s; `histogram_quantile` cannot extrapolate a quantile that falls in
+  the `+Inf` bucket past that boundary, so any repeat whose queue-wait tail
+  genuinely exceeds 10s reports a clamped p99 of exactly 10000ms rather
+  than its true value. This sweep's repeats were, on average, more
+  degraded than Stage 25's (every repeat here had a positive, often large,
+  lag slope, versus Stage 25's mix of clean and degraded repeats) - purely
+  repeat-to-repeat variance consistent with the pattern already described
+  in Stages 24-25, not a sign that this stage's changes altered processor
+  behavior (no production code changed). Left as-is per this stage's
+  measurement-only, no-methodology-change scope; a future stage revisiting
+  queue-wait tail behavior specifically should widen the histogram's
+  buckets first.
+- **Answers to the four analysis questions:**
+  1. **Producer inter-arrival time distribution?** Tight and consistent
+     with the requested rate at every rate and repeat (p50 0.91-0.95ms,
+     p99 1.37-2.01ms); occasional single-digit-to-tens-of-ms outlier gaps,
+     rare and uncorrelated with degradation severity.
+  2. **Sliding-window arrival rate (100ms/500ms/1s)?** Never exceeds the
+     requested rate by more than ~1-1.5% in any window, at any rate.
+  3. **Clean vs. degraded repeat comparison at 1050/1075/1100?** No repeat
+     in this sweep was fully "clean" in the Stage 25 sense (all nine showed
+     a positive, often substantial, lag slope) - but even so, arrival
+     variance was statistically indistinguishable between the mildest and
+     most severe repeat at each rate, while queue wait and lag slope
+     varied by 3-8x within the same rate.
+  4. **Does higher short-window burst rate accompany higher queue wait/lag
+     slope?** No - burstiness metrics are essentially flat across repeats
+     at a fixed rate while queue wait and lag slope vary widely. Arrival
+     variance is not confirmed as the mechanism.
+- **Outcome: arrival-burst hypothesis not supported - continue investigating
+  consumer/Kafka-side behavior.** Per this experiment's own decision rule,
+  since degraded repeats do **not** show higher short-window burst rate
+  while the average rate is held identical, the arrival-variance hypothesis
+  is rejected as the explanation for repeat-to-repeat variance. The
+  producer side is now cleanly ruled out, joining Stage 24's transaction-
+  phase ruling-out and Stage 25's processor-internal-buffer ruling-out:
+  every stage in this series has now measured its own layer (PostgreSQL,
+  transaction lifecycle, processor-internal queueing, and now producer
+  pacing) and found it flat/well-behaved regardless of degradation. The
+  remaining unmeasured layer is consumer/Kafka-side behavior itself -
+  broker-side partition/fetch/batching behavior, rebalance-adjacent
+  effects, or fetch-request timing on the consumer's own poll() call -
+  rather than anything upstream of the topic.
+- **Hypotheses ruled out (this stage, joining the running list):** producer/
+  injector-side short-window arrival bursts. Combined with Stages 20-25:
+  cgroup throttling, host CPU saturation, scheduler starvation, connection
+  explosion, LWLock contention, IO-wait explosion, a single slow query,
+  transaction read/write/commit-phase growth, SQL-count/execution-time
+  growth near saturation, lock contention, an internal processor-side
+  record queue/buffer, elevated Kafka poll interval/idle time during
+  degradation, handler-execution-time growth under load.
+- **Next experiment:** with producer pacing, transaction internals, and
+  processor-internal buffering all ruled out, the next isolated diagnostic
+  should look directly at the consumer/broker boundary - e.g. Kafka
+  fetch-request/response timing and broker-side partition metrics
+  (`kafka_consumergroup_lag` already available per-partition, plus
+  broker-side fetch latency if exposed) around the moment a repeat tips
+  into degradation, to see whether the delay is introduced by the broker's
+  own fetch-serving behavior rather than anything already ruled out on
+  either the producer or consumer-application side.

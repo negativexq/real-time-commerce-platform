@@ -1215,6 +1215,60 @@ stay clean and sometimes tip into severe queueing (e.g. 1050/rep 0 at
 variance from the injector/generator side, since per-record service time
 is flat and does not explain the difference.
 
+### Stage 26 — Injector arrival variance diagnosis: burst hypothesis not supported
+
+**Why?** Stage 25 proved waiting happens in the Kafka topic before handler
+execution, not inside the processor (which cannot buffer records). Its open
+question: why does the same requested rate sometimes stay clean and
+sometimes tip into severe queueing? Hypothesis: the injector's long-window
+average rate hides short-lived arrival bursts. Diagnostic only.
+
+**What was added (benchmark tooling only):** `direct_injector.py` now
+retains each publish's timestamp (already being measured for
+`publish_latency_ms`) and computes inter-arrival gap percentiles plus
+sliding-window arrival rates (100ms/500ms/1s) via three small pure
+functions - `inter_arrival_gaps()`, `sliding_window_rates()`,
+`arrival_variance_summary()` - unit-tested (7 cases). No new Prometheus
+metric, no production code touched; the result lives in the already-
+gitignored `injector-<rate>-<repeat>.json` raw artifact.
+
+**Benchmark:** 3 workers, 1/1/1, unmodified processor image,
+1050/1075/1100 evt/s, 3 repeats (tag
+[`bench-injector-arrival-variance-3w`](../artifacts/benchmark/bench-injector-arrival-variance-3w/)).
+
+**Central finding: injector pacing is tight and does not distinguish
+clean-ish from severely-degraded repeats.** Inter-arrival gap p50 tracked
+the requested rate's reciprocal almost exactly at every rate (0.91-0.95ms),
+with tight p95/p99 (1.14-2.01ms) regardless of how badly that repeat went
+on to degrade. Sliding-window arrival rate never exceeded the requested
+rate by more than ~1-1.5% in any window size. Critically, window-rate
+maxima were nearly identical across all three repeats at a given rate even
+as their lag slopes ranged 3-8x apart (e.g. 1050's three repeats all
+showed a 100ms-window max of 1060 evt/s, with lag slopes from +19.34/s to
++98.15/s). No short-window burst was hiding in the average at any rate
+tested.
+
+**Conclusion: arrival-burst hypothesis not supported.** Per this
+experiment's own decision rule - degraded repeats did not show higher
+short-window burst rate at an identical average rate - the hypothesis is
+rejected. The producer side is now cleanly ruled out, joining Stage 24's
+transaction-phase and Stage 25's processor-buffer rulings-out: every layer
+measured so far (PostgreSQL, transaction lifecycle, processor-internal
+queueing, producer pacing) is flat/well-behaved regardless of degradation.
+The remaining unmeasured layer is the consumer/Kafka broker boundary
+itself. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#injector-arrival-variance-diagnosis--measurement-only-no-code-change).
+
+**Correctness** held in all 9 repeats, including the most severely
+degraded one (peak lag 8894). **Data-collection note:** `consumer_queue_wait_ms`
+p99 hit a 10,000ms histogram-bucket ceiling in every repeat of this sweep
+(`Histogram.DEFAULT_BUCKETS`'s highest finite boundary is 10.0s) - reported
+as a measurement limitation, not fixed here (out of scope: no methodology
+changes this stage). **Recommended next experiment:** Kafka
+fetch-request/response timing and broker-side partition metrics around the
+moment a repeat tips into degradation, since producer, transaction, and
+processor-internal layers are all now ruled out.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |

@@ -65,6 +65,46 @@ class DirectProducer:
         self._client.flush(30)
 
 
+def inter_arrival_gaps(timestamps: list[float]) -> list[float]:
+    """Gaps (seconds) between consecutive publish timestamps, in send order."""
+    return [b - a for a, b in zip(timestamps, timestamps[1:], strict=False)]
+
+
+def sliding_window_rates(timestamps: list[float], window_seconds: float) -> list[float]:
+    """Events/sec in each consecutive, non-overlapping window_seconds-wide bin
+    spanning the timestamps - reveals short-lived bursts an average rate over
+    the whole run would hide."""
+    if not timestamps:
+        return []
+    start = timestamps[0]
+    span = timestamps[-1] - start
+    bin_count = int(span / window_seconds) + 1
+    counts = [0] * bin_count
+    for t in timestamps:
+        index = min(int((t - start) / window_seconds), bin_count - 1)
+        counts[index] += 1
+    return [count / window_seconds for count in counts]
+
+
+def arrival_variance_summary(timestamps: list[float]) -> dict[str, Any]:
+    """Inter-arrival gap distribution plus sliding-window burst rates, from
+    raw publish timestamps. Pure/testable: takes and returns plain data, adds
+    no new Prometheus metric or production instrumentation."""
+    gaps_ms = [gap * 1000 for gap in inter_arrival_gaps(timestamps)]
+    summary: dict[str, Any] = {
+        "inter_arrival_gap_ms": percentiles(gaps_ms)
+        | {"max": max(gaps_ms) if gaps_ms else None},
+    }
+    for label, window_seconds in (("100ms", 0.1), ("500ms", 0.5), ("1s", 1.0)):
+        rates = sliding_window_rates(timestamps, window_seconds)
+        summary[f"window_rate_{label}"] = percentiles(rates) | {
+            "max": max(rates) if rates else None,
+            "min": min(rates) if rates else None,
+            "window_count": len(rates),
+        }
+    return summary
+
+
 def prepare_messages(
     *, bootstrap: str, seed: int, target_count: int, client_id: str
 ) -> list[Any]:
@@ -123,6 +163,7 @@ def inject_messages(
     next_deadline = started
     next_sample = started
     published_ids: list[str] = []
+    send_timestamps: list[float] = []
     try:
         for message in messages:
             now = perf_counter()
@@ -138,6 +179,7 @@ def inject_messages(
                 errors += 1
                 raise
             publish_latencies.append(perf_counter() - publish_started)
+            send_timestamps.append(publish_started)
             if message.event_id is not None:
                 published_ids.append(str(message.event_id))
             next_deadline += interval
@@ -167,7 +209,9 @@ def inject_messages(
         "missed_deadlines": missed_deadlines,
         "scheduler_drift_ms": percentiles([item * 1000 for item in drift]),
         "producer_errors": errors + producer.delivery_failures,
+        "arrival_variance": arrival_variance_summary(send_timestamps),
         "event_ids": published_ids,
+        "send_timestamps": send_timestamps,
     }
 
 
@@ -198,7 +242,11 @@ def main() -> int:
     else:
         print(
             json.dumps(
-                {key: value for key, value in result.items() if key != "event_ids"}
+                {
+                    key: value
+                    for key, value in result.items()
+                    if key not in {"event_ids", "send_timestamps"}
+                }
             )
         )
     return 0

@@ -392,6 +392,7 @@ def _run_one(
     arrival_rate = float(injected["actual_published_rate"])
     service_rate = arrival_rate - lag_slope if lag_slope is not None else None
     event_ids = injected.pop("event_ids")
+    injected.pop("send_timestamps", None)
     rows = query_all(
         config.postgres_dsn,
         "SELECT event_id::text, "
