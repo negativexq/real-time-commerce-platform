@@ -2724,12 +2724,14 @@ configuration was changed. This is attribution, not optimization.
   [`bench-partition-scaling-6p-6w`](../../artifacts/benchmark/bench-partition-scaling-6p-6w/).
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1050,1500,2000,2300 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-partition-scaling-6p-6w --events-topic commerce.events.scale6 --consumer-group commerce-event-processor-scale6-v1`.
-  A 12-partition run was in scope ("if environment allows") but was not
-  attempted once the 6-partition results showed processor-side CPU
-  already approaching its ceiling (see below) - adding six more containers
-  to the same shared host would very likely worsen contention rather than
-  reveal new capacity, and would not change this stage's answer to its own
-  question. Documented as a deliberate scope decision, not an omission.
+  A 12-partition/12-worker run was in scope ("if environment allows") but
+  was intentionally not attempted: the 6-worker topology already showed
+  processor CPU approaching the available local host CPU budget while
+  service rate remained flat, and adding six more workers on the same
+  8-vCPU Docker Desktop VM would likely turn the experiment into a
+  host-contention test rather than a clean Kafka partition-scalability
+  test. This is documented explicitly as a scope decision, not as
+  evidence that 12 partitions cannot scale.
 - **Results (mean of 3 repeats per rate):**
 
   | Requested rate | Mean lag slope | Mean service rate | Mean E2E p99 (ms) |
@@ -2753,7 +2755,11 @@ configuration was changed. This is attribution, not optimization.
   indistinguishable from the 3-partition baseline's ~1,050-1,150 evt/s
   range established across Stages 18-28. Doubling the partition and
   consumer count from 3 to 6 produced no meaningful increase in
-  sustainable throughput.
+  sustainable throughput. In one sentence: scaling from 3 to 6
+  partitions/consumers preserved correctness but did not materially
+  increase throughput on the shared local benchmark host. This is a
+  statement about this environment and this workload, not a claim that
+  Kafka itself is the bottleneck.
 - **PostgreSQL was not CPU-saturated - ruling out the database as the new
   constraint too.** `postgres` container CPU stayed flat at 108-155% (of
   800% available on the host's 8 vCPUs) across every rate and repeat, with
@@ -2765,19 +2771,24 @@ configuration was changed. This is attribution, not optimization.
   3-partition baseline's ~2.6ms, plausibly from six containers now sharing
   the same Postgres connection/statement throughput more intensely, but
   not a runaway growth that would explain a ceiling this flat).
-- **The suggestive (not yet confirmed) new signal: host CPU
-  oversubscription.** Summed processor CPU across all 6 containers grew
-  with rate, reaching ~505-533% (of a possible 600%) at 2000 evt/s -
-  combined with Postgres's own steady ~110-155%, that is routinely
-  650-700%+ of simultaneous CPU demand from just these two service groups
-  alone, on an 8-vCPU Docker Desktop VM that is *also* running Kafka,
-  Redis, Prometheus, three exporters, and the demo-control-api throughout.
-  This is consistent with genuine host-level CPU contention becoming the
-  binding constraint once 6 (not 3) processor containers compete for the
-  same shared vCPU pool - but this stage did not run a dedicated
-  cgroup/PSI/scheduler diagnostic (the Stage 21 methodology) at 6-consumer
-  scale to confirm it rigorously, so it is reported as the most plausible
-  remaining explanation, not a proven mechanism.
+- **Host CPU contention became the leading environment-level hypothesis
+  after horizontal consumer scaling.** Summed processor CPU across all 6
+  containers grew with rate, reaching ~505-533% (of a possible 600%) at
+  2000 evt/s - combined with Postgres's own steady ~110-155%, that is
+  routinely 650-700%+ of simultaneous CPU demand from just these two
+  service groups alone, on an 8-vCPU Docker Desktop VM that is *also*
+  running Kafka, Redis, Prometheus, three exporters, and the
+  demo-control-api throughout. This is consistent with genuine host-level
+  CPU contention becoming the binding constraint once 6 (not 3) processor
+  containers compete for the same shared vCPU pool. **This is not yet
+  proven.** Stage 21 ruled out host CPU starvation, but only for the
+  3-worker topology - that result must not be reused as proof for 6
+  workers, and this stage did not run a dedicated cgroup/PSI/scheduler
+  diagnostic (the Stage 21 methodology) at 6-consumer scale to confirm it.
+  CPU contention is documented here as the leading hypothesis, not a
+  confirmed bottleneck; the 6-worker configuration requires its own
+  controlled CPU/scheduling diagnosis before this can be upgraded to a
+  finding.
 - **`max_fetchq_records_sampled` and `consumer_queue_wait_ms` confirm
   genuine, sustained saturation, not measurement noise:** fetch-queue
   depth grew from a few hundred records at 1050 evt/s to 12,000-16,000 at
@@ -2804,7 +2815,11 @@ configuration was changed. This is attribution, not optimization.
   intra-partition worker-pool concurrency.
 - **Correctness:** held in all 12 repeats at every rate tested, including
   2300 evt/s - the cleanest correctness record of any stage that pushed
-  requested rate this far past the known ceiling. The
+  requested rate this far past the known ceiling. Unlike Stage 28's
+  worker-pool experiment, Kafka-native partition scaling preserved the
+  ordering guarantees the application depends on: this confirms
+  partition-based horizontal scaling is semantically valid here, even
+  though it did not increase throughput on this host. The
   `normal`/`duplicate`/`dlq`/`retry` processor smoke scenarios still fail
   identically to Stages 26-28's already-tracked, pre-existing, unrelated
   DLQ-offset-race issue (this stage changed no production code, so it was

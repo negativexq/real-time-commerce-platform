@@ -1417,16 +1417,21 @@ additions to `direct_injector.py`/`direct_saturation.py`
 1050/1500/2000/2300 evt/s (bracketing both the old 3-partition ceiling and
 the theoretical 6-consumer ceiling, ~2308 evt/s), 3 repeats (tag
 [`bench-partition-scaling-6p-6w`](../artifacts/benchmark/bench-partition-scaling-6p-6w/)).
-A 12-partition run was in scope but skipped once 6-partition results
-showed processor CPU already approaching its ceiling - a deliberate scope
-decision, not an omission.
+A 12-partition/12-worker run was in scope but intentionally skipped: the
+6-worker topology already showed processor CPU approaching the local host
+budget while service rate stayed flat, and adding six more workers on the
+same 8-vCPU VM would likely test host contention rather than Kafka
+scalability. Documented as a scope decision, not evidence that 12
+partitions cannot scale.
 
 **Central finding: the ceiling did not move.** Mean service rate stayed
 pinned in the same 977-1,233 evt/s band across the *entire* range tested,
 from 1050 through 2300 evt/s requested (2.2x) - indistinguishable from the
 3-partition baseline's ~1,050-1,150 evt/s established across Stages
-18-28. Doubling partitions and consumers from 3 to 6 produced no
-meaningful throughput increase.
+18-28. Scaling from 3 to 6 partitions/consumers preserved correctness but
+did not materially increase throughput on the shared local benchmark
+host. This conclusion is scoped to this environment and this workload -
+it is not a claim that Kafka itself is a bottleneck.
 
 **PostgreSQL was not the new constraint either.** DB CPU stayed flat at
 108-155% (of 800% available) across every rate, with no upward trend as
@@ -1435,18 +1440,22 @@ clean as every prior stage. Handler latency stayed in a tight 3.0-3.9ms
 band (a modest increase over the 3-partition baseline's ~2.6ms, not a
 runaway).
 
-**Suggestive (not confirmed) signal: host CPU oversubscription.** Summed
+**Host CPU contention became the leading environment-level hypothesis
+after horizontal consumer scaling** - not a confirmed bottleneck. Summed
 processor CPU across 6 containers reached ~505-533% (of 600% possible) at
 2000 evt/s; combined with Postgres's own ~110-155%, that's 650-700%+ of
 simultaneous demand on an 8-vCPU host also running Kafka, Redis,
-Prometheus, and three exporters. Consistent with genuine host contention
-becoming the binding constraint at 6-consumer scale, but this stage did
-not run the Stage 21 cgroup/PSI diagnostic at this scale to confirm it
-rigorously - reported as the most plausible remaining explanation, not a
-proven mechanism. `max_fetchq_records_sampled` (up to 12,000-16,000 at
-2000-2300 evt/s, from a few hundred at 1050) and `consumer_queue_wait_ms`
-(repeatedly hitting the known 10s histogram ceiling) both confirm genuine
-sustained saturation at the higher rates, not measurement noise.
+Prometheus, and three exporters. This is consistent with host contention
+becoming the binding constraint at 6-consumer scale, but Stage 21's
+cgroup/PSI/scheduler diagnosis was only ever run at 3-consumer scale -
+that result cannot be reused as proof for 6 consumers, and this stage did
+not re-run it at the new scale. CPU has not been proven as the
+bottleneck here; it is reported as the leading hypothesis pending a
+dedicated 6-consumer diagnosis. `max_fetchq_records_sampled` (up to
+12,000-16,000 at 2000-2300 evt/s, from a few hundred at 1050) and
+`consumer_queue_wait_ms` (repeatedly hitting the known 10s histogram
+ceiling) both confirm genuine sustained saturation at the higher rates,
+not measurement noise.
 
 **Conclusion: Kafka partition count is ruled out as the main bottleneck**,
 per this experiment's own decision rule - throughput did not scale
