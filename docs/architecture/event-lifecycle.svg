@@ -1,0 +1,169 @@
+<svg viewBox="0 0 920 1690" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Event Processor — Full Event Lifecycle</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="1690" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="460" y="36" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">One Kafka Event, One PostgreSQL Transaction</text>
+  <text x="460" y="58" text-anchor="middle" font-size="13" fill="#64748b">Every stage below happens for every processed event; the fraud stages are conditional on event type</text>
+
+  <!-- ============ 1. KAFKA BOUNDARY ============ -->
+  <rect x="60" y="84" width="800" height="96" rx="10" fill="#FFF7E0" stroke="#B8860B" stroke-width="1.5"/>
+  <text x="80" y="106" font-size="12" font-weight="700" fill="#8a6d1a" letter-spacing="0.06em">KAFKA BOUNDARY</text>
+  <rect x="90" y="118" width="330" height="46" rx="6" fill="#ffffff" stroke="#B8860B"/>
+  <text x="255" y="137" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Kafka Topic</text>
+  <text x="255" y="153" text-anchor="middle" font-size="11.5" fill="#475569">commerce.events (3+ partitions)</text>
+  <rect x="460" y="118" width="370" height="46" rx="6" fill="#ffffff" stroke="#B8860B"/>
+  <text x="645" y="137" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Consumer Group</text>
+  <text x="645" y="153" text-anchor="middle" font-size="11.5" fill="#475569">one partition owned by exactly one consumer — delivery order preserved</text>
+  <line x1="420" y1="141" x2="455" y2="141" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <line x1="460" y1="180" x2="460" y2="206" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ============ 2. CONSUMER LAYER ============ -->
+  <rect x="60" y="208" width="800" height="128" rx="10" fill="#EAF2FE" stroke="#2563EB" stroke-width="1.5"/>
+  <text x="80" y="230" font-size="12" font-weight="700" fill="#1d4ed8" letter-spacing="0.06em">CONSUMER LAYER (single poll thread)</text>
+  <rect x="90" y="242" width="220" height="76" rx="6" fill="#ffffff" stroke="#2563EB"/>
+  <text x="200" y="269" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">poll()</text>
+  <text x="200" y="286" text-anchor="middle" font-size="11" fill="#475569">one ConsumedMessage,</text>
+  <text x="200" y="300" text-anchor="middle" font-size="11" fill="#475569">never a batch</text>
+  <rect x="340" y="242" width="220" height="76" rx="6" fill="#ffffff" stroke="#2563EB"/>
+  <text x="450" y="269" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Message Validation</text>
+  <text x="450" y="286" text-anchor="middle" font-size="11" fill="#475569">schema, headers,</text>
+  <text x="450" y="300" text-anchor="middle" font-size="11" fill="#475569">key/body match</text>
+  <rect x="590" y="242" width="240" height="76" rx="6" fill="#ffffff" stroke="#2563EB"/>
+  <text x="710" y="269" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">MessageProcessor</text>
+  <text x="710" y="286" text-anchor="middle" font-size="11" fill="#475569">.process(message)</text>
+  <text x="710" y="300" text-anchor="middle" font-size="11" fill="#475569">orchestrates everything below</text>
+  <line x1="310" y1="280" x2="335" y2="280" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="560" y1="280" x2="585" y2="280" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <line x1="460" y1="336" x2="460" y2="362" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ============ 3. IDEMPOTENCY BOUNDARY ============ -->
+  <text x="460" y="384" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f172a">Idempotency: two independent layers</text>
+
+  <!-- Redis fast path -->
+  <rect x="60" y="398" width="380" height="176" rx="10" fill="#F5EEFF" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="80" y="420" font-size="12" font-weight="700" fill="#5b21b6" letter-spacing="0.05em">FAST PATH — Redis</text>
+  <text x="80" y="437" font-size="11" fill="#5b21b6">distributed coordination across processor instances</text>
+  <rect x="80" y="448" width="340" height="34" rx="5" fill="#ffffff" stroke="#7C3AED"/>
+  <text x="250" y="470" text-anchor="middle" font-size="12" font-family="ui-monospace, monospace" fill="#0f172a">reserve(event_id, token) — atomic Lua</text>
+  <line x1="250" y1="482" x2="250" y2="494" stroke="#7C3AED" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <rect x="80" y="496" width="340" height="34" rx="5" fill="#ffffff" stroke="#7C3AED"/>
+  <text x="250" y="518" text-anchor="middle" font-size="12" fill="#0f172a">PROCESSING lease held (bounded TTL)</text>
+  <line x1="250" y1="530" x2="250" y2="542" stroke="#7C3AED" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <rect x="80" y="544" width="340" height="24" rx="5" fill="#ede4ff" stroke="#7C3AED" stroke-dasharray="4 3"/>
+  <text x="250" y="560" text-anchor="middle" font-size="11" font-style="italic" fill="#5b21b6">complete() — only after commit, below ↓</text>
+
+  <!-- Postgres durable safety -->
+  <rect x="480" y="398" width="380" height="176" rx="10" fill="#EAF7EC" stroke="#15803d" stroke-width="1.5"/>
+  <text x="500" y="420" font-size="12" font-weight="700" fill="#166534" letter-spacing="0.05em">DURABLE SAFETY — PostgreSQL</text>
+  <text x="500" y="437" font-size="11" fill="#166534">survives Redis loss; the ground truth</text>
+  <rect x="500" y="452" width="340" height="102" rx="5" fill="#ffffff" stroke="#15803d"/>
+  <text x="670" y="474" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">processed_events ledger</text>
+  <text x="670" y="492" text-anchor="middle" font-size="11" fill="#475569">SELECT by event_id → digest match?</text>
+  <text x="670" y="507" text-anchor="middle" font-size="11" fill="#475569">already durably processed → skip</text>
+  <text x="670" y="522" text-anchor="middle" font-size="11" fill="#475569">→ else: this is the transaction's</text>
+  <text x="670" y="537" text-anchor="middle" font-size="11" fill="#475569">first INSERT (see box below)</text>
+  <text x="670" y="562" text-anchor="middle" font-size="10.5" font-style="italic" fill="#166534">runs inside the transaction, not before it</text>
+
+  <line x1="460" y1="574" x2="460" y2="600" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ============ 4. TRANSACTION BOX ============ -->
+  <rect x="40" y="602" width="840" height="742" rx="12" fill="#F0FBF1" stroke="#0f9d58" stroke-width="3"/>
+  <text x="460" y="632" text-anchor="middle" font-size="15" font-weight="800" fill="#0f5132" letter-spacing="0.04em">ONE POSTGRESQL TRANSACTION</text>
+  <text x="460" y="652" text-anchor="middle" font-size="11.5" fill="#0f5132">everything in this box commits together, or none of it does</text>
+
+  <rect x="380" y="668" width="160" height="32" rx="16" fill="#0f9d58"/>
+  <text x="460" y="689" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">BEGIN</text>
+  <line x1="460" y1="700" x2="460" y2="718" stroke="#0f5132" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <rect x="90" y="720" width="740" height="56" rx="6" fill="#ffffff" stroke="#0f9d58"/>
+  <text x="460" y="742" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">processed_events INSERT — durable idempotency guard + Kafka-coordinate uniqueness</text>
+  <text x="460" y="759" text-anchor="middle" font-size="11" fill="#475569">every event, always — the ledger row this whole system's correctness anchors on</text>
+  <line x1="460" y1="776" x2="460" y2="794" stroke="#0f5132" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <rect x="90" y="796" width="740" height="56" rx="6" fill="#ffffff" stroke="#0f9d58"/>
+  <text x="460" y="818" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">Business repository write (handler.apply)</text>
+  <text x="460" y="835" text-anchor="middle" font-size="11" fill="#475569">customer / session / cart / order / payment / refund — validated against the prior event's durable state</text>
+  <line x1="460" y1="852" x2="460" y2="870" stroke="#0f5132" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <rect x="90" y="872" width="356" height="180" rx="6" fill="#ffffff" stroke="#0f9d58" stroke-dasharray="5 4"/>
+  <text x="268" y="894" text-anchor="middle" font-size="12" font-weight="700" fill="#0f172a">IF fraud-eligible event type</text>
+  <text x="268" y="912" text-anchor="middle" font-size="11" fill="#64748b">(checkout / order / payment×2 / refund)</text>
+  <rect x="106" y="922" width="324" height="40" rx="5" fill="#F0FBF1" stroke="#0f9d58"/>
+  <text x="268" y="946" text-anchor="middle" font-size="11.5" fill="#0f172a">Fraud-context reads — up to 9 bounded SELECTs</text>
+  <line x1="268" y1="962" x2="268" y2="972" stroke="#0f5132" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <rect x="106" y="974" width="324" height="34" rx="5" fill="#F0FBF1" stroke="#0f9d58"/>
+  <text x="268" y="995" text-anchor="middle" font-size="11.5" fill="#0f172a">Fraud evaluation — pure Python, no DB</text>
+  <line x1="268" y1="1008" x2="268" y2="1018" stroke="#0f5132" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <rect x="106" y="1020" width="324" height="26" rx="5" fill="#F0FBF1" stroke="#0f9d58"/>
+  <text x="268" y="1038" text-anchor="middle" font-size="11" fill="#0f172a">fraud_evaluations + fraud_alerts INSERT</text>
+
+  <rect x="474" y="872" width="356" height="180" rx="6" fill="#FFF0F0" stroke="#c0392b" stroke-width="1.6"/>
+  <text x="652" y="898" text-anchor="middle" font-size="13" font-weight="800" fill="#7f1d1d">TRANSACTIONAL OUTBOX</text>
+  <text x="652" y="918" text-anchor="middle" font-size="11.5" fill="#7f1d1d">fraud_outbox INSERT</text>
+  <text x="652" y="936" text-anchor="middle" font-size="11" fill="#7f1d1d">same cursor, same transaction —</text>
+  <text x="652" y="951" text-anchor="middle" font-size="11" fill="#7f1d1d">commits atomically with the</text>
+  <text x="652" y="966" text-anchor="middle" font-size="11" fill="#7f1d1d">fraud_alerts row above.</text>
+  <text x="652" y="988" text-anchor="middle" font-size="11" fill="#7f1d1d">No separate publish step —</text>
+  <text x="652" y="1003" text-anchor="middle" font-size="11" fill="#7f1d1d">a downstream publisher polls this</text>
+  <text x="652" y="1018" text-anchor="middle" font-size="11" fill="#7f1d1d">table after COMMIT, independently.</text>
+  <text x="652" y="1038" text-anchor="middle" font-size="10.5" font-style="italic" fill="#991b1b">only on REVIEW/BLOCK decisions</text>
+
+  <line x1="460" y1="1052" x2="460" y2="1076" stroke="#0f5132" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <rect x="380" y="1078" width="160" height="32" rx="16" fill="#0f9d58"/>
+  <text x="460" y="1099" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">COMMIT</text>
+
+  <text x="460" y="1140" text-anchor="middle" font-size="11" fill="#0f5132">connection released back to the pool</text>
+  <text x="460" y="1158" text-anchor="middle" font-size="11" fill="#0f5132">on any error above: rollback, no ledger row, no side effects, no outbox row</text>
+  <text x="460" y="1180" text-anchor="middle" font-size="11" fill="#0f5132">retries re-run this whole block; every INSERT above is a safe no-op or a clean rejection, never a duplicate</text>
+
+  <line x1="460" y1="1344" x2="460" y2="1370" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ============ 5. POST-COMMIT FLOW ============ -->
+  <rect x="60" y="1372" width="800" height="150" rx="10" fill="#F1F5F9" stroke="#475569" stroke-width="1.5"/>
+  <text x="80" y="1394" font-size="12" font-weight="700" fill="#334155" letter-spacing="0.06em">POST-COMMIT (only reached if the transaction above committed)</text>
+
+  <rect x="90" y="1406" width="220" height="86" rx="6" fill="#F5EEFF" stroke="#7C3AED"/>
+  <text x="200" y="1432" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">Redis complete()</text>
+  <text x="200" y="1450" text-anchor="middle" font-size="11" fill="#475569">reservation → COMPLETED,</text>
+  <text x="200" y="1465" text-anchor="middle" font-size="11" fill="#475569">TTL 7 days — future</text>
+  <text x="200" y="1479" text-anchor="middle" font-size="11" fill="#475569">redeliveries short-circuit</text>
+
+  <rect x="340" y="1406" width="220" height="86" rx="6" fill="#ffffff" stroke="#475569"/>
+  <text x="450" y="1432" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">OffsetCommitTracker</text>
+  <text x="450" y="1450" text-anchor="middle" font-size="11" fill="#475569">contiguous-safe-offset</text>
+  <text x="450" y="1465" text-anchor="middle" font-size="11" fill="#475569">bookkeeping per partition,</text>
+  <text x="450" y="1479" text-anchor="middle" font-size="11" fill="#475569">batched (size/interval)</text>
+
+  <rect x="590" y="1406" width="240" height="86" rx="6" fill="#FFF7E0" stroke="#B8860B"/>
+  <text x="710" y="1432" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">Kafka offset commit</text>
+  <text x="710" y="1450" text-anchor="middle" font-size="11" fill="#475569">advances only up to the</text>
+  <text x="710" y="1465" text-anchor="middle" font-size="11" fill="#475569">highest contiguous safe</text>
+  <text x="710" y="1479" text-anchor="middle" font-size="11" fill="#475569">offset — never past a gap</text>
+
+  <line x1="310" y1="1449" x2="335" y2="1449" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="560" y1="1449" x2="585" y2="1449" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <text x="80" y="1560" font-size="12" font-weight="700" fill="#0f172a">Legend</text>
+  <rect x="80" y="1572" width="16" height="16" rx="3" fill="#EAF2FE" stroke="#2563EB"/>
+  <text x="104" y="1585" font-size="11.5" fill="#334155">Consumer / in-process</text>
+  <rect x="280" y="1572" width="16" height="16" rx="3" fill="#F5EEFF" stroke="#7C3AED"/>
+  <text x="304" y="1585" font-size="11.5" fill="#334155">Redis — fast, coordinating</text>
+  <rect x="520" y="1572" width="16" height="16" rx="3" fill="#F0FBF1" stroke="#0f9d58"/>
+  <text x="544" y="1585" font-size="11.5" fill="#334155">PostgreSQL — durable</text>
+  <rect x="720" y="1572" width="16" height="16" rx="3" fill="#FFF0F0" stroke="#c0392b"/>
+  <text x="744" y="1585" font-size="11.5" fill="#334155">Outbox</text>
+
+  <text x="460" y="1630" text-anchor="middle" font-size="11" fill="#94a3b8">services/event_processor/processor.py · persistence/unit_of_work.py · fraud/context.py + repository.py</text>
+  <text x="460" y="1648" text-anchor="middle" font-size="10.5" fill="#b6bfcc">Source-derived diagram — see docs/architecture/README.md for the code path this traces</text>
+</svg>

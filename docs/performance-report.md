@@ -1481,6 +1481,11 @@ established (idempotency, transactional persistence, transactional
 outbox, Kafka ordering, safe offset advancement)? **No code was changed** -
 this is a code-path inventory, not a benchmark.
 
+This lifecycle is also diagrammed directly (not a performance artifact -
+added afterward, purely for reference) in
+[`docs/architecture/`](architecture/README.md): the full event path and a
+worked crash-after-commit recovery timeline.
+
 **Lifecycle confirmed by direct inspection:** exactly one PostgreSQL
 transaction per source Kafka event, exactly one commit per event, Redis
 `reserve()`/`complete()` bracketing (never inside) that transaction, and

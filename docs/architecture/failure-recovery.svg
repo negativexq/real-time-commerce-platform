@@ -1,0 +1,104 @@
+<svg viewBox="0 0 920 1160" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Crash After Commit — Why At-Least-Once + Idempotent Recovery Is Safe</title>
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="920" height="1160" fill="#ffffff"/>
+
+  <text x="460" y="36" text-anchor="middle" font-size="22" font-weight="700" fill="#0f172a">Failure Scenario: Process Crashes After DB Commit</text>
+  <text x="460" y="58" text-anchor="middle" font-size="13" fill="#64748b">The worst ordinary timing window in an at-least-once system — and why this design still recovers safely</text>
+
+  <!-- timeline spine -->
+  <line x1="140" y1="96" x2="140" y2="1080" stroke="#cbd5e1" stroke-width="3"/>
+
+  <!-- helper macro-like repeated structure via individual groups -->
+
+  <!-- 1 -->
+  <circle cx="140" cy="110" r="9" fill="#2563EB"/>
+  <rect x="180" y="86" width="660" height="50" rx="8" fill="#EAF2FE" stroke="#2563EB"/>
+  <text x="200" y="107" font-size="13" font-weight="700" fill="#0f172a">1. Kafka delivers the event</text>
+  <text x="200" y="124" font-size="11.5" fill="#475569">poll() returns offset N on this consumer's owned partition</text>
+
+  <!-- 2 -->
+  <circle cx="140" cy="176" r="9" fill="#15803d"/>
+  <text x="152" y="181" font-size="13" font-weight="800" fill="#15803d">✓</text>
+  <rect x="180" y="152" width="660" height="50" rx="8" fill="#F5EEFF" stroke="#7C3AED"/>
+  <text x="200" y="173" font-size="13" font-weight="700" fill="#0f172a">2. Redis reserve(event_id, token) succeeds</text>
+  <text x="200" y="190" font-size="11.5" fill="#475569">state → PROCESSING, bounded TTL lease held</text>
+  <text x="792" y="181" font-size="16" font-weight="800" fill="#15803d">✅</text>
+
+  <!-- 3 -->
+  <circle cx="140" cy="242" r="9" fill="#15803d"/>
+  <rect x="180" y="218" width="660" height="58" rx="8" fill="#F0FBF1" stroke="#0f9d58" stroke-width="2"/>
+  <text x="200" y="240" font-size="13" font-weight="700" fill="#0f172a">3. PostgreSQL transaction commits</text>
+  <text x="200" y="257" font-size="11.5" fill="#475569">processed_events ledger row + business effects + (fraud/outbox if applicable) — all durable now</text>
+  <text x="792" y="248" font-size="16" font-weight="800" fill="#15803d">✅</text>
+
+  <!-- 4 crash -->
+  <circle cx="140" cy="312" r="10" fill="#b91c1c"/>
+  <rect x="180" y="284" width="660" height="56" rx="8" fill="#FFF0F0" stroke="#c0392b" stroke-width="2"/>
+  <text x="200" y="308" font-size="13.5" font-weight="800" fill="#7f1d1d">4. Process crashes — right here</text>
+  <text x="200" y="325" font-size="11.5" fill="#7f1d1d">container killed, OOM, host restart — anything, at the worst possible instant</text>
+  <text x="792" y="318" font-size="16" font-weight="800" fill="#b91c1c">❌</text>
+
+  <!-- 5 -->
+  <circle cx="140" cy="380" r="9" fill="#b91c1c"/>
+  <rect x="180" y="356" width="660" height="50" rx="8" fill="#FFF7F0" stroke="#c0392b"/>
+  <text x="200" y="377" font-size="13" font-weight="700" fill="#0f172a">5. Redis complete() never runs</text>
+  <text x="200" y="394" font-size="11.5" fill="#475569">reservation is left stuck at PROCESSING</text>
+  <text x="792" y="386" font-size="16" font-weight="800" fill="#b91c1c">❌</text>
+
+  <!-- 6 -->
+  <circle cx="140" cy="446" r="9" fill="#b91c1c"/>
+  <rect x="180" y="422" width="660" height="50" rx="8" fill="#FFF7E0" stroke="#B8860B"/>
+  <text x="200" y="443" font-size="13" font-weight="700" fill="#0f172a">6. Kafka offset for N is never committed</text>
+  <text x="200" y="460" font-size="11.5" fill="#475569">commit_terminal() is downstream of complete() — it was never reached</text>
+  <text x="792" y="452" font-size="16" font-weight="800" fill="#b91c1c">❌</text>
+
+  <!-- divider -->
+  <line x1="180" y1="492" x2="840" y2="492" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="460" y="516" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">— container restarts / a sibling picks up the partition on rebalance —</text>
+
+  <!-- 7 redelivery -->
+  <circle cx="140" cy="562" r="9" fill="#2563EB"/>
+  <rect x="180" y="538" width="660" height="50" rx="8" fill="#EAF2FE" stroke="#2563EB"/>
+  <text x="200" y="559" font-size="13" font-weight="700" fill="#0f172a">7. Kafka redelivers offset N</text>
+  <text x="200" y="576" font-size="11.5" fill="#475569">nothing was ever committed past it — at-least-once, exactly as designed</text>
+
+  <!-- 8 redis lease -->
+  <circle cx="140" cy="628" r="9" fill="#7C3AED"/>
+  <rect x="180" y="604" width="660" height="58" rx="8" fill="#F5EEFF" stroke="#7C3AED"/>
+  <text x="200" y="626" font-size="13" font-weight="700" fill="#0f172a">8. Redis reserve() is called again</text>
+  <text x="200" y="643" font-size="11.5" fill="#475569">the stale PROCESSING lease has TTL-expired by now (bounded, short) — a fresh reservation is granted</text>
+
+  <!-- 9 processed_events guard -->
+  <circle cx="140" cy="702" r="10" fill="#0f9d58"/>
+  <rect x="180" y="674" width="660" height="66" rx="8" fill="#F0FBF1" stroke="#0f9d58" stroke-width="2"/>
+  <text x="200" y="698" font-size="13.5" font-weight="800" fill="#0f172a">9. processed_events duplicate guard fires</text>
+  <text x="200" y="715" font-size="11.5" fill="#475569">SELECT by event_id finds the row from step 3 — digest matches → AlreadyPersistedEvent</text>
+  <text x="200" y="730" font-size="11.5" fill="#475569">the handler, business writes, and fraud/outbox path are never re-run</text>
+
+  <!-- 10 safe recovery -->
+  <circle cx="140" cy="782" r="11" fill="#0f9d58"/>
+  <rect x="180" y="750" width="660" height="80" rx="10" fill="#0f9d58"/>
+  <text x="510" y="778" text-anchor="middle" font-size="14.5" font-weight="800" fill="#ffffff">10. Safe recovery</text>
+  <text x="510" y="798" text-anchor="middle" font-size="12" fill="#eafff0">Redis complete() runs now → offset N commits → processing resumes at N+1</text>
+  <text x="510" y="816" text-anchor="middle" font-size="11.5" fill="#eafff0">business/fraud/outbox effects were written exactly once — the crash cost only a retry, not correctness</text>
+
+  <!-- callout box -->
+  <rect x="60" y="864" width="800" height="230" rx="12" fill="#F8FAFC" stroke="#475569" stroke-width="1.5"/>
+  <text x="80" y="892" font-size="14" font-weight="800" fill="#0f172a">Why this recovers safely, not just "usually works"</text>
+  <text x="80" y="918" font-size="12" fill="#334155">• <tspan font-weight="700">At-least-once, by construction:</tspan> the Kafka offset only advances after Redis complete() —</text>
+  <text x="98" y="935" font-size="12" fill="#334155">which only runs after the DB transaction commits. A crash anywhere before that point means redelivery.</text>
+  <text x="80" y="960" font-size="12" fill="#334155">• <tspan font-weight="700">Idempotent, by construction:</tspan> the processed_events ledger is the durable, independent source of</text>
+  <text x="98" y="977" font-size="12" fill="#334155">truth Redis losing its lease (TTL, restart, flush) cannot undermine — a replay is recognized and skipped.</text>
+  <text x="80" y="1002" font-size="12" fill="#334155">• <tspan font-weight="700">No double side effects:</tspan> business writes and the transactional outbox row live in the same</text>
+  <text x="98" y="1019" font-size="12" fill="#334155">transaction as the ledger row — if the ledger check says "already done," nothing else ever ran twice either.</text>
+  <text x="80" y="1044" font-size="12" fill="#334155">• <tspan font-weight="700">Ordering is preserved through the crash:</tspan> the partition's next offset is still N — a sibling consumer</text>
+  <text x="98" y="1061" font-size="12" fill="#334155">(or the restarted process) picks up exactly where the durable state actually is, not where Redis thought it was.</text>
+  <text x="80" y="1084" font-size="11" font-style="italic" fill="#64748b">Source: services/event_processor/processor.py (reserve/complete placement), persistence/repositories/processed_events.py (the guard)</text>
+
+  <text x="460" y="1140" text-anchor="middle" font-size="10.5" fill="#b6bfcc">See docs/architecture/event-lifecycle.svg for the full non-failure path this timeline is a slice of</text>
+</svg>

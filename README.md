@@ -66,6 +66,11 @@ processing, PostgreSQL uniqueness protects durable effects, and Kafka offsets
 are committed only after terminal handling. Delivery is **at least once**;
 ordering is partition-scoped rather than global.
 
+For the full per-event path - Kafka delivery through Redis/PostgreSQL
+idempotency, the single transaction spanning business persistence, fraud
+evaluation, and the transactional outbox, and a worked crash-recovery
+timeline - see [`docs/architecture/`](docs/architecture/README.md).
+
 ## Engineering Highlights
 
 - **Versioned event contracts:** shared Pydantic envelopes and payload models
