@@ -266,6 +266,7 @@ services:
       FRAUD_ALERT_TOPIC: ${FRAUD_ALERT_TOPIC:-commerce.fraud-alerts}
       FRAUD_OUTBOX_ENABLED: ${FRAUD_OUTBOX_ENABLED:-true}
     mem_limit: 320m
+    cpus: ${PROCESSOR_CPU_LIMIT:-8}
     restart: unless-stopped
 
   demo-verification-processor:

@@ -2972,3 +2972,124 @@ configuration was changed. This is attribution, not optimization.
   productive next step is confirming or ruling out Stage 29's host-CPU-
   oversubscription hypothesis - the one item explicitly left unconfirmed
   and the leading unresolved factor in the current ceiling.
+
+## Processor CPU budget A/B — container-level, host CPU hypothesis weakened
+
+- **Previous diagnosis leading to this experiment:** Stage 29's 6-partition/
+  6-worker sweep preserved correctness but did not move the throughput
+  ceiling, leaving host compute contention as the leading unresolved
+  environment-level hypothesis (summed processor CPU had reached ~530% of
+  a possible 600% at 2000 evt/s). VM-level CPU reallocation (the originally
+  requested 4-vCPU-vs-8-vCPU Docker Desktop A/B) was attempted first and
+  found **not reproducible from this environment**: Docker Desktop's
+  settings-store.json holds no `cpus`/`memory`/`vm` key, the `docker
+  desktop` CLI plugin (v0.4.3) exposes no resource-sizing subcommand, and
+  the VM's sockets under `~/Library/Containers/com.docker.docker/Data/vms/0/`
+  are undocumented internal IPC, not a supported API - changing VM CPU
+  sizing requires the Docker Desktop GUI (Settings → Resources → CPU limit
+  slider → Apply & Restart), which cannot be driven from this shell. Per
+  explicit instruction, that experiment was **not faked**; this stage runs
+  the narrower, explicitly-scoped substitute instead: **container-level**
+  CPU quota on the event-processor containers specifically, which answers
+  "does giving processor containers more CPU help?" - not "can this
+  application scale on a bigger machine?"
+- **Mechanism and proof of effect.** Added one line to
+  [`compose.yaml`](../../compose.yaml)'s `event-processor` service:
+  `cpus: ${PROCESSOR_CPU_LIMIT:-8}` (default 8 = the host's full core
+  count, a no-op preserving every prior stage's exact behavior since a
+  single container was never going to exceed the VM's total cores
+  anyway). Verified applied, not assumed, via two independent signals for
+  every configuration tested: `docker inspect --format
+  '{{.HostConfig.NanoCpus}}'` on each of the 6 containers, and reading
+  `/sys/fs/cgroup/cpu.max` from inside a running container (cgroup v2 CFS
+  quota/period, the actual enforcement mechanism) - both matched the
+  intended quota exactly in both configurations (`50000 100000` = 0.5 CPU
+  for Configuration A; `100000 100000` = 1.0 CPU for Configuration B).
+- **Design.** 6 Kafka partitions, 6 processor containers (same isolated
+  `commerce.events.scale6` topic and `commerce-event-processor-scale6-v1`
+  group as Stage 29 - production topic/group untouched throughout),
+  `PROCESSOR_WORKER_POOL_SIZE=1` (Stage 28's pooled mode never used, Kafka-
+  native partition parallelism only), same database/indexes/fraud
+  path/code revision as every prior stage. Configuration A: `cpus: 0.5`
+  per container (~3 CPU aggregate processor budget). Configuration B:
+  `cpus: 1.0` per container (~6 CPU aggregate budget, double A's). Rates
+  1050/1500/2000 evt/s, 10s warmup, 45s steady, 3 repeats each. Tags
+  [`bench-cpu-budget-A-0.5cpu-6w`](../../artifacts/benchmark/bench-cpu-budget-A-0.5cpu-6w/)
+  and
+  [`bench-cpu-budget-B-1cpu-6w`](../../artifacts/benchmark/bench-cpu-budget-B-1cpu-6w/).
+  Commands identical except `--run-tag` and `PROCESSOR_CPU_LIMIT`:
+  `python -m scripts.benchmark.direct_saturation --rates 1050,1500,2000 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --events-topic commerce.events.scale6 --consumer-group commerce-event-processor-scale6-v1`.
+- **Results (mean of 3 repeats per rate):**
+
+  | Rate | A (0.5 CPU/container) service rate | A lag slope | B (1.0 CPU/container) service rate | B lag slope |
+  | --- | ---: | ---: | ---: | ---: |
+  | 1050 | 977.1 | +55.7/s | 935.2 | +108.7/s |
+  | 1500 | 1,106.6 | +364.6/s | 1,021.9 | +450.3/s |
+  | 2000 | 1,227.3 | +747.4/s | 1,053.3 | +899.6/s |
+
+  Correctness (`unique_event_ids == processed_rows == matched_e2e`) held
+  in **all 18 repeats** across both configurations, at every rate. No
+  unexpected DLQ records, no duplicate durable effects, no unresolved
+  offset gaps; final lag drained to 0 after every repeat.
+- **The central finding: doubling the CPU quota did not help - and the
+  aggregate CPU actually used barely changed between configurations.**
+  Summed processor CPU usage stayed in the same ~250-370% band in *both*
+  configurations (Configuration A: ~251-311% against its 300% cap;
+  Configuration B: ~287-373% against its *600%* cap) - Configuration B had
+  twice the ceiling available and used almost the same absolute amount of
+  CPU as Configuration A did. Service rate did not improve with the extra
+  headroom; if anything it was nominally lower at every rate tested
+  (935.2 vs. 977.1 at 1050; 1,021.9 vs. 1,106.6 at 1500; 1,053.3 vs.
+  1,227.3 at 2000) - not attributed to a causal cost of *more* CPU quota
+  (there is no plausible mechanism for that), most likely reflecting the
+  ordinary repeat-to-repeat noise and gradual baseline drift already
+  documented in Stages 26-27 from this session's accumulating database
+  size, not a real negative effect.
+- **Direct throttling evidence rules out CPU quota as the constraint.**
+  `cgroup cpu.stat` read from a live Configuration-B container (the
+  *tighter*-feeling of the two by comparison, though still generous)
+  showed `nr_throttled: 46` out of `nr_periods: 10297` - about 0.45% of
+  scheduling periods hit the quota, functionally negligible. If container
+  CPU quota were the binding constraint, Configuration B's doubled budget
+  should have both (a) shown measurably higher CPU consumption than A,
+  and (b) produced a measurably higher service rate - neither happened.
+  PostgreSQL CPU stayed in the same modest 120-186% band in both
+  configurations, consistent with every prior stage's finding that the
+  database is not saturated.
+- **Decision, applying this experiment's own rules:** 0.5 CPU vs. 1.0 CPU
+  per container produced no meaningful throughput difference (if
+  anything, a nominal decrease, attributed to noise, not to more CPU
+  being harmful) - this is **Outcome B**. Conclusion, stated at the scope
+  this experiment can actually support: **on this local M2 Air benchmark
+  environment, processor container CPU quota alone does not explain the
+  observed ~1,000-1,200 evt/s ceiling under the 6-partition topology.**
+  This does **not** conclude "the application universally scales to X,"
+  does **not** conclude "Kafka was the bottleneck," and does **not**
+  resolve the still-open, narrower question of *host*-level (VM-wide)
+  CPU contention, which remains untested because the VM-level A/B could
+  not be run from this environment (see above) - this stage only rules
+  out the container-quota-specific version of the CPU hypothesis, a
+  meaningfully narrower claim than the original Stage 29 hypothesis.
+- **Official capacity claim unchanged: ~1050 evt/s sustainable.** This
+  stage ran no dedicated clean capacity sweep under a fixed CPU
+  configuration and does not establish or certify a new throughput
+  ceiling; per instruction, the existing claim is not modified by this
+  A/B alone.
+- **Correctness / validation:** application code diff is empty for
+  `processor.py`, `idempotency.py`, `dlq.py`, `offset_tracker.py`,
+  `unit_of_work.py`, every repository, and fraud logic - the only change
+  in this stage is the single additive, reversible `cpus:` line in
+  `compose.yaml` (default 8, a no-op unless `PROCESSOR_CPU_LIMIT` is
+  explicitly set). pytest (330), ruff, and mypy (185 files) all pass
+  unchanged. Environment fully restored: 1 processor worker, default
+  topic/group, `PROCESSOR_WORKER_POOL_SIZE=1`, default (unconstrained)
+  CPU quota verified via `docker inspect`/`cpu.max` after restoration,
+  production consumer lag 0.
+- **Next step:** with both the container-CPU-quota hypothesis and (from
+  Stage 30) persistence batching now ruled out or rejected, and VM-level
+  CPU reallocation blocked by this environment's tooling limitations, the
+  most defensible next step is not another local-host resource
+  experiment - it is treating the ~1050 evt/s isolated-pipeline ceiling
+  as this benchmark environment's honestly-measured, multiply-
+  cross-checked local capacity, and shifting focus away from chasing a
+  higher number in this specific sandbox.

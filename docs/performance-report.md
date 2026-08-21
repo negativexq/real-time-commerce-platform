@@ -1540,6 +1540,66 @@ step:** confirm or rule out Stage 29's host-CPU-oversubscription
 hypothesis, the one item still unconfirmed, rather than pursuing
 persistence optimization further.
 
+### Stage 31 — Processor CPU budget A/B: container-quota hypothesis weakened
+
+**Why?** Stage 29 left host compute contention as the leading unresolved
+hypothesis for why 6-partition/6-worker scaling didn't raise the ceiling.
+The originally requested VM-level (Docker Desktop 4-vCPU-vs-8-vCPU) A/B
+was attempted first and found **not reproducible from this environment** -
+no CLI flag, no editable settings file, only an undocumented internal
+socket API - so it was not run and not faked. This stage runs the
+narrower, explicitly-scoped substitute: does giving the processor
+*containers* more CPU quota help? (Not: can this scale on a bigger
+machine?)
+
+**Mechanism, verified not assumed:** one additive, reversible line in
+`compose.yaml` (`cpus: ${PROCESSOR_CPU_LIMIT:-8}`, default a no-op).
+Applied quota confirmed via `docker inspect` **and** `/sys/fs/cgroup/cpu.max`
+read from inside the containers for both configurations (`50000 100000` =
+0.5 CPU; `100000 100000` = 1.0 CPU).
+
+**Design:** 6 partitions/6 workers, isolated topic/group (production
+untouched), `PROCESSOR_WORKER_POOL_SIZE=1` (no Stage 28 pooled mode),
+same DB/indexes/code. Configuration A: 0.5 CPU/container (~3 CPU
+aggregate). Configuration B: 1.0 CPU/container (~6 CPU aggregate,
+double). 1050/1500/2000 evt/s, 3 repeats (tags
+[`bench-cpu-budget-A-0.5cpu-6w`](../artifacts/benchmark/bench-cpu-budget-A-0.5cpu-6w/) /
+[`bench-cpu-budget-B-1cpu-6w`](../artifacts/benchmark/bench-cpu-budget-B-1cpu-6w/)).
+
+**Central finding: doubling the quota did not help, and CPU actually used
+barely changed.** Summed processor CPU stayed in the same ~250-370% band
+in *both* configurations even though B's ceiling was twice A's - B never
+used the extra headroom it had. Service rate did not improve with more
+CPU available; if anything it was nominally lower at every rate (e.g.
+1050: 935.2 vs. 977.1 evt/s), attributed to ordinary repeat-to-repeat
+noise/baseline drift (Stages 26-27 already documented this drift), not a
+real cost of more CPU quota - there's no plausible mechanism for that.
+`cgroup cpu.stat` on a live Configuration-B container showed `nr_throttled:
+46` of `nr_periods: 10297` (~0.45%) - functionally negligible throttling
+even at the tighter-feeling of the two configurations. PostgreSQL CPU
+stayed flat (120-186%) in both, consistent with every prior stage.
+
+**Conclusion (Outcome B): on this local M2 Air benchmark environment,
+processor container CPU quota alone does not explain the observed
+~1,000-1,200 evt/s ceiling under the 6-partition topology.** Correctness
+held in all 18 repeats across both configurations. This does not conclude
+the application universally scales to any given number, does not conclude
+Kafka was the bottleneck, and does not resolve the narrower, still-open
+question of *host/VM-wide* CPU contention (untestable from this
+environment) - only the container-quota-specific version of the
+hypothesis is ruled out here. Full detail in
+[`optimization-history.md`](performance/optimization-history.md#processor-cpu-budget-ab--container-level-host-cpu-hypothesis-weakened).
+
+**Official capacity claim unchanged: ~1050 evt/s sustainable** - no
+dedicated clean capacity sweep was run under a fixed CPU configuration, so
+no new ceiling is certified by this A/B alone. **Validation:** application
+code diff empty for `processor.py`, `idempotency.py`, `dlq.py`,
+`offset_tracker.py`, `unit_of_work.py`, every repository, and fraud
+logic - only the one-line `compose.yaml` addition. pytest (330), ruff, and
+mypy (185 files) pass unchanged. Environment fully restored and verified:
+1 worker, default topic/group, `PROCESSOR_WORKER_POOL_SIZE=1`, default
+CPU quota, lag 0.
+
 ## Final Capacity Summary
 
 | Path/configuration | Artifact-backed result | Meaning |
