@@ -1,0 +1,138 @@
+<svg viewBox="0 0 1100 1280" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Event Processing — Sequence Diagram</title>
+  <defs>
+    <marker id="sarrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="sarrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1100" height="1280" fill="#ffffff"/>
+
+  <text x="550" y="34" text-anchor="middle" font-size="21" font-weight="700" fill="#0f172a">Event Processing — Sequence</text>
+  <text x="550" y="55" text-anchor="middle" font-size="12.5" fill="#64748b">One record, top to bottom — failure points are marked where the real system can crash</text>
+
+  <!-- lane headers -->
+  <g font-size="12.5" font-weight="700">
+    <rect x="50" y="76" width="140" height="34" rx="6" fill="#F1F5F9" stroke="#475569"/>
+    <text x="120" y="98" text-anchor="middle" fill="#0f172a">Producer</text>
+    <rect x="248" y="76" width="140" height="34" rx="6" fill="#FFF7E0" stroke="#B8860B"/>
+    <text x="318" y="98" text-anchor="middle" fill="#0f172a">Kafka</text>
+    <rect x="470" y="76" width="160" height="34" rx="6" fill="#EAF2FE" stroke="#2563EB"/>
+    <text x="550" y="98" text-anchor="middle" fill="#0f172a">Consumer (processor)</text>
+    <rect x="712" y="76" width="140" height="34" rx="6" fill="#F5EEFF" stroke="#7C3AED"/>
+    <text x="782" y="98" text-anchor="middle" fill="#0f172a">Redis</text>
+    <rect x="910" y="76" width="140" height="34" rx="6" fill="#F0FBF1" stroke="#0f9d58"/>
+    <text x="980" y="98" text-anchor="middle" fill="#0f172a">PostgreSQL</text>
+  </g>
+
+  <!-- lifelines -->
+  <g stroke="#cbd5e1" stroke-width="1.4">
+    <line x1="120" y1="112" x2="120" y2="1220"/>
+    <line x1="318" y1="112" x2="318" y2="1220"/>
+    <line x1="550" y1="112" x2="550" y2="1220"/>
+    <line x1="782" y1="112" x2="782" y2="1220"/>
+    <line x1="980" y1="112" x2="980" y2="1220"/>
+  </g>
+
+  <!-- 1: Producer -> Kafka -->
+  <line x1="120" y1="146" x2="313" y2="146" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="220" y="138" text-anchor="middle" font-size="11.5" fill="#334155">publish(event, key=entity_id)</text>
+
+  <!-- 2: Kafka -> Consumer -->
+  <line x1="318" y1="186" x2="545" y2="186" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="432" y="178" text-anchor="middle" font-size="11.5" fill="#334155">poll() → ConsumedMessage (offset N)</text>
+
+  <!-- 3: self validation -->
+  <rect x="550" y="204" width="150" height="30" rx="5" fill="#EAF2FE" stroke="#2563EB"/>
+  <text x="625" y="223" text-anchor="middle" font-size="11" fill="#0f172a">validate_message()</text>
+
+  <!-- 4: Consumer -> Redis reserve -->
+  <line x1="550" y1="264" x2="777" y2="264" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="666" y="256" text-anchor="middle" font-size="11.5" fill="#334155">reserve(event_id, token)</text>
+  <!-- 5: Redis -> Consumer -->
+  <line x1="782" y1="296" x2="555" y2="296" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="666" y="288" text-anchor="middle" font-size="11.5" fill="#334155">RESERVED</text>
+
+  <!-- 6: Consumer -> PostgreSQL BEGIN -->
+  <line x1="550" y1="336" x2="975" y2="336" stroke="#0f9d58" stroke-width="1.8" marker-end="url(#sarrow)"/>
+  <text x="762" y="328" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0f5132">BEGIN transaction</text>
+
+  <!-- transaction shading box, spans steps 6..COMMIT+failure marker A -->
+  <rect x="530" y="350" width="470" height="326" rx="10" fill="#F0FBF1" fill-opacity="0.55" stroke="#0f9d58" stroke-width="2"/>
+  <text x="765" y="372" text-anchor="middle" font-size="11.5" font-weight="800" fill="#0f5132">ONE POSTGRESQL TRANSACTION</text>
+
+  <!-- 7 -->
+  <line x1="550" y1="404" x2="975" y2="404" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="762" y="396" text-anchor="middle" font-size="11" fill="#334155">processed_events INSERT (idempotency + coord. guard)</text>
+
+  <!-- 8 -->
+  <line x1="550" y1="442" x2="975" y2="442" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="762" y="434" text-anchor="middle" font-size="11" fill="#334155">business repository write (handler.apply)</text>
+
+  <!-- 9 (conditional) -->
+  <line x1="550" y1="480" x2="975" y2="480" stroke="#334155" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#sarrow)"/>
+  <text x="762" y="472" text-anchor="middle" font-size="11" fill="#334155">fraud-context reads (up to 9 SELECTs) — if eligible</text>
+
+  <!-- 10 self fraud evaluation -->
+  <rect x="550" y="498" width="180" height="30" rx="5" fill="#EAF2FE" stroke="#2563EB" stroke-dasharray="4 3"/>
+  <text x="640" y="517" text-anchor="middle" font-size="10.5" fill="#0f172a">fraud evaluation (pure Python)</text>
+
+  <!-- 11 -->
+  <line x1="550" y1="558" x2="975" y2="558" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#sarrowRed)"/>
+  <text x="762" y="550" text-anchor="middle" font-size="11" fill="#7f1d1d">fraud_alerts + fraud_outbox INSERT — if REVIEW/BLOCK</text>
+
+  <!-- 12 COMMIT -->
+  <rect x="700" y="588" width="130" height="30" rx="15" fill="#0f9d58"/>
+  <text x="765" y="608" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">COMMIT</text>
+
+  <!-- failure marker A: crash before commit -->
+  <rect x="565" y="630" width="405" height="34" rx="6" fill="#FFF0F0" stroke="#c0392b"/>
+  <text x="767" y="645" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7f1d1d">⚠ crash before COMMIT → rolls back,</text>
+  <text x="767" y="658" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7f1d1d">nothing durable, safe to redeliver as new</text>
+
+  <!-- post-commit failure marker B -->
+  <rect x="530" y="694" width="480" height="52" rx="8" fill="#FFF0F0" stroke="#c0392b" stroke-width="1.6"/>
+  <text x="770" y="714" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7f1d1d">⚠ FAILURE POINT — crash after COMMIT, before Redis complete()</text>
+  <text x="770" y="732" text-anchor="middle" font-size="10.5" fill="#7f1d1d">offset never commits → Kafka redelivers → processed_events guard makes the replay a safe no-op</text>
+
+  <!-- 14: Consumer -> Redis complete -->
+  <line x1="550" y1="782" x2="777" y2="782" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="666" y="774" text-anchor="middle" font-size="11.5" fill="#334155">complete(event_id, token)</text>
+  <line x1="782" y1="812" x2="555" y2="812" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="666" y="804" text-anchor="middle" font-size="11.5" fill="#334155">COMPLETED (TTL 7d)</text>
+
+  <!-- 15: self OffsetCommitTracker -->
+  <rect x="470" y="836" width="160" height="34" rx="5" fill="#EAF2FE" stroke="#2563EB"/>
+  <text x="550" y="853" text-anchor="middle" font-size="10.5" fill="#0f172a">OffsetCommitTracker</text>
+  <text x="550" y="865" text-anchor="middle" font-size="10.5" fill="#0f172a">.mark_terminal()</text>
+
+  <!-- 16: Consumer -> Kafka commit -->
+  <line x1="550" y1="906" x2="323" y2="906" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="436" y="898" text-anchor="middle" font-size="11.5" fill="#334155">commit(offset N+1) — batched, contiguous-safe only</text>
+
+  <!-- Retry path box -->
+  <rect x="60" y="946" width="1010" height="160" rx="12" fill="#FFF7E0" stroke="#B8860B" stroke-width="1.6"/>
+  <text x="80" y="972" font-size="13" font-weight="800" fill="#8a6d1a">Retry path — any RetryableProcessingError / RetryableDatabaseError above</text>
+  <text x="80" y="994" font-size="11.5" fill="#334155">run_with_retry() re-invokes the same persist() call with bounded exponential backoff + jitter</text>
+  <text x="80" y="1011" font-size="11.5" fill="#334155">(processor_max_processing_attempts) — loops back to step 6, BEGIN transaction, above.</text>
+  <text x="80" y="1032" font-size="11.5" fill="#334155">Every INSERT above is a safe no-op (ON CONFLICT DO NOTHING) or a clean rejection on retry — never a duplicate row.</text>
+  <text x="80" y="1053" font-size="11.5" fill="#334155">On exhaustion: idempotency.release() frees the Redis lease, then the record publishes to commerce.events.dlq</text>
+  <text x="80" y="1074" font-size="11.5" fill="#334155">(Kafka producer only — no DB write on this path); the offset still commits, since DLQ is a terminal outcome.</text>
+  <text x="80" y="1094" font-size="11.5" fill="#334155">Retry exhaustion is per-record and never blocks or reorders any other partition's or event's processing.</text>
+
+  <!-- Legend -->
+  <text x="60" y="1146" font-size="12" font-weight="700" fill="#0f172a">Legend</text>
+  <line x1="60" y1="1162" x2="100" y2="1162" stroke="#334155" stroke-width="1.5" marker-end="url(#sarrow)"/>
+  <text x="108" y="1166" font-size="11" fill="#334155">call / return</text>
+  <line x1="240" y1="1162" x2="280" y2="1162" stroke="#334155" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#sarrow)"/>
+  <text x="288" y="1166" font-size="11" fill="#334155">conditional (fraud-eligible only)</text>
+  <rect x="500" y="1154" width="16" height="16" rx="3" fill="#FFF0F0" stroke="#c0392b"/>
+  <text x="524" y="1166" font-size="11" fill="#334155">failure point</text>
+  <rect x="650" y="1154" width="16" height="16" rx="3" fill="#F0FBF1" fill-opacity="0.55" stroke="#0f9d58" stroke-width="2"/>
+  <text x="674" y="1166" font-size="11" fill="#334155">single PostgreSQL transaction</text>
+
+  <text x="550" y="1210" text-anchor="middle" font-size="11" fill="#94a3b8">services/event_processor/processor.py · persistence/unit_of_work.py · consumer.py · offset_tracker.py</text>
+  <text x="550" y="1228" text-anchor="middle" font-size="10.5" fill="#b6bfcc">Matches the non-failure path in event-lifecycle.svg and the crash timeline in failure-recovery.svg — no independent claims</text>
+</svg>

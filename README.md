@@ -1,5 +1,11 @@
 # Real-Time Commerce Platform
 
+**Production-oriented event-driven commerce platform demonstrating reliable
+Kafka processing with at-least-once delivery, idempotent consumers (Redis
+coordination + a PostgreSQL durable ledger), transactional persistence, a
+transactional outbox for downstream integration, crash/failure recovery, and
+benchmark-driven capacity analysis.**
+
 An event-driven commerce platform that models stateful customer journeys from
 browsing through payment and refund, then processes versioned Kafka events into
 durable business and fraud outcomes.
@@ -69,7 +75,9 @@ ordering is partition-scoped rather than global.
 For the full per-event path - Kafka delivery through Redis/PostgreSQL
 idempotency, the single transaction spanning business persistence, fraud
 evaluation, and the transactional outbox, and a worked crash-recovery
-timeline - see [`docs/architecture/`](docs/architecture/README.md).
+timeline - see [`docs/architecture/`](docs/architecture/README.md): full
+lifecycle diagram, failure recovery timeline, sequence diagram, and design
+decisions.
 
 ## Engineering Highlights
 

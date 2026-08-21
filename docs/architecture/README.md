@@ -1,13 +1,22 @@
 # Event Processor Architecture
 
-Two diagrams tracing the actual code path for one Kafka event through the
-processor, derived directly from
+Diagrams and a design-decisions record tracing the actual code path for
+one Kafka event through the processor, derived directly from
 [`services/event_processor/processor.py`](../../services/event_processor/processor.py),
 [`persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
 and [`fraud/context.py`](../../services/event_processor/fraud/context.py) +
 [`fraud/repository.py`](../../services/event_processor/fraud/repository.py) -
 not an idealized or aspirational design. They are static, documentation-only
 artifacts; no runtime behavior changed to produce them.
+
+## Design Decisions
+
+[`design-decisions.md`](design-decisions.md) explains *why* the system is
+built this way - Redis + PostgreSQL idempotency, at-least-once delivery,
+the transactional outbox, partition-scoped ordering, and why persistence
+batching and unbounded worker scaling were each rejected - as
+Problem/Considered alternatives/Decision/Trade-off, tied back to the
+specific benchmark stages (Stage 28-31) that produced the evidence.
 
 ## [`event-lifecycle.svg`](event-lifecycle.svg) - the full path
 
@@ -55,6 +64,26 @@ that is still safe, not merely "usually fine":
   Kafka's own within-partition offset ordering means whichever consumer
   picks the partition back up resumes from the durable truth, not from
   whatever Redis last believed.
+
+## [`event-processing-sequence.svg`](event-processing-sequence.svg) - sequence view
+
+![Event processing sequence](event-processing-sequence.svg)
+
+The same lifecycle as `event-lifecycle.svg`, redrawn as a five-lane
+sequence diagram (Producer, Kafka, Consumer, Redis, PostgreSQL) so the
+*order and direction* of every call is explicit, alongside the two
+concrete crash points and the retry path:
+
+- a crash **before** `COMMIT` rolls the transaction back - nothing
+  durable, safe to redeliver as if the event were brand new;
+- a crash **after** `COMMIT` but before Redis `complete()` is the same
+  window `failure-recovery.svg` walks through in detail - the offset
+  never commits, so Kafka redelivers, and the `processed_events` guard
+  makes the replay a safe no-op;
+- the retry path shows that `run_with_retry()` re-invokes the same
+  `persist()` call on any retryable error, and that retry exhaustion
+  releases the Redis lease and routes to the DLQ rather than blocking or
+  reordering anything else.
 
 ## Why two independent idempotency layers
 
