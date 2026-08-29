@@ -1,5 +1,5 @@
 # Real-Time Commerce Platform
-
+ 
 **Production-oriented event-driven commerce platform demonstrating reliable
 Kafka processing with at-least-once delivery, idempotent consumers (Redis
 coordination + a PostgreSQL durable ledger), transactional persistence, a
