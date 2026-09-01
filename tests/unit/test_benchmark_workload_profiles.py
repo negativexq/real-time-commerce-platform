@@ -3,14 +3,22 @@ import pytest
 from scripts.benchmark.direct_injector import prepare_messages
 from scripts.benchmark.workload_profiles import (
     FRAUD_ELIGIBLE_EVENT_TYPES,
+    PreparedWorkload,
     calculate_fraud_eligible_share,
     event_type_counts,
     prepare_controlled_workload,
 )
-from shared.schemas import parse_event
+from shared.commerce_common.enums import EventType
+from shared.schemas import (
+    OrderCreatedPayload,
+    PaymentCompletedPayload,
+    PaymentFailedPayload,
+    SessionStartedPayload,
+    parse_event,
+)
 
 
-def _prepared(profile: str, target_count: int = 100_003):
+def _prepared(profile: str, target_count: int = 100_003) -> PreparedWorkload:
     return prepare_controlled_workload(
         bootstrap="localhost:29092",
         seed=20260831,
@@ -58,18 +66,20 @@ def test_profile_keeps_original_random_stream_for_shared_prefix() -> None:
     assert [event.event_type for event in first_events[:3]] == [
         event.event_type for event in second_events[:3]
     ]
-    first_sessions = [
-        event.payload
+    first_session = next(
+        event
         for event in first_events[:3]
-        if event.event_type.value == "session_started"
-    ]
-    second_sessions = [
-        event.payload
+        if event.event_type is EventType.SESSION_STARTED
+    )
+    second_session = next(
+        event
         for event in second_events[:3]
-        if event.event_type.value == "session_started"
-    ]
-    assert first_sessions[0].device_type == second_sessions[0].device_type
-    assert first_sessions[0].ip_address == second_sessions[0].ip_address
+        if event.event_type is EventType.SESSION_STARTED
+    )
+    assert isinstance(first_session.payload, SessionStartedPayload)
+    assert isinstance(second_session.payload, SessionStartedPayload)
+    assert first_session.payload.device_type == second_session.payload.device_type
+    assert first_session.payload.ip_address == second_session.payload.ip_address
 
 
 def test_different_seeds_remain_within_tolerance() -> None:
@@ -132,10 +142,17 @@ def test_controlled_components_are_valid_and_ordered(profile: str) -> None:
         order_ids = {
             str(event.payload.order_id)
             for event in component
-            if event.event_type.value == "order_created"
+            if event.event_type is EventType.ORDER_CREATED
+            and isinstance(event.payload, OrderCreatedPayload)
         }
         for event in component:
-            if event.event_type.value in {"payment_completed", "payment_failed"}:
+            if event.event_type in {
+                EventType.PAYMENT_COMPLETED,
+                EventType.PAYMENT_FAILED,
+            }:
+                assert isinstance(
+                    event.payload, (PaymentCompletedPayload, PaymentFailedPayload)
+                )
                 assert str(event.payload.order_id) in order_ids
 
 
