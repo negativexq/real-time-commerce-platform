@@ -24,6 +24,15 @@ and end-to-end observability.
 [Testing](#testing) ·
 [Troubleshooting](#troubleshooting)
 
+## Engineering Deep Dives
+
+| Topic | Question answered |
+| --- | --- |
+| [Fraud Decision Strategy](docs/deep-dives/fraud-decision-strategy.md) | How does behavior become APPROVE, REVIEW, or BLOCK? |
+| [Scenario & Journey Generation](docs/deep-dives/scenario-generation.md) | How are valid stateful commerce events generated? |
+| [Fraud-Eligible Workload Profiles](docs/deep-dives/fraud-workload-profiles.md) | How are 42.8%, 20%, 10%, 5%, and 0% workloads created? |
+| [Benchmark Methodology](docs/deep-dives/benchmark-methodology.md) | How is sustainable capacity classified and validated? |
+
 ## Overview
 
 Registrations, browsing, carts, orders, payments, and refunds arrive
@@ -153,6 +162,12 @@ an `APPROVE` decision.
 | ~10% | 1400 evt/s | 1500–1600 evt/s |
 | ~5% | Near-line-rate observed through 1500–1600 evt/s | Exact transition boundary not fully resolved |
 | 0% | 1600 evt/s | 1700 evt/s first transition/degraded candidate |
+
+> **Capacity is workload-dependent.** Under the historical workload (~42.8%
+> fraud-eligible events), the isolated processor remained near line rate
+> through roughly 1075 evt/s. Reducing fraud-path traffic shifted the observed
+> near-line-rate region upward, reaching roughly 1600 evt/s with 0%
+> fraud-eligible traffic.
 
 These are measured local observations, not production limits. The 0% row means
 the generated workload contained exactly zero fraud-eligible events; it does
