@@ -110,16 +110,14 @@ revert the change based on system-level evidence.
 
 These scopes are intentionally separate: the isolated three-worker result is
 not a continuation of the Demo full-path series and must not be read as a
-“49 → 1050 evt/s” optimization.
+“49 → 1050 evt/s” optimization or as one universal platform limit.
 
-> **Isolated processor capacity:** controlled benchmarking moved the
-> three-worker Kafka → processor → persistence path from ~750 evt/s
-> sustainable to ~1050 evt/s sustainable while durable correctness held in
-> every retained run — a measured ~40% increase, delivered across three
-> separate, independently evidenced changes (commit batching, then
-> query-plan-aware indexing plus a fresh capacity sweep). The current
-> transition begins around 1050–1075 evt/s. This is a local isolated
-> benchmark result, not a production capacity or SLA claim.
+> **Historical isolated benchmark:** Under the original direct-injector
+> workload, the three-worker Kafka → processor → persistence path reached
+> approximately **~1050 evt/s sustainable** while durable correctness held.
+> That workload contained approximately **42.8% fraud-eligible events**. This
+> is a local result for that workload and benchmark state, not a universal
+> platform capacity or production SLA.
 
 | Milestone | Sustainable isolated capacity |
 | --- | ---: |
@@ -129,7 +127,63 @@ not a continuation of the Demo full-path series and must not be read as a
 
 **~40% measured sustainable-capacity improvement from the ~750 evt/s
 baseline**, reached in two distinct, separately retained steps — not
-attributed to any single change.
+attributed to any single change. The historical ~1050 evt/s result remains
+valid for the original workload; it is not replaced by the workload-sensitive
+measurements below.
+
+### Workload-sensitive capacity
+
+Throughput depends on event composition and the amount of work performed per
+event. The processor therefore does not have a single workload-independent
+throughput ceiling. Fraud-eligible events enter the fraud path and may perform
+additional customer/order/payment context reads, fraud evaluation, and fraud
+persistence. Non-eligible events avoid that portion of the path, although they
+still incur normal validation, idempotency, business, and Kafka processing
+costs.
+
+Here, **fraud-eligible event share is not fraud detection rate**. The eligible
+events are `checkout_started`, `order_created`, `payment_completed`,
+`payment_failed`, and `refund_requested`. An eligible event can still produce
+an `APPROVE` decision.
+
+| Fraud-eligible event share | Highest near-line-rate observation | Transition / degraded candidate |
+| ---: | ---: | ---: |
+| ~42.8% historical baseline | 1075 evt/s | 1100 evt/s |
+| ~20% | 1200 evt/s | 1300 evt/s |
+| ~10% | 1400 evt/s | 1500–1600 evt/s |
+| ~5% | Near-line-rate observed through 1500–1600 evt/s | Exact transition boundary not fully resolved |
+| 0% | 1600 evt/s | 1700 evt/s first transition/degraded candidate |
+
+These are measured local observations, not production limits. The 0% row means
+the generated workload contained exactly zero fraud-eligible events; it does
+not disable or bypass fraud processing. The ~20% and ~42.8% observations and
+the later lower-share observations were collected in separate benchmark state
+regimes, so this is a workload-sensitivity study rather than a perfectly
+single-state authoritative capacity matrix.
+
+The controlled profiles changed only incoming benchmark composition. They used
+complete valid JourneyBuilder journeys, deterministic seeds, a common workload
+random stream, and profile-specific UUID namespaces to prevent durable
+idempotency collisions. The production path remained:
+
+`direct injector → Kafka → processor → Redis/PostgreSQL → outbox/DLQ`
+
+The benchmark used three processor workers, three Kafka partitions, and a
+1/1/1 assignment, with repeated warmup/steady-state runs around candidate
+rates. Accepted runs required the same correctness checks as normal traffic.
+
+#### Correctness evidence
+
+- Unique injected event IDs matched durable `processed_events` rows and E2E matches.
+- No unexpected dependency or database-integrity errors occurred.
+- No unexpected DLQ records remained.
+- Kafka source lag drained to zero and pending outbox work drained to zero.
+- Fraud-evaluation counts matched the fraud-eligible event count.
+- The 0% profile generated exactly zero fraud-eligible events.
+
+The detailed run artifacts and invalidation notes remain under
+[`artifacts/benchmark/`](artifacts/benchmark/), with the historical benchmark
+record preserved separately from the workload-composition observations.
 
 ### Performance engineering journey
 
@@ -156,17 +210,16 @@ process: reducing two SQL statements to one did not reduce total execution
 cost, and the change was removed when the steady-state benchmark contradicted
 the hypothesis.
 
-> **Local benchmark environment:** Results were measured under the documented
-> workload in a local Docker environment. The current ~1050 evt/s result
-> applies only to the isolated `Kafka → processor → persistence` path with
-> three processor workers and three Kafka partitions, verified 1/1/1
-> assignment, and the retained Kafka commit-batching and PostgreSQL indexing
-> changes above. ~1050 evt/s is the highest rate where all repeats stayed
-> bounded and correct; ~1075 evt/s is the first rate that repeatably
-> degraded. It is a comparative engineering result, not Demo full-path
-> throughput and not a production capacity or SLA claim. Earlier 750/775
-> evt/s figures above remain historically accurate for the pre-batching
-> configuration they were measured against.
+> **Benchmark scope:** These figures were measured in a local Docker
+> environment on the isolated `Kafka → processor → persistence` path. They
+> are hardware-, state-, topology-, and workload-dependent and are not a
+> production SLA. The historical ~1050 evt/s result remains the reference for
+> the original ~42.8% workload; the newer table shows how the observed region
+> changes as fraud-eligible traffic is reduced. Some profile groups were
+> executed after separate environment resets, and several transition bands
+> remain broad, so the table should not be read as a universal capacity curve.
+> Earlier 750/775 evt/s figures remain historically accurate for the
+> pre-batching configuration they were measured against.
 
 Follow the evidence from the [Performance Report](docs/performance-report.md)
 → [Methodology](docs/performance/methodology.md)
