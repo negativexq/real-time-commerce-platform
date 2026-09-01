@@ -1,19 +1,23 @@
 # Real-Time Commerce Platform
  
-**Production-oriented event-driven commerce platform demonstrating reliable
-Kafka processing with at-least-once delivery, idempotent consumers (Redis
-coordination + a PostgreSQL durable ledger), transactional persistence, a
-transactional outbox for downstream integration, crash/failure recovery, and
-benchmark-driven capacity analysis.**
+**Production-oriented event-driven commerce platform implementing at-least-once
+Kafka processing, idempotent consumers (Redis coordination + a PostgreSQL
+durable ledger), transactional persistence, a transactional outbox for
+downstream integration, and benchmark-driven capacity analysis.**
+
+The implementation includes crash and failure-recovery paths, but CI does not
+yet integration-test process crashes or restarts.
 
 An event-driven commerce platform that models stateful customer journeys from
 browsing through payment and refund, then processes versioned Kafka events into
 durable business and fraud outcomes.
 
-The runnable local system demonstrates the engineering guarantees behind
-at-least-once workflows: idempotent consumption, transactional persistence,
-bounded retries and DLQ handling, a transactional outbox, fraud evaluation,
-and end-to-end observability.
+The runnable local system exercises the workflows behind at-least-once
+processing: idempotent consumption, transactional persistence, bounded retries
+and DLQ handling, a transactional outbox, fraud evaluation, and end-to-end
+observability. CI verifies duplicate-consumer idempotency and DLQ-on-retry-
+exhaustion behavior against real Kafka, PostgreSQL, and Redis; other reliability
+paths remain unit- or smoke-tested.
 
 [Architecture](#architecture) ·
 [Engineering Highlights](#engineering-highlights) ·
@@ -37,7 +41,8 @@ and end-to-end observability.
 
 Registrations, browsing, carts, orders, payments, and refunds arrive
 asynchronously. The processor validates and persists them, evaluates
-deterministic fraud rules, and reliably publishes derived alerts. An
+deterministic fraud rules, and publishes derived alerts through a separate
+outbox publisher. An
 interactive Demo Control Center drives bounded scenarios and exposes live run
 progress, outcomes, infrastructure health, Prometheus metrics, and provisioned
 Grafana dashboards.
@@ -81,28 +86,33 @@ processing, PostgreSQL uniqueness protects durable effects, and Kafka offsets
 are committed only after terminal handling. Delivery is **at least once**;
 ordering is partition-scoped rather than global.
 
-For the full per-event path - Kafka delivery through Redis/PostgreSQL
+For the design of the full per-event path - Kafka delivery through Redis/PostgreSQL
 idempotency, the single transaction spanning business persistence, fraud
 evaluation, and the transactional outbox, and a worked crash-recovery
 timeline - see [`docs/architecture/`](docs/architecture/README.md): full
 lifecycle diagram, failure recovery timeline, sequence diagram, and design
-decisions.
+decisions. These documents describe the recovery paths; CI does not currently
+execute process-crash scenarios.
 
 ## Engineering Highlights
 
 - **Versioned event contracts:** shared Pydantic envelopes and payload models
   provide one producer/consumer validation boundary.
 - **Idempotent Kafka processing:** Redis token-checked leases coordinate work;
-  PostgreSQL constraints prevent duplicate durable side effects.
+  PostgreSQL constraints prevent duplicate durable side effects. CI verifies
+  duplicate delivery end to end against the real stack.
 - **Transactional consistency:** a Unit of Work commits business state, fraud
   decisions, and outbox records atomically per accepted source event.
 - **Bounded failure handling:** classified transient failures retry with capped
-  backoff; invalid or exhausted records follow a confirmed DLQ path.
-- **Reliable derived events:** a separate publisher claims committed outbox
-  rows and publishes fraud alerts with at-least-once delivery.
+  backoff; invalid or exhausted records follow a confirmed DLQ path. CI verifies
+  the retry-exhaustion path against the real stack.
+- **Derived events:** a separate publisher claims committed outbox rows and
+  publishes fraud alerts with at-least-once delivery. Outbox internals and
+  failure-ordering permutations are covered by unit tests, not real-stack
+  integration tests.
 - **Operability and evidence:** bounded-label Prometheus metrics, provisioned
-  Grafana dashboards, deterministic scenarios, and retained benchmark artifacts
-  make behavior inspectable and reproducible.
+  Grafana dashboards, deterministic scenarios, and retained benchmark summaries
+  make behavior inspectable and support reproducible local measurements.
 
 ## Performance Engineering
 
@@ -187,7 +197,7 @@ The benchmark used three processor workers, three Kafka partitions, and a
 1/1/1 assignment, with repeated warmup/steady-state runs around candidate
 rates. Accepted runs required the same correctness checks as normal traffic.
 
-#### Correctness evidence
+#### Benchmark correctness evidence
 
 - Unique injected event IDs matched durable `processed_events` rows and E2E matches.
 - No unexpected dependency or database-integrity errors occurred.
@@ -196,9 +206,11 @@ rates. Accepted runs required the same correctness checks as normal traffic.
 - Fraud-evaluation counts matched the fraud-eligible event count.
 - The 0% profile generated exactly zero fraud-eligible events.
 
-The detailed run artifacts and invalidation notes remain under
+The benchmark summaries and invalidation notes remain under
 [`artifacts/benchmark/`](artifacts/benchmark/), with the historical benchmark
-record preserved separately from the workload-composition observations.
+record preserved separately from the workload-composition observations. Raw
+per-run dumps are reproducible through the benchmark scripts but are not
+committed.
 
 ### Performance engineering journey
 
@@ -372,7 +384,7 @@ primary consumer group offsets.
 | `scripts/` | Deterministic smoke, verification, and scoped cleanup utilities. |
 | `services/` | Generator, processor, outbox publisher, and Demo Control API services. |
 | `shared/` | Versioned event schemas, common domain helpers, Kafka metadata, and metrics. |
-| `tests/` | Python unit tests and event fixtures. |
+| `tests/` | Python unit and integration tests, plus event fixtures. |
 
 Root-level orchestration lives in `compose.yaml`, `Makefile`, `.env.example`,
 and `pyproject.toml`.
@@ -518,6 +530,33 @@ make type-check
 make test
 make compose-config
 ```
+
+### CI reliability coverage
+
+CI has two jobs. `quality` runs `make check` without live services, so
+integration tests skip there when their dependencies are unavailable.
+`integration` starts the compose Kafka, kafka-init, PostgreSQL, and Redis
+services, runs `pytest -m integration`, and fails if no marked test executes or
+if any marked test skips.
+
+The current processor reliability coverage against the real stack is limited
+to two behaviors:
+
+- duplicate delivery is consumed once at the business-effect boundary: the
+  PostgreSQL side effect is persisted once, Redis completion is recorded, and
+  the source offset advances;
+- a deterministic processing failure reaches the real DLQ after retry
+  exhaustion, and the source offset is committed only after DLQ delivery.
+
+The fraud-context integration tests use real PostgreSQL but do not exercise the
+full Kafka/Redis processor path. Outbox internals and most failure-ordering
+permutations use in-process fakes in unit tests.
+
+### Known reliability test limitations
+
+CI has no real-stack integration coverage for process crash/restart redelivery,
+a crash after the PostgreSQL commit and before Redis completion, a crash during
+outbox publication, or multi-consumer rebalance recovery.
 
 ### Frontend
 
