@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -13,6 +14,13 @@ from confluent_kafka import Producer  # type: ignore[import-untyped]
 
 from scripts.benchmark.config import derive_seed, load_config
 from scripts.benchmark.stats import percentiles
+from scripts.benchmark.workload_profiles import (
+    FRAUD_ELIGIBLE_EVENT_TYPES,
+    PROFILE_NAMES,
+    PROFILE_TARGETS,
+    calculate_fraud_eligible_share,
+    prepare_controlled_workload,
+)
 from services.event_generator.anomalies import valid_message
 from services.event_generator.config import GeneratorConfig
 from services.event_generator.generator import SeededUuidFactory, SyntheticGenerator
@@ -139,18 +147,33 @@ def inject_messages(
     sample: Callable[[], None] | None = None,
     producer: DirectProducer | None = None,
     close_producer: bool = True,
+    workload_profile: str = "baseline",
 ) -> dict[str, Any]:
     """Publish prebuilt messages at a monotonic fixed rate. ``topic``
     defaults to the standard production topic - every prior benchmark stage
     keeps behaving identically; only a caller that explicitly passes an
     isolated topic (e.g. a partition-scaling experiment) diverges."""
+    if workload_profile not in PROFILE_NAMES:
+        raise ValueError(f"unsupported workload profile: {workload_profile}")
     target_count = max(1, int(rate * duration_seconds * 1.05))
-    messages = prepare_messages(
-        bootstrap=bootstrap,
-        seed=seed,
-        target_count=target_count,
-        client_id=f"direct-injector-{config_tag}",
-    )
+    if workload_profile == "baseline":
+        messages = prepare_messages(
+            bootstrap=bootstrap,
+            seed=seed,
+            target_count=target_count,
+            client_id=f"direct-injector-{config_tag}",
+        )
+        component_starts: set[int] = set()
+    else:
+        prepared = prepare_controlled_workload(
+            bootstrap=bootstrap,
+            seed=seed,
+            target_count=target_count,
+            profile=workload_profile,
+            client_id=f"direct-injector-{config_tag}",
+        )
+        messages = prepared.messages
+        component_starts = {start for start, _ in prepared.component_ranges}
     producer_config = GeneratorConfig(
         kafka_bootstrap_servers=bootstrap,
         kafka_client_id=f"direct-injector-{config_tag}",
@@ -169,10 +192,13 @@ def inject_messages(
     next_sample = started
     published_ids: list[str] = []
     send_timestamps: list[float] = []
+    published_type_counts: dict[str, int] = {}
     try:
-        for message in messages:
+        for index, message in enumerate(messages):
             now = perf_counter()
-            if now - started >= duration_seconds:
+            if now - started >= duration_seconds and (
+                workload_profile == "baseline" or index in component_starts
+            ):
                 break
             if sample is not None and now >= next_sample:
                 sample()
@@ -187,6 +213,9 @@ def inject_messages(
             send_timestamps.append(publish_started)
             if message.event_id is not None:
                 published_ids.append(str(message.event_id))
+            published_type_counts[message.event_type] = (
+                published_type_counts.get(message.event_type, 0) + 1
+            )
             next_deadline += interval
             now = perf_counter()
             lateness = now - next_deadline
@@ -204,6 +233,11 @@ def inject_messages(
         errors += producer.delivery_failures
         raise
     ended = perf_counter()
+    fraud_eligible_event_count = sum(
+        count
+        for event_type, count in published_type_counts.items()
+        if event_type in FRAUD_ELIGIBLE_EVENT_TYPES
+    )
     return {
         "requested_rate": rate,
         "target_count": target_count,
@@ -217,6 +251,15 @@ def inject_messages(
         "arrival_variance": arrival_variance_summary(send_timestamps),
         "event_ids": published_ids,
         "send_timestamps": send_timestamps,
+        "workload_profile": workload_profile,
+        "requested_fraud_eligible_share": PROFILE_TARGETS[workload_profile],
+        "event_type_counts": published_type_counts,
+        "fraud_eligible_event_count": fraud_eligible_event_count,
+        "non_fraud_eligible_event_count": len(published_ids)
+        - fraud_eligible_event_count,
+        "actual_fraud_eligible_share": (
+            calculate_fraud_eligible_share(published_type_counts)
+        ),
     }
 
 
@@ -228,6 +271,11 @@ def main() -> int:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--events-topic", default="commerce.events")
+    parser.add_argument(
+        "--workload-profile",
+        choices=PROFILE_NAMES,
+        default=os.environ.get("BENCH_WORKLOAD_PROFILE", "baseline"),
+    )
     args = parser.parse_args()
     configure_logging("WARNING")
     config = load_config(args.run_tag)
@@ -238,6 +286,7 @@ def main() -> int:
         duration_seconds=args.duration_seconds,
         seed=args.seed or derive_seed(args.run_tag, "direct-injector", str(args.rate)),
         topic=args.events_topic,
+        workload_profile=args.workload_profile,
     )
     result["run_tag"] = args.run_tag
     result["seed"] = args.seed or derive_seed(
