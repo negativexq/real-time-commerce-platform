@@ -22,6 +22,8 @@ from scripts.benchmark.config import load_config
 from services.event_processor.errors import FraudContextDependencyError
 from services.event_processor.fraud.context import FraudContextBuilder
 
+pytestmark = pytest.mark.integration
+
 
 def _connect() -> psycopg.Connection[tuple[object, ...]] | None:
     dsn = load_config("fraud-context-roundtrip-test").postgres_dsn
