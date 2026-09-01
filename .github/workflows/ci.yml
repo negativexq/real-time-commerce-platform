@@ -34,6 +34,8 @@ jobs:
     needs: quality
     timeout-minutes: 15
     env:
+      BENCH_KAFKA_BOOTSTRAP: localhost:29092
+      BENCH_REDIS_URL: redis://127.0.0.1:6379/0
       BENCH_POSTGRES_DSN: postgresql://commerce:commerce_local_dev@127.0.0.1:5432/commerce
 
     steps:
@@ -49,8 +51,24 @@ jobs:
       - name: Install project
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
-      - name: Bring up PostgreSQL
-        run: docker compose up -d postgres
+      - name: Bring up Kafka, Kafka init, PostgreSQL, and Redis
+        run: docker compose up -d kafka kafka-init postgres redis
+
+      - name: Wait for Kafka readiness
+        run: |
+          for attempt in {1..60}; do
+            if docker compose exec -T kafka \
+              /opt/kafka/bin/kafka-topics.sh \
+              --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs kafka
+          exit 1
+
+      - name: Wait for Kafka topic initialization
+        run: docker compose wait kafka-init
 
       - name: Wait for PostgreSQL readiness
         run: |
@@ -85,9 +103,9 @@ jobs:
           print(f"Integration tests executed: {executed}; skipped: {skipped}")
           PY
 
-      - name: Dump PostgreSQL logs on failure
+      - name: Dump dependency logs on failure
         if: failure()
-        run: docker compose logs postgres
+        run: docker compose logs kafka kafka-init postgres redis
 
       - name: Tear down
         if: always()
