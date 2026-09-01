@@ -53,5 +53,6 @@ AGENTS.md
 artifacts/benchmark/**/direct-saturation.json
 artifacts/benchmark/**/direct-saturation-*.json
 artifacts/benchmark/**/injector-*.json
+artifacts/benchmark/**/*.jsonl
 artifacts/benchmark/**/postgres-diagnostics-raw-*.json
 artifacts/benchmark/**/cpu-scheduling-raw-*.json
