@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 440" width="1240" height="440" role="img" aria-label="Dead-letter loop: the processor publishes to commerce.events.dlq, the sink copies records into dead_letters, operators triage them, and replayable ones go back to commerce.events">
+<title>Dead-letter loop: the processor publishes to commerce.events.dlq, the sink copies records into dead_letters, operators triage them, and replayable ones go back to commerce.events</title>
+<style>
+  .t { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; fill: #151c25; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #151c25; }
+  .mut { fill: #5d6673; }
+  .flow { stroke-dasharray: 6 8; animation: flow 1.6s linear infinite; }
+  .fast { animation-duration: 0.8s; }
+  .slow { animation-duration: 3.2s; }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+  .pulse { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .flow, .pulse { animation: none; } }
+</style>
+<defs>
+  <filter id="sh" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="1.6" flood-color="#0f172a" flood-opacity=".07"/></filter>
+  <marker id="ah-flow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0e8a91"/></marker>
+  <marker id="ah-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f7d45"/></marker>
+  <marker id="ah-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a86a0c"/></marker>
+  <marker id="ah-bad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c23b28"/></marker>
+  <marker id="ah-mut" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5d6673"/></marker>
+</defs>
+<rect x="0.5" y="0.5" width="1239" height="439" rx="16" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="40" y="150" width="200" height="96" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="59" cy="174" r="4.5" fill="#2f7d45"/>
+<text x="71" y="178.5" class="t" font-size="14" font-weight="600" text-anchor="start">Event processor</text>
+<text x="56" y="200" class="t mut" font-size="12" font-weight="400" text-anchor="start">validation failure,</text>
+<text x="56" y="217" class="t mut" font-size="12" font-weight="400" text-anchor="start">permanent error or</text>
+<text x="56" y="234" class="t mut" font-size="12" font-weight="400" text-anchor="start">retries exhausted</text>
+<rect x="300" y="169" width="200" height="58" rx="9" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="300" y="179" width="3" height="38" rx="1.5" fill="#a86a0c"/>
+<text x="316" y="194" class="m" font-size="13" font-weight="600" text-anchor="start">commerce.events.dlq</text>
+<text x="316" y="213" class="t mut" font-size="11.5" font-weight="400" text-anchor="start">full record + error</text>
+<rect x="560" y="150" width="180" height="96" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="579" cy="174" r="4.5" fill="#a86a0c"/>
+<text x="591" y="178.5" class="t" font-size="14" font-weight="600" text-anchor="start">DLQ sink</text>
+<text x="576" y="200" class="t mut" font-size="12" font-weight="400" text-anchor="start">idempotent on the</text>
+<text x="576" y="217" class="t mut" font-size="12" font-weight="400" text-anchor="start">DLQ coordinates</text>
+<rect x="800" y="120" width="400" height="160" rx="12" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="819" cy="144" r="4.5" fill="#a86a0c"/>
+<text x="831" y="148.5" class="m" font-size="14" font-weight="600" text-anchor="start">dead_letters</text>
+<text x="1184" y="148.5" class="t mut" font-size="12" font-weight="400" text-anchor="end">console: Dead letters</text>
+<rect x="816" y="172" width="176" height="38" rx="8" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="830" cy="191" r="4" fill="#a86a0c"/>
+<text x="842" y="189" class="m" font-size="12" font-weight="600" text-anchor="start">NEW</text>
+<text x="842" y="203" class="t mut" font-size="10.5" font-weight="400" text-anchor="start">not looked at yet</text>
+<rect x="1008" y="172" width="176" height="38" rx="8" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1022" cy="191" r="4" fill="#0e8a91"/>
+<text x="1034" y="189" class="m" font-size="12" font-weight="600" text-anchor="start">TRIAGED</text>
+<text x="1034" y="203" class="t mut" font-size="10.5" font-weight="400" text-anchor="start">understood, kept</text>
+<rect x="816" y="220" width="176" height="38" rx="8" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="830" cy="239" r="4" fill="#7b8491"/>
+<text x="842" y="237" class="m" font-size="12" font-weight="600" text-anchor="start">DISCARDED</text>
+<text x="842" y="251" class="t mut" font-size="10.5" font-weight="400" text-anchor="start">not worth acting on</text>
+<rect x="1008" y="220" width="176" height="38" rx="8" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1022" cy="239" r="4" fill="#2f7d45"/>
+<text x="1034" y="237" class="m" font-size="12" font-weight="600" text-anchor="start">REPLAYED</text>
+<text x="1034" y="251" class="t mut" font-size="10.5" font-weight="400" text-anchor="start">sent back to Kafka</text>
+<path d="M240,198 L300,198" fill="none" stroke="#dfe4ea" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M240,198 L300,198" fill="none" stroke="#a86a0c" stroke-width="2.5" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<path d="M500,198 L560,198" fill="none" stroke="#dfe4ea" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M500,198 L560,198" fill="none" stroke="#a86a0c" stroke-width="2.5" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<path d="M740,198 L800,198" fill="none" stroke="#dfe4ea" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M740,198 L800,198" fill="none" stroke="#a86a0c" stroke-width="2.5" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<path d="M1000,120 C1000,40 140,40 140,150" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M1000,120 C1000,40 140,40 140,150" fill="none" stroke="#2f7d45" stroke-width="2" stroke-linecap="round" class="flow " marker-end="url(#ah-ok)"/>
+<rect x="470" y="22" width="300" height="38" rx="19" fill="#ffffff" stroke="#dfe4ea"/>
+<text x="620" y="46" class="t" font-size="12.5" font-weight="600" text-anchor="middle" style="fill:#2f7d45">Replay to commerce.events</text>
+<rect x="40" y="320" width="1160" height="92" rx="12" fill="#ffffff" stroke="#dfe4ea"/>
+<text x="62" y="349" class="t" font-size="12.5" font-weight="600" text-anchor="start">Replay is offered only when a second try can work:</text>
+<text x="62" y="370" class="m mut" font-size="12" font-weight="400" text-anchor="start">retry_exhausted or missing_business_dependency  ·  full, untruncated payload  ·  source topic on the allow-list  ·  status not already REPLAYED</text>
+<text x="62" y="393" class="t mut" font-size="12" font-weight="400" text-anchor="start">The row is locked while the record is sent; if Kafka does not confirm delivery, nothing changes.</text>
+<text x="40" y="290" class="t mut" font-size="12" font-weight="400" text-anchor="start">A replay that fails again lands as a new record, linked from the original.</text>
+</svg>

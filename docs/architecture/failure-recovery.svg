@@ -98,7 +98,7 @@
   <text x="98" y="1019" font-size="12" fill="#334155">transaction as the ledger row — if the ledger check says "already done," nothing else ever ran twice either.</text>
   <text x="80" y="1044" font-size="12" fill="#334155">• <tspan font-weight="700">Ordering is preserved through the crash:</tspan> the partition's next offset is still N — a sibling consumer</text>
   <text x="98" y="1061" font-size="12" fill="#334155">(or the restarted process) picks up exactly where the durable state actually is, not where Redis thought it was.</text>
-  <text x="80" y="1084" font-size="11" font-style="italic" fill="#64748b">Source: services/event_processor/processor.py (reserve/complete placement), persistence/repositories/processed_events.py (the guard)</text>
+  <text x="80" y="1084" font-size="11" font-style="italic" fill="#64748b">Source: services/event_processor_go/internal/processor (reserve/complete placement), persistence/repositories.go insertProcessedEvent (the guard)</text>
 
   <text x="460" y="1140" text-anchor="middle" font-size="10.5" fill="#b6bfcc">See docs/architecture/event-lifecycle.svg for the full non-failure path this timeline is a slice of</text>
 </svg>

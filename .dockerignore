@@ -23,5 +23,3 @@ scripts/*
 !scripts/generator-smoke.py
 !scripts/generator-persona-smoke.py
 !scripts/generator-anomaly-smoke.py
-!scripts/processor-smoke.py
-!scripts/persistence-smoke.py

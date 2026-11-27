@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly required_tables=(
-  "dead_letter_events"
+  "dead_letters"
   "fraud_alerts"
   "processed_events"
 )

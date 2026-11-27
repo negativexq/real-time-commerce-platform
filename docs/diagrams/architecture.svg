@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 690" width="1240" height="690" role="img" aria-label="Architecture: the scenario runner publishes to Kafka; the Go processor takes a Redis lease and writes each event in one PostgreSQL transaction; failures go to a DLQ topic and a sink copies them into PostgreSQL for triage and replay; an outbox publisher sends fraud alerts">
+<title>Architecture: the scenario runner publishes to Kafka; the Go processor takes a Redis lease and writes each event in one PostgreSQL transaction; failures go to a DLQ topic and a sink copies them into PostgreSQL for triage and replay; an outbox publisher sends fraud alerts</title>
+<style>
+  .t { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; fill: #151c25; }
+  .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #151c25; }
+  .mut { fill: #5d6673; }
+  .flow { stroke-dasharray: 6 8; animation: flow 1.6s linear infinite; }
+  .fast { animation-duration: 0.8s; }
+  .slow { animation-duration: 3.2s; }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+  .pulse { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .flow, .pulse { animation: none; } }
+</style>
+<defs>
+  <filter id="sh" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation="1.6" flood-color="#0f172a" flood-opacity=".07"/></filter>
+  <marker id="ah-flow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0e8a91"/></marker>
+  <marker id="ah-ok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f7d45"/></marker>
+  <marker id="ah-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a86a0c"/></marker>
+  <marker id="ah-bad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c23b28"/></marker>
+  <marker id="ah-mut" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5d6673"/></marker>
+</defs>
+<rect x="0.5" y="0.5" width="1239" height="689" rx="16" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="40" y="70" width="230" height="96" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="59" cy="94" r="4.5" fill="#0e8a91"/>
+<text x="71" y="98.5" class="t" font-size="14" font-weight="600" text-anchor="start">Commerce console</text>
+<text x="56" y="120" class="t mut" font-size="12" font-weight="400" text-anchor="start">Next.js web + FastAPI</text>
+<text x="56" y="137" class="t mut" font-size="12" font-weight="400" text-anchor="start">runs, fraud, dead-letter triage</text>
+<rect x="40" y="250" width="230" height="96" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="59" cy="274" r="4.5" fill="#0e8a91" class="pulse"/>
+<text x="71" y="278.5" class="t" font-size="14" font-weight="600" text-anchor="start">Scenario runner</text>
+<text x="56" y="300" class="t mut" font-size="12" font-weight="400" text-anchor="start">seeded customer journeys</text>
+<text x="56" y="317" class="t mut" font-size="12" font-weight="400" text-anchor="start">bounded count and rate</text>
+<rect x="330" y="40" width="270" height="436" rx="14" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<text x="352" y="72" class="t" font-size="16" font-weight="650" text-anchor="start">Kafka</text>
+<text x="352" y="92" class="t mut" font-size="12" font-weight="400" text-anchor="start">KRaft, single broker</text>
+<rect x="350" y="118" width="230" height="58" rx="9" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="350" y="128" width="3" height="38" rx="1.5" fill="#0e8a91"/>
+<text x="366" y="143" class="m" font-size="13" font-weight="600" text-anchor="start">commerce.events</text>
+<text x="366" y="162" class="t mut" font-size="11.5" font-weight="400" text-anchor="start">3 partitions, keyed by customer</text>
+<rect x="350" y="258" width="230" height="58" rx="9" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="350" y="268" width="3" height="38" rx="1.5" fill="#a86a0c"/>
+<text x="366" y="283" class="m" font-size="13" font-weight="600" text-anchor="start">commerce.events.dlq</text>
+<text x="366" y="302" class="t mut" font-size="11.5" font-weight="400" text-anchor="start">invalid or exhausted records</text>
+<rect x="350" y="398" width="230" height="58" rx="9" fill="#f3f5f8" stroke="#dfe4ea"/>
+<rect x="350" y="408" width="3" height="38" rx="1.5" fill="#c23b28"/>
+<text x="366" y="423" class="m" font-size="13" font-weight="600" text-anchor="start">commerce.fraud-alerts</text>
+<text x="366" y="442" class="t mut" font-size="11.5" font-weight="400" text-anchor="start">derived events from the outbox</text>
+<rect x="660" y="60" width="260" height="150" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="679" cy="84" r="4.5" fill="#2f7d45" class="pulse"/>
+<text x="691" y="88.5" class="t" font-size="14" font-weight="600" text-anchor="start">Event processor</text>
+<text x="904" y="88.5" class="m mut" font-size="12" font-weight="400" text-anchor="end">Go</text>
+<text x="676" y="114" class="m" font-size="11.5" font-weight="600" text-anchor="start" style="fill:#0e8a91">1</text>
+<text x="694" y="114" class="t mut" font-size="12" font-weight="400" text-anchor="start">validate the contract</text>
+<text x="676" y="136" class="m" font-size="11.5" font-weight="600" text-anchor="start" style="fill:#0e8a91">2</text>
+<text x="694" y="136" class="t mut" font-size="12" font-weight="400" text-anchor="start">take a Redis lease</text>
+<text x="676" y="158" class="m" font-size="11.5" font-weight="600" text-anchor="start" style="fill:#0e8a91">3</text>
+<text x="694" y="158" class="t mut" font-size="12" font-weight="400" text-anchor="start">one PostgreSQL transaction</text>
+<text x="676" y="180" class="m" font-size="11.5" font-weight="600" text-anchor="start" style="fill:#0e8a91">4</text>
+<text x="694" y="180" class="t mut" font-size="12" font-weight="400" text-anchor="start">commit the offset</text>
+<rect x="660" y="262" width="260" height="84" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="679" cy="286" r="4.5" fill="#a86a0c"/>
+<text x="691" y="290.5" class="t" font-size="14" font-weight="600" text-anchor="start">DLQ sink</text>
+<text x="676" y="312" class="t mut" font-size="12" font-weight="400" text-anchor="start">copies each dead letter once</text>
+<text x="676" y="329" class="t mut" font-size="12" font-weight="400" text-anchor="start">into PostgreSQL</text>
+<rect x="660" y="392" width="260" height="84" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="679" cy="416" r="4.5" fill="#c23b28"/>
+<text x="691" y="420.5" class="t" font-size="14" font-weight="600" text-anchor="start">Fraud outbox publisher</text>
+<text x="676" y="442" class="t mut" font-size="12" font-weight="400" text-anchor="start">claims committed rows,</text>
+<text x="676" y="459" class="t mut" font-size="12" font-weight="400" text-anchor="start">publishes at least once</text>
+<rect x="980" y="60" width="220" height="80" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="999" cy="84" r="4.5" fill="#7b8491"/>
+<text x="1011" y="88.5" class="t" font-size="14" font-weight="600" text-anchor="start">Redis</text>
+<text x="996" y="110" class="t mut" font-size="12" font-weight="400" text-anchor="start">leases, completion markers</text>
+<rect x="980" y="180" width="220" height="296" rx="12" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="999" cy="204" r="4.5" fill="#2f7d45"/>
+<text x="1011" y="208.5" class="t" font-size="14" font-weight="600" text-anchor="start">PostgreSQL</text>
+<line x1="997" y1="226" x2="1017" y2="226" stroke="#2f7d45" stroke-dasharray="3 4"/>
+<text x="1024" y="230" class="t" font-size="12" font-weight="400" text-anchor="start" style="fill:#2f7d45">one transaction per event</text>
+<rect x="996" y="252" width="188" height="32" rx="7" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1010" cy="268" r="3.5" fill="#2f7d45"/>
+<text x="1021" y="272.5" class="m" font-size="12" font-weight="400" text-anchor="start">orders, payments, …</text>
+<rect x="996" y="296" width="188" height="32" rx="7" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1010" cy="312" r="3.5" fill="#2f7d45"/>
+<text x="1021" y="316.5" class="m" font-size="12" font-weight="400" text-anchor="start">fraud_evaluations</text>
+<rect x="996" y="340" width="188" height="32" rx="7" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1010" cy="356" r="3.5" fill="#2f7d45"/>
+<text x="1021" y="360.5" class="m" font-size="12" font-weight="400" text-anchor="start">processed_events</text>
+<rect x="996" y="384" width="188" height="32" rx="7" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1010" cy="400" r="3.5" fill="#c23b28"/>
+<text x="1021" y="404.5" class="m" font-size="12" font-weight="400" text-anchor="start">fraud_outbox</text>
+<rect x="996" y="428" width="188" height="32" rx="7" fill="#f3f5f8" stroke="#dfe4ea"/>
+<circle cx="1010" cy="444" r="3.5" fill="#a86a0c"/>
+<text x="1021" y="448.5" class="m" font-size="12" font-weight="400" text-anchor="start">dead_letters</text>
+<rect x="990" y="246" width="200" height="176" rx="9" fill="none" stroke="#2f7d45" stroke-dasharray="3 4"/>
+<rect x="40" y="540" width="1160" height="110" rx="14" fill="#ffffff" stroke="#dfe4ea"/>
+<text x="62" y="572" class="t" font-size="14" font-weight="650" text-anchor="start">Observability</text>
+<text x="62" y="594" class="t mut" font-size="12" font-weight="400" text-anchor="start">Every service and exporter exposes /metrics,</text>
+<text x="62" y="611" class="t mut" font-size="12" font-weight="400" text-anchor="start">with bounded labels: no run or business IDs.</text>
+<rect x="400" y="558" width="200" height="74" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="419" cy="582" r="4.5" fill="#a86a0c"/>
+<text x="431" y="586.5" class="t" font-size="14" font-weight="600" text-anchor="start">Prometheus</text>
+<text x="416" y="608" class="t mut" font-size="12" font-weight="400" text-anchor="start">scrapes every 10 s, alert rules</text>
+<rect x="720" y="558" width="200" height="74" rx="10" fill="#ffffff" stroke="#dfe4ea" filter="url(#sh)"/>
+<circle cx="739" cy="582" r="4.5" fill="#0e8a91"/>
+<text x="751" y="586.5" class="t" font-size="14" font-weight="600" text-anchor="start">Grafana</text>
+<text x="736" y="608" class="t mut" font-size="12" font-weight="400" text-anchor="start">7 provisioned dashboards</text>
+<path d="M600,595 L720,595" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M600,595 L720,595" fill="none" stroke="#0e8a91" stroke-width="2" stroke-linecap="round" class="flow " marker-end="url(#ah-flow)"/>
+<text x="980" y="584" class="t mut" font-size="12" font-weight="400" text-anchor="start">Alerts reach the console's</text>
+<text x="980" y="601" class="t mut" font-size="12" font-weight="400" text-anchor="start">notification bell; critical</text>
+<text x="980" y="618" class="t mut" font-size="12" font-weight="400" text-anchor="start">ones stay until resolved.</text>
+<path d="M270,298 C310.0,298 310.0,160 350,160" fill="none" stroke="#dfe4ea" stroke-width="5" stroke-linecap="round"/>
+<path d="M270,298 C310.0,298 310.0,160 350,160" fill="none" stroke="#0e8a91" stroke-width="3" stroke-linecap="round" class="flow fast" marker-end="url(#ah-flow)"/>
+<text x="280" y="322" class="m" font-size="11.5" font-weight="400" text-anchor="start" style="fill:#0e8a91">events</text>
+<path d="M270,118 C310.0,118 310.0,140 350,140" fill="none" stroke="#dfe4ea" stroke-width="3.6" stroke-linecap="round" stroke-dasharray="3 5"/>
+<path d="M270,118 C310.0,118 310.0,140 350,140" fill="none" stroke="#a86a0c" stroke-width="1.6" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<text x="306" y="108" class="m" font-size="11.5" font-weight="400" text-anchor="middle" style="fill:#a86a0c">replay</text>
+<path d="M580,147 C620.0,147 620.0,135 660,135" fill="none" stroke="#dfe4ea" stroke-width="5" stroke-linecap="round"/>
+<path d="M580,147 C620.0,147 620.0,135 660,135" fill="none" stroke="#0e8a91" stroke-width="3" stroke-linecap="round" class="flow fast" marker-end="url(#ah-flow)"/>
+<path d="M920,100 L980,100" fill="none" stroke="#dfe4ea" stroke-width="3.6" stroke-linecap="round"/>
+<path d="M920,100 L980,100" fill="none" stroke="#7b8491" stroke-width="1.6" stroke-linecap="round" class="flow " marker-end="url(#ah-mut)"/>
+<path d="M920,170 C955.0,170 955.0,268 990,268" fill="none" stroke="#dfe4ea" stroke-width="5" stroke-linecap="round"/>
+<path d="M920,170 C955.0,170 955.0,268 990,268" fill="none" stroke="#2f7d45" stroke-width="3" stroke-linecap="round" class="flow " marker-end="url(#ah-ok)"/>
+<path d="M660,190 C620.0,190 620.0,280 580,280" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M660,190 C620.0,190 620.0,280 580,280" fill="none" stroke="#a86a0c" stroke-width="2" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<text x="632" y="264" class="m" font-size="11.5" font-weight="400" text-anchor="start" style="fill:#a86a0c">DLQ</text>
+<path d="M580,300 C620.0,300 620.0,304 660,304" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M580,300 C620.0,300 620.0,304 660,304" fill="none" stroke="#a86a0c" stroke-width="2" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<path d="M920,304 C958.0,304 958.0,444 996,444" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M920,304 C958.0,304 958.0,444 996,444" fill="none" stroke="#a86a0c" stroke-width="2" stroke-linecap="round" class="flow slow" marker-end="url(#ah-warn)"/>
+<path d="M996,400 C958.0,400 958.0,434 920,434" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M996,400 C958.0,400 958.0,434 920,434" fill="none" stroke="#c23b28" stroke-width="2" stroke-linecap="round" class="flow " marker-end="url(#ah-bad)"/>
+<path d="M660,434 C620.0,434 620.0,427 580,427" fill="none" stroke="#dfe4ea" stroke-width="4" stroke-linecap="round"/>
+<path d="M660,434 C620.0,434 620.0,427 580,427" fill="none" stroke="#c23b28" stroke-width="2" stroke-linecap="round" class="flow " marker-end="url(#ah-bad)"/>
+</svg>

@@ -1,5 +1,12 @@
 # Performance Engineering Report
 
+> **Note:** the benchmark directories cited below measured the retired
+> Python processor and were removed from the tree on 2026-11-27, as was the
+> Python processor itself (`services/event_processor/`, its tests and smoke
+> scripts); the Go processor in `services/event_processor_go/` replaced it.
+> Names are kept for reference; recover them from git history as described in
+> [`artifacts/benchmark/README.md`](../artifacts/benchmark/README.md).
+
 This report tells the performance-engineering story from the first Demo
 Control API benchmark to the measured saturation boundary of the isolated
 processor pipeline. It is based on the repository's benchmark JSON, benchmark
@@ -65,7 +72,7 @@ experiment isolated progress refresh from event generation.
 Stage 2 supported the generator-blocking hypothesis. “Kafka was slow” was not
 supported by this experiment.
 
-Source: [`bench-20260802T004243Z`](../artifacts/benchmark/bench-20260802T004243Z/).
+Source: `bench-20260802T004243Z`.
 
 ### Stage 2 — Remove progress refresh from the hot path
 
@@ -88,8 +95,8 @@ three-run median of **77.509 evt/s**; the background-refresh stage reached
 the requested 100 evt/s.
 
 Sources:
-[`bench-after-refresh-final-20260807T114000Z`](../artifacts/benchmark/bench-after-refresh-final-20260807T114000Z/)
-and [`bench-stage2-20260807T120000Z`](../artifacts/benchmark/bench-stage2-20260807T120000Z/).
+`bench-after-refresh-final-20260807T114000Z`
+and `bench-stage2-20260807T120000Z`.
 
 **Lesson:** observability and progress code is still production code when it
 runs in a hot path.
@@ -130,8 +137,8 @@ evt/s. The result supported the scheduler hypothesis without hiding warm-up
 behavior.
 
 Sources:
-[`bench-instrumented-20260807T144500Z`](../artifacts/benchmark/bench-instrumented-20260807T144500Z/)
-and [`bench-fixed-rate-final-20260807T151000Z`](../artifacts/benchmark/bench-fixed-rate-final-20260807T151000Z/).
+`bench-instrumented-20260807T144500Z`
+and `bench-fixed-rate-final-20260807T151000Z`.
 
 **Lesson:** sleeping for `1 / rate` after work is not a fixed-rate scheduler.
 
@@ -155,7 +162,7 @@ reads as the expensive SQL class. The data did not support a generic
 “PostgreSQL disk is slow” conclusion.
 
 Source:
-[`bench-tx-decomposition-combined-20260808T050000Z`](../artifacts/benchmark/bench-tx-decomposition-combined-20260808T050000Z/).
+`bench-tx-decomposition-combined-20260808T050000Z`.
 
 ### Stage 5 — Transaction decomposition
 
@@ -181,7 +188,7 @@ boundaries.
 system. This rejected the simplistic “fewer statements is faster” hypothesis.
 
 Sources:
-[`bench-tx-detailed-final-20260808T070000Z`](../artifacts/benchmark/bench-tx-detailed-final-20260808T070000Z/)
+`bench-tx-detailed-final-20260808T070000Z`
 and the rate-specific decomposition artifacts indexed in
 [`artifacts/benchmark/README.md`](../artifacts/benchmark/README.md).
 
@@ -215,7 +222,7 @@ query averages from approximately 14.2 to 15.4 ms. System performance
 regressed, so the change was reverted.
 
 Sources:
-[`bench-tx-combined-payments-20260808T080000Z`](../artifacts/benchmark/bench-tx-combined-payments-20260808T080000Z/)
+`bench-tx-combined-payments-20260808T080000Z`
 and the original-query baseline above.
 
 **Lesson:** fewer SQL round trips do not automatically produce higher
@@ -277,8 +284,8 @@ Composite index → targeted lookup → shorter transaction → higher service r
 ```
 
 Sources:
-[`bench-tx-index-20260808T090000Z`](../artifacts/benchmark/bench-tx-index-20260808T090000Z/)
-and [`bench-tx-index-write-20260808T100000Z`](../artifacts/benchmark/bench-tx-index-write-20260808T100000Z/).
+`bench-tx-index-20260808T090000Z`
+and `bench-tx-index-write-20260808T100000Z`.
 
 **Lesson:** query-plan-aware indexing produced the largest confirmed
 optimization because both micro-level query cost and system-level queueing
@@ -306,7 +313,7 @@ far beyond the Demo-path generated rate. Therefore the Demo-path limit was not
 the processor ceiling.
 
 Source:
-[`bench-serial-ceiling-20260808T110000Z`](../artifacts/benchmark/bench-serial-ceiling-20260808T110000Z/).
+`bench-serial-ceiling-20260808T110000Z`.
 
 ### Stage 9 — Direct Kafka injector and methodology boundary
 
@@ -364,7 +371,7 @@ safely demonstrated rate. Above it:
 The single-processor saturation transition was between 500 and 600 evt/s.
 
 Source:
-[`bench-worker-scale-1w-20260808T160000Z`](../artifacts/benchmark/bench-worker-scale-1w-20260808T160000Z/).
+`bench-worker-scale-1w-20260808T160000Z`.
 
 **Lesson:** the processor appeared limited earlier only because the Demo
 generator could not feed it fast enough.
@@ -392,7 +399,7 @@ linear:
 The 2/1 assignment became a concrete imbalance hypothesis for Stage 12.
 
 Source:
-[`bench-worker-scale-2w-resource-20260808T180000Z`](../artifacts/benchmark/bench-worker-scale-2w-resource-20260808T180000Z/).
+`bench-worker-scale-2w-resource-20260808T180000Z`.
 
 ### Stage 12 — Three workers, three partitions
 
@@ -419,7 +426,7 @@ Despite `processed ≈ injected` at 900, all three lag slopes were positive.
 That rate was treated as a boundary signal, not a sustainable-capacity result.
 
 Source:
-[`bench-worker-scale-3w-20260808T191000Z`](../artifacts/benchmark/bench-worker-scale-3w-20260808T191000Z/).
+`bench-worker-scale-3w-20260808T191000Z`.
 
 ### Stage 13 — Locate the actual boundary
 
@@ -456,8 +463,8 @@ and 652.1/s against approximately 838/s injected, with +283.3/s and +185.6/s
 lag growth. Its E2E p95 median was 24.657 s.
 
 Sources:
-[`bench-worker-scale-3w-boundary-20260808T200000Z`](../artifacts/benchmark/bench-worker-scale-3w-boundary-20260808T200000Z/)
-and [`bench-worker-scale-3w-boundary-775-20260808T210000Z`](../artifacts/benchmark/bench-worker-scale-3w-boundary-775-20260808T210000Z/).
+`bench-worker-scale-3w-boundary-20260808T200000Z`
+and `bench-worker-scale-3w-boundary-775-20260808T210000Z`.
 
 **Conclusion:** the confirmed sustainable isolated capacity is approximately
 **750 evt/s**, and repeatable saturation begins in the **750–775 evt/s**
@@ -483,13 +490,13 @@ correctness invariants, and the re-test of the exact 750/775/800 boundary
 rates (all three became sustainable) are in
 [`optimization-history.md`](performance/optimization-history.md#bounded-batched-offset-commits--kept),
 artifact
-[`bench-batched-commit-3w-boundary`](../artifacts/benchmark/bench-batched-commit-3w-boundary/).
+`bench-batched-commit-3w-boundary`.
 
 **What did the follow-up ceiling-discovery benchmark prove?** With the
 topology unchanged (3 workers, 3 partitions, 1/1/1 assignment, verified
 before each sweep) and only the requested rate varied, a broad sweep at
 850/900/950/1000 evt/s (10s warmup, 45s steady state, 3 repeats each,
-[`bench-batched-commit-3w-ceiling-broad`](../artifacts/benchmark/bench-batched-commit-3w-ceiling-broad/))
+`bench-batched-commit-3w-ceiling-broad`)
 found:
 
 | Rate | Lag slope (3 repeats) | E2E p95 (3 repeats) | Verdict |
@@ -500,7 +507,7 @@ found:
 | 1000 | +11.48, +16.27, +6.09/s | 356, 784, 548 ms | Non-sustainable - injected rate itself fell to ~99% of requested, service rate trailed injected, E2E p99 reached 1210 ms |
 
 A refinement rate at 925 evt/s (3 repeats, same methodology,
-[`bench-batched-commit-3w-ceiling-refinement`](../artifacts/benchmark/bench-batched-commit-3w-ceiling-refinement/))
+`bench-batched-commit-3w-ceiling-refinement`)
 produced a mixed result: lag slope stayed low and non-escalating (+2.71,
 +1.28, +1.15/s, similar to 900), but E2E p95 was highly volatile and reached
 1027ms and 1092ms in two of the three repeats - a regression the lag-slope
@@ -556,9 +563,9 @@ change accompanied it.
 **What did the benchmark prove?** Same 3-worker/1/1/1 topology, same
 900/925/950 evt/s rates as Stage 14, 3 repeats each, 10s warmup / 45s
 steady state. A fresh `INFO` control run
-([`bench-info-baseline-control-3w-boundary`](../artifacts/benchmark/bench-info-baseline-control-3w-boundary/))
+(`bench-info-baseline-control-3w-boundary`)
 preceded a `DEBUG` experiment run
-([`bench-debug-success-log-3w-boundary`](../artifacts/benchmark/bench-debug-success-log-3w-boundary/))
+(`bench-debug-success-log-3w-boundary`)
 on a rebuilt image with freshly recreated containers, so `docker logs
 --since/--until` gave a clean, time-windowed stdout/stderr comparison:
 
@@ -602,7 +609,7 @@ pool, PostgreSQL, or fraud-rule configuration was touched.
 
 **What did the benchmark prove?** Same 3-worker/1/1/1 topology, same 900/925/
 950 evt/s x 3 repeats as Stage 14/15
-([`bench-tx-decomposition-v2-3w-boundary`](../artifacts/benchmark/bench-tx-decomposition-v2-3w-boundary/)).
+(`bench-tx-decomposition-v2-3w-boundary`).
 
 | Stage | Avg (ms, mean of 9 repeats) | Share of transaction total |
 | --- | ---: | ---: |
@@ -666,8 +673,8 @@ first (migration file not yet on disk, so it could not be applied), then a
 second truncate, then the migration added and applied, then the indexed
 sweep - same 3-worker/1/1/1 topology, same 900/925/950 evt/s × 3 repeats,
 same 10s/45s timing
-([`bench-orders-index-baseline-3w-boundary`](../artifacts/benchmark/bench-orders-index-baseline-3w-boundary/),
-[`bench-orders-index-3w-boundary`](../artifacts/benchmark/bench-orders-index-3w-boundary/)).
+(`bench-orders-index-baseline-3w-boundary`,
+`bench-orders-index-3w-boundary`).
 
 **EXPLAIN evidence** (comparable representative customers, ~85-90 orders
 each): baseline - `Bitmap Heap Scan` + `Filter` + `Sort`, 39 buffer hits,
@@ -772,7 +779,7 @@ migration version 7 with all three composite indexes present; 3 workers,
 1/1/1 assignment, lag 0 confirmed before starting.
 
 **Broad sweep** (950/1000/1050/1100 evt/s × 3, 10s warmup, 45s steady; tag
-[`bench-post-index-3w-ceiling-broad`](../artifacts/benchmark/bench-post-index-3w-ceiling-broad/)):
+`bench-post-index-3w-ceiling-broad`):
 
 | Rate | Repeats clean | Lag slope range | E2E p95 range | Peak PG CPU |
 | --- | --- | --- | --- | --- |
@@ -786,7 +793,7 @@ through 1100 evt/s - the degradation above 1000 is genuine
 processor/PostgreSQL saturation, not an injector artifact.
 
 **Refinement** (1075 evt/s × 3; tag
-[`bench-post-index-3w-ceiling-refinement`](../artifacts/benchmark/bench-post-index-3w-ceiling-refinement/)):
+`bench-post-index-3w-ceiling-refinement`):
 slope +10.0/+3.0/+34.8/s, E2E p95 407/552/2275ms - 2 of 3 repeats degraded,
 the same non-sustainable pattern as 1100.
 
@@ -831,7 +838,7 @@ diagnostic - no code, SQL, index, or configuration change.
 `pg_stat_activity`/`pg_locks` once per second and snapshots `pg_stat_io`/
 `pg_stat_checkpointer` before/after, for the duration of each rate's
 3-repeat sweep at 1050/1075/1100 evt/s (tag
-[`bench-postgres-saturation-diagnosis-3w`](../artifacts/benchmark/bench-postgres-saturation-diagnosis-3w/)).
+`bench-postgres-saturation-diagnosis-3w`).
 Query text is never persisted - only bounded `<table>_<kind>` classes.
 
 **Active/waiting backend and wait-event evidence:**
@@ -906,7 +913,7 @@ cgroup v2 `cpu.stat`/`cpu.max`, VM-wide `/proc/stat` (aggregate + 8
 per-core), `/proc/loadavg`, `/proc/pressure/cpu` (PSI), per-process
 utime/stime and context switches, `docker stats` container CPU%, and a
 fixed-cost `SELECT 1` probe - at 1050/1075/1100 evt/s × 3 repeats (tag
-[`bench-cpu-scheduling-diagnosis-3w`](../artifacts/benchmark/bench-cpu-scheduling-diagnosis-3w/)),
+`bench-cpu-scheduling-diagnosis-3w`),
 concurrently with the usual saturation sweep.
 
 **cgroup throttling: none, and structurally impossible.** `nr_periods`
@@ -989,7 +996,7 @@ verified directly by SQL-class call-count metrics and by a counting-cursor
 test). Semantic equivalence verified against the exact legacy two-query
 sequence across 7 scenarios (own order, no order, missing order, another
 customer's order, unknown customer) in
-[`tests/integration/test_fraud_context_roundtrip.py`](../tests/integration/test_fraud_context_roundtrip.py).
+`tests/integration/test_fraud_context_roundtrip.py`.
 
 **Controlled A/B** (clean reset before each condition, `git stash`
 isolated the true baseline code, image rebuilt for each condition,
@@ -1033,7 +1040,7 @@ or Kafka change.
 **Method.** Same 3-worker/3-partition/1/1/1 topology, current kept code
 (fraud-context optimization active), 10s warmup, 45s steady, 3 repeats,
 rates 1000-1150 evt/s (tag
-[`bench-post-fraud-context-ceiling-3w`](../artifacts/benchmark/bench-post-fraud-context-ceiling-3w/)).
+`bench-post-fraud-context-ceiling-3w`).
 No data reset was performed before this sweep (accumulated data from the
 immediately preceding Stage 22 sweeps) - noted as a confound for a
 *definitive* boundary claim, though not for the qualitative classification
@@ -1104,7 +1111,7 @@ read/write/commit with zero added overhead (unit-tested, 8 cases).
 
 **Benchmark:** 3 workers, 1/1/1, current optimized code, 1000/1050/1075/
 1100 evt/s only (not extending the ceiling search), 3 repeats (tag
-[`bench-transaction-lifecycle-v3-3w`](../artifacts/benchmark/bench-transaction-lifecycle-v3-3w/)).
+`bench-transaction-lifecycle-v3-3w`).
 
 **Central finding: phase durations do not track degradation.** Read,
 write, and commit stayed in the same ~0.4-1.3ms band regardless of
@@ -1172,7 +1179,7 @@ no internal buffer can.
 
 **Benchmark:** 3 workers, 1/1/1, current code, 1000/1050/1075/1100 evt/s
 only, 3 repeats (tag
-[`bench-consumer-queueing-diagnosis-3w`](../artifacts/benchmark/bench-consumer-queueing-diagnosis-3w/)).
+`bench-consumer-queueing-diagnosis-3w`).
 
 **Central finding: handler execution is flat; queue wait moves with
 degradation.** `handler_latency_ms` sat in an almost perfectly constant
@@ -1234,7 +1241,7 @@ gitignored `injector-<rate>-<repeat>.json` raw artifact.
 
 **Benchmark:** 3 workers, 1/1/1, unmodified processor image,
 1050/1075/1100 evt/s, 3 repeats (tag
-[`bench-injector-arrival-variance-3w`](../artifacts/benchmark/bench-injector-arrival-variance-3w/)).
+`bench-injector-arrival-variance-3w`).
 
 **Central finding: injector pacing is tight and does not distinguish
 clean-ish from severely-degraded repeats.** Inter-arrival gap p50 tracked
@@ -1287,7 +1294,7 @@ change.
 
 **Benchmark:** 3 workers, 1/1/1, rebuilt processor image, 1050/1075/1100
 evt/s, 3 repeats (tag
-[`bench-consumer-fetch-boundary-3w`](../artifacts/benchmark/bench-consumer-fetch-boundary-3w/)).
+`bench-consumer-fetch-boundary-3w`).
 
 **Central finding: a real buffer exists, one layer below where Stage 25
 could see.** `max_fetchq_records_sampled` was never near zero (hundreds to
@@ -1358,9 +1365,9 @@ summary-merge logic.
 
 **Benchmark:** 3 workers, 1/1/1, same DB/indexes/methodology, 1050/1100/
 1150/1200 evt/s, 3 repeats. Baseline (pool size 1, tag
-[`bench-worker-pool-baseline-3w`](../artifacts/benchmark/bench-worker-pool-baseline-3w/))
+`bench-worker-pool-baseline-3w`)
 vs. candidate (pool size 4, matching the existing DB pool max size, tag
-[`bench-worker-pool-candidate-3w`](../artifacts/benchmark/bench-worker-pool-candidate-3w/)).
+`bench-worker-pool-candidate-3w`).
 
 **Central finding: the candidate is not just slower, it is unsafe.**
 Lag slope was 1.5-2.8x worse than baseline at every rate (e.g. 1050:
@@ -1416,7 +1423,7 @@ additions to `direct_injector.py`/`direct_saturation.py`
 **Benchmark:** 6 workers, 1/1/1/1/1/1, same DB/indexes/methodology,
 1050/1500/2000/2300 evt/s (bracketing both the old 3-partition ceiling and
 the theoretical 6-consumer ceiling, ~2308 evt/s), 3 repeats (tag
-[`bench-partition-scaling-6p-6w`](../artifacts/benchmark/bench-partition-scaling-6p-6w/)).
+`bench-partition-scaling-6p-6w`).
 A 12-partition/12-worker run was in scope but intentionally skipped: the
 6-worker topology already showed processor CPU approaching the local host
 budget while service rate stayed flat, and adding six more workers on the
@@ -1568,8 +1575,8 @@ untouched), `PROCESSOR_WORKER_POOL_SIZE=1` (no Stage 28 pooled mode),
 same DB/indexes/code. Configuration A: 0.5 CPU/container (~3 CPU
 aggregate). Configuration B: 1.0 CPU/container (~6 CPU aggregate,
 double). 1050/1500/2000 evt/s, 3 repeats (tags
-[`bench-cpu-budget-A-0.5cpu-6w`](../artifacts/benchmark/bench-cpu-budget-A-0.5cpu-6w/) /
-[`bench-cpu-budget-B-1cpu-6w`](../artifacts/benchmark/bench-cpu-budget-B-1cpu-6w/)).
+`bench-cpu-budget-A-0.5cpu-6w` /
+`bench-cpu-budget-B-1cpu-6w`).
 
 **Central finding: doubling the quota did not help, and CPU actually used
 barely changed.** Summed processor CPU stayed in the same ~250-370% band
@@ -1650,7 +1657,7 @@ interpretation. Aggregate processor metrics did not expose a worker label for
 per-worker processed counts, so the report does not invent those values.
 
 Reliability evidence remains preserved in
-[`bench-fixed-rate-final-20260807T151000Z`](../artifacts/benchmark/bench-fixed-rate-final-20260807T151000Z/):
+`bench-fixed-rate-final-20260807T151000Z`:
 zero duplicate durable side effects, controlled retry/DLQ checks, and 100%
 outbox publish success for the defined scenarios. The disruptive outage test
 was not run.

@@ -29,11 +29,86 @@ jobs:
       - name: Run checks
         run: make check
 
+  go-processor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.5-bookworm
+        env:
+          POSTGRES_USER: commerce
+          POSTGRES_PASSWORD: commerce_local_dev
+          POSTGRES_DB: commerce
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U commerce -d commerce"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7.4.5-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      # Redis and PostgreSQL tests fail instead of skipping in CI.
+      PROCESSOR_TEST_POSTGRES_DSN: postgresql://commerce:commerce_local_dev@127.0.0.1:5432/commerce
+      PROCESSOR_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      PROCESSOR_TEST_REQUIRE_SERVICES: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/event_processor_go/go.mod
+          cache-dependency-path: services/event_processor_go/go.sum
+
+      - name: Format, vet and test
+        run: make go-check
+
+      - name: Build processor image
+        run: docker compose --profile processor build event-processor
+
+  demo-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/demo_control_web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.17.1"
+          cache: npm
+          cache-dependency-path: apps/demo_control_web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   integration:
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: 15
     env:
+      # compose defaults the processor to 8 CPUs (the benchmark budget); Docker
+      # refuses a limit above the runner's 4, and these tests need very little.
+      PROCESSOR_CPU_LIMIT: "2"
       BENCH_KAFKA_BOOTSTRAP: localhost:29092
       BENCH_REDIS_URL: redis://127.0.0.1:6379/0
       BENCH_POSTGRES_DSN: postgresql://commerce:commerce_local_dev@127.0.0.1:5432/commerce
@@ -83,6 +158,9 @@ jobs:
 
       - name: Apply database migrations
         run: docker compose --profile processor run --rm --build postgres-migrate
+
+      - name: Build Go processor image
+        run: docker compose --profile processor build event-processor
 
       - name: Run integration tests
         run: |

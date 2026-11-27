@@ -70,8 +70,7 @@ def run_once(
     duplicate_durable_side_effects = max(total_rows - distinct_event_ids, 0)
 
     # Every entity table that gets created off a specific event_id must also
-    # have at most one row per event_id - reusing the same join pattern
-    # persistence-smoke.py already uses for this exact invariant.
+    # have at most one row per event_id.
     entity_duplication = query_all(
         config.postgres_dsn,
         """

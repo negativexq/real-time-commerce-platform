@@ -1,19 +1,17 @@
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: lint format format-check type-check test check compose-config up down logs ps \
+.PHONY: lint format format-check type-check test check web-check compose-config up down logs ps \
 	kafka-topics kafka-describe kafka-smoke postgres-shell postgres-tables redis-cli \
 	storage-smoke storage-status storage-logs generator-build generator-up \
 	generator-down generator-logs generator-run generator-sample generator-status \
 	generator-smoke generator-personas generator-normal generator-suspicious \
 	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
-	generator-anomaly-smoke processor-build processor-up processor-down \
-	processor-run processor-logs processor-status processor-sample processor-smoke \
+	generator-anomaly-smoke go-check go-service-test processor-build processor-up processor-down \
+	processor-run processor-logs processor-status processor-smoke \
 	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
 	processor-idempotency-status processor-clear-test-state clean clean-volumes \
 	db-migrate db-migration-status db-schema-check db-tables db-counts \
-	db-reset-test-data persistence-sample persistence-smoke \
-	persistence-duplicate-smoke persistence-recovery-smoke \
-	persistence-dependency-smoke persistence-refund-smoke \
+	db-reset-test-data \
 	fraud-rules fraud-config-check fraud-db-status fraud-sample-normal \
 	fraud-sample-suspicious fraud-sample-bot fraud-sample-takeover fraud-smoke \
 	fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke \
@@ -43,6 +41,22 @@ test:
 	$(PYTHON) -m pytest
 
 check: lint format-check type-check test
+
+# The demo console: the same steps as the demo-web CI job.
+web-check:
+	cd apps/demo_control_web && npm run typecheck && npm test && npm run build
+
+go-check:
+	cd services/event_processor_go && test -z "$$(gofmt -l .)" && go vet ./... && go test ./...
+
+# Go tests that need Redis and PostgreSQL, against the local Compose stack.
+# Each PostgreSQL test creates and drops its own database.
+go-service-test:
+	cd services/event_processor_go && \
+		PROCESSOR_TEST_POSTGRES_DSN=postgresql://commerce:commerce_local_dev@localhost:5432/commerce \
+		PROCESSOR_TEST_REDIS_URL=redis://localhost:6379/15 \
+		PROCESSOR_TEST_REQUIRE_SERVICES=1 \
+		go test -count=1 ./internal/idempotency ./internal/persistence ./internal/dlqsink
 
 compose-config:
 	docker compose config
@@ -84,12 +98,10 @@ db-migrate:
 	docker compose --profile processor run --rm postgres-migrate
 
 db-migration-status:
-	docker compose --profile processor run --rm --entrypoint python \
-		postgres-migrate -m services.event_processor.persistence.migrations status
+	docker compose --profile processor run --rm postgres-migrate status
 
 db-schema-check:
-	docker compose --profile processor run --rm --entrypoint python \
-		postgres-migrate -m services.event_processor.persistence.migrations check
+	docker compose --profile processor run --rm postgres-migrate check
 
 db-tables: postgres-tables
 
@@ -201,55 +213,25 @@ processor-logs:
 processor-status:
 	docker compose --profile processor ps event-processor
 
-processor-sample:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+PROCESSOR_INTEGRATION = $(PYTHON) -m pytest -m integration tests/integration/test_processor_reliability.py
 
-processor-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+processor-smoke: processor-build
+	$(PROCESSOR_INTEGRATION)
 
-processor-duplicate-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py duplicate
+processor-duplicate-smoke: processor-build
+	$(PROCESSOR_INTEGRATION) -k duplicate
 
-processor-dlq-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py dlq
+processor-dlq-smoke: processor-build
+	$(PROCESSOR_INTEGRATION) -k dlq
 
 processor-retry-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py retry
-
-persistence-sample:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py sample
-
-persistence-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py normal
-
-persistence-duplicate-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py duplicate
-
-persistence-recovery-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py recovery
-
-persistence-dependency-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py dependency
-
-persistence-refund-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py refund
+	cd services/event_processor_go && go test ./internal/processor -run 'Retry|Exhausted|Backoff'
 
 fraud-rules:
-	$(PYTHON) scripts/fraud-admin.py rules
+	docker compose --profile processor run --rm --no-deps event-processor fraud-rules
 
 fraud-config-check:
-	$(PYTHON) scripts/fraud-admin.py config
+	docker compose --profile processor run --rm --no-deps event-processor fraud-config
 
 fraud-db-status fraud-counts:
 	docker compose exec -T postgres sh -c \
@@ -272,7 +254,7 @@ fraud-sample-takeover:
 	$(MAKE) generator-takeover
 
 fraud-smoke fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke:
-	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py
+	cd services/event_processor_go && go test ./internal/fraud
 
 fraud-outbox-build:
 	docker compose --profile fraud build fraud-outbox-publisher
@@ -290,8 +272,7 @@ fraud-outbox-status:
 	docker compose --profile fraud ps fraud-outbox-publisher
 
 fraud-outbox-smoke:
-	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py \
-		-k alert_event_is_deterministic
+	cd services/event_processor_go && go test ./internal/fraud -run 'Alert|PythonReference'
 
 fraud-outbox-recovery-smoke:
 	$(PYTHON) -m pytest tests/unit/test_fraud_outbox.py

@@ -2,11 +2,11 @@
 
 Diagrams and a design-decisions record tracing the actual code path for
 one Kafka event through the processor, derived directly from
-[`services/event_processor/processor.py`](../../services/event_processor/processor.py),
-[`persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
-and [`fraud/context.py`](../../services/event_processor/fraud/context.py) +
-[`fraud/repository.py`](../../services/event_processor/fraud/repository.py) -
-not an idealized or aspirational design. They are static, documentation-only
+`services/event_processor_go/internal/processor`,
+`internal/persistence/unit_of_work.go`, and `internal/fraud/context.go` +
+`internal/fraud/repository.go` - not an idealized or aspirational design.
+(The diagrams were first drawn from the retired Python processor, which the
+Go code ports step for step.) They are static, documentation-only
 artifacts; no runtime behavior changed to produce them.
 
 ## Design Decisions

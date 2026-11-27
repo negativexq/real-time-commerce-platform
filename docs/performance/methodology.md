@@ -65,8 +65,9 @@ minus service difference.
 The benchmark validates unique event IDs, processed-row counts, E2E timestamp
 matches, terminal error counters, and post-load lag drain. The broader
 reliability benchmark also validates duplicate durable side effects, retry/DLQ
-behavior, and transactional outbox delivery; those artifacts are indexed in
-[`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
+behavior, and transactional outbox delivery. Those artifacts were removed
+with the Python processor on 2026-11-27. To recover them from git history,
+see [`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
 
 ## Resource environment
 

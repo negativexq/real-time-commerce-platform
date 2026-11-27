@@ -2,6 +2,14 @@
 
 ## Purpose
 
+> **Runtime:** the processor that runs in Compose is the Go port in
+> [`services/event_processor_go/`](../services/event_processor_go/README.md),
+> adopted on 2026-11-27 after a byte-level parity check and a benchmark A/B.
+> It keeps every behaviour described below. The Python package that used to
+> live in `services/event_processor/` was removed the same day; Python names
+> below (such as `MessageProcessor` or `OffsetCommitTracker`) refer to the
+> design the Go packages port one to one.
+
 Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
 validation, Redis leases, retries, DLQ, and manual offsets while replacing the
 no-op audit boundary with transactional PostgreSQL repositories. Sprint 8 adds
@@ -101,7 +109,7 @@ order. It favors auditable ownership over throughput.
 
 **Commits are batched, not per-event.** `commit_terminal()` (called once a
 record reaches success, duplicate-skip, or confirmed DLQ delivery) hands the
-offset to `services/event_processor/offset_tracker.py::OffsetCommitTracker`,
+offset to the offset tracker (`services/event_processor_go/internal/offsets`),
 which tracks the highest *contiguous* terminal offset per partition and only
 issues an actual `commit(asynchronous=False)` call once
 `PROCESSOR_OFFSET_COMMIT_BATCH_SIZE` terminal records have accumulated
@@ -168,6 +176,62 @@ delivery, and never recursively dead-letters its own failure. A crash after DLQ
 delivery but before source commit can still create duplicate Kafka records;
 downstream readers should deduplicate by `dlq_record_id`.
 
+## DLQ sink
+
+The processor only publishes to Kafka. A separate consumer, the `dlq-sink`
+Compose service (`event-processor dlq-sink`, consumer group
+`commerce-dlq-sink-v1`), copies every DLQ envelope into the PostgreSQL
+`dead_letters` table so the demo console can search and triage it:
+
+- Rows are keyed by `dlq_record_id` and inserted with `ON CONFLICT DO
+  NOTHING`, so duplicate Kafka records and replays are harmless, and a triage
+  status already set on a row is never overwritten.
+- The Kafka offset is committed only after the row is stored. A database
+  outage is retried with capped backoff (200 ms to 5 s) instead of skipping
+  records.
+- A record that is not a valid envelope is still stored, as
+  `unreadable_dlq_record`, with an ID derived from its DLQ coordinate.
+- When an envelope has no original event ID or type (malformed JSON, for
+  example), the sink takes them from the sanitized source headers. That is
+  how such records count towards a run's `dlq_count`.
+- `status` starts as `NEW`. Operators move records to `TRIAGED` or
+  `DISCARDED` (with an optional note), reopen them as `NEW`, or replay them.
+
+It serves `/metrics` and `/health` on port 9104 (`DLQ_SINK_METRICS_PORT`) and
+exports `commerce_dlq_sink_records_total{result}`,
+`commerce_dlq_sink_store_errors_total` and
+`commerce_dlq_sink_last_record_timestamp_seconds`. The table is created by
+`database/migrations/008_dead_letters.sql`. Migration 009 added the triage
+columns and dropped the older `dead_letter_events` table, which no processor
+ever wrote; the migration refuses to drop it if it holds any rows.
+
+## Triage and replay
+
+The demo console's Dead letters page and the Demo Control API work on the
+stored rows:
+
+- `POST /api/v1/dlq/{id}/status` sets `TRIAGED`, `DISCARDED` or `NEW` with an
+  optional note (500 characters).
+- `POST /api/v1/dlq/bulk-status` moves every `NEW` record of one category to
+  `TRIAGED` or `DISCARDED`. Records already handled are left alone.
+- `POST /api/v1/dlq/{id}/replay` rebuilds the original Kafka record from the
+  envelope (key, value and the sanitized headers, which include every header
+  the processor requires), adds a `replayed_from_dlq_record_id` header and
+  produces it to its source topic with `acks=all`. The row is locked while
+  this happens, so a double click cannot replay it twice, and if Kafka does
+  not confirm the record the row is left unchanged.
+
+Only failures that a second attempt can fix are replayable:
+`retry_exhausted` and `missing_business_dependency`, with the full payload
+stored (not truncated), from an allowed topic (`DEMO_DLQ_REPLAY_TOPICS`,
+default `commerce.events`). Validation failures and integrity errors fail the
+same way every time and are refused with the reason.
+
+Replay is safe for the processor's idempotency: a dead-lettered event's Redis
+lease is released, so the replay is processed rather than skipped. The event
+then either applies (the record shows *Applied*) or dead-letters again as a
+new record, which the replayed record links to. Replay never hides a failure.
+
 ## Delivery semantics and limitations
 
 This is at-least-once consumption with PostgreSQL durable idempotency and
@@ -196,10 +260,10 @@ between zero and one; and completed TTL must exceed processing TTL. CLI values
 override the environment:
 
 ```bash
-python -m services.event_processor.main
-python -m services.event_processor.main --max-messages 20 --idle-timeout 10
-python -m services.event_processor.main --max-messages 20 --from-beginning
-python -m services.event_processor.main --group-id local-test --log-level DEBUG
+docker compose --profile processor run --rm event-processor
+docker compose --profile processor run --rm event-processor --max-messages 20 --idle-timeout 10
+docker compose --profile processor run --rm event-processor --max-messages 20 --from-beginning
+docker compose --profile processor run --rm event-processor --group-id local-test --log-level DEBUG
 ```
 
 `--from-beginning` sets `auto.offset.reset=earliest`; it does not rewrite an
@@ -212,19 +276,19 @@ make processor-logs
 make processor-down
 ```
 
-The service has no host port. Startup opens a bounded psycopg pool, checks
-`SELECT 1` and schema version 2, then starts Kafka polling. SIGINT/SIGTERM stops
+The service has no host port. Startup opens a bounded pgx pool, checks
+`SELECT 1` and the required schema version, then starts Kafka polling. SIGINT/SIGTERM stops
 new polling, closes the consumer, flushes the DLQ producer boundedly, and closes
 Redis and PostgreSQL gracefully.
 
 Available bounded workflows:
 
 ```bash
-make processor-sample
-make processor-smoke
+make go-check                    # gofmt, go vet, Go unit tests
+make processor-smoke             # integration tests against the Go container
 make processor-duplicate-smoke
 make processor-dlq-smoke
-make processor-retry-smoke
+make processor-retry-smoke       # Go retry/backoff tests
 make processor-idempotency-status
 make processor-clear-test-state
 ```

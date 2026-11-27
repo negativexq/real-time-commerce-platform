@@ -127,16 +127,6 @@ def render(run_tag: str) -> str:
         f"| Duplicate durable side effects | {dup_effects} "
         f"| duplicate_delivery scenario, {idempotency['n_runs']} run(s); expected 0 |"
     )
-    retry_rate = _fmt_stat(retry_dlq["retry"]["retry_success_rate"], "", 3)
-    lines.append(
-        f"| Retry success rate | {retry_rate} "
-        "| isolated harness, controlled transient failures |"
-    )
-    dlq_rate_val = _fmt_stat(retry_dlq["retry"]["dlq_rate"], "", 3)
-    lines.append(
-        f"| DLQ rate (retry harness) | {dlq_rate_val} "
-        "| isolated harness, controlled exhausted retries |"
-    )
     outbox_success = _fmt_stat(outbox["publish_success_rate"], "", 3)
     lines.append(
         f"| Outbox publish success | {outbox_success} "
@@ -193,14 +183,8 @@ def render(run_tag: str) -> str:
         "were ever reset."
     )
     lines.append(
-        "- Idempotency and retry/DLQ correctness use a mix of the real "
-        "primary pipeline (duplicate_delivery and malformed_event scenarios) "
-        "and, for the transient-retry path only, an isolated consumer group "
-        "(`commerce-benchmark-retry-<run_tag>-*`) and isolated Redis key "
-        "prefix, modeled directly on `scripts/processor-smoke.py`, because "
-        "production traffic has no organic source of transient/retryable "
-        "failures (malformed data produces permanent validation errors, not "
-        "`RetryableProcessingError`)."
+        "- Idempotency and DLQ correctness use the real primary pipeline "
+        "(duplicate_delivery and malformed_event scenarios)."
     )
     lines.append(
         "- End-to-end latency uses the real Kafka broker publish timestamp "
@@ -401,17 +385,12 @@ def render(run_tag: str) -> str:
                 f"| {case['dlq_metadata_complete']} |"
             )
         lines.append("")
-    retry = retry_dlq["retry"]
-    lines.append("### Transient retry (isolated harness)")
-    lines.append("")
-    lines.append(f"- Runs: {retry['n_runs']}")
     lines.append(
-        f"- Retry attempts (total): {_fmt_stat(retry['retry_attempts_total'], '', 0)}"
+        "Transient retry (retry-then-success and exhausted-retry DLQ) is not "
+        "benchmarked: production traffic has no organic retryable failure. It "
+        "is verified by the Go processor's unit tests and by "
+        "`tests/integration/test_processor_reliability.py`."
     )
-    lines.append(
-        f"- Retry success rate: {_fmt_stat(retry['retry_success_rate'], '', 3)}"
-    )
-    lines.append(f"- DLQ rate: {_fmt_stat(retry['dlq_rate'], '', 3)}")
     lines.append("")
     for check in checks_by_prefix.get("retry_dlq", []):
         lines.append(_check_line(check))
@@ -451,17 +430,10 @@ def render(run_tag: str) -> str:
         "which bounds the time resolution of peak-throughput and lag-curve readings."
     )
     lines.append(
-        "- The transient-retry sub-test uses a synthetic handler that raises "
-        "`RetryableProcessingError` on a controlled schedule, since production "
-        "traffic has no organic source of transient failures without actually "
-        "degrading Redis/Postgres connectivity (considered too disruptive for "
-        "this benchmark)."
-    )
-    lines.append(
-        "- The legacy `dead_letter_events` Postgres table is never written to "
-        "by the current codebase (only read by `GET /api/v1/dlq`); DLQ "
-        "verification in this report is based entirely on the "
-        "`commerce.events.dlq` Kafka topic, the actual current DLQ mechanism."
+        "- DLQ verification in this report is based on the "
+        "`commerce.events.dlq` Kafka topic, where the processor publishes "
+        "dead letters. The `dead_letters` table is a copy made by the "
+        "dlq-sink and can lag behind the topic."
     )
     lines.append(
         "- `demo_runs.duplicate_count` and `demo_runs.dlq_count` are never "

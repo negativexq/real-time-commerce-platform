@@ -164,6 +164,6 @@
   <rect x="720" y="1572" width="16" height="16" rx="3" fill="#FFF0F0" stroke="#c0392b"/>
   <text x="744" y="1585" font-size="11.5" fill="#334155">Outbox</text>
 
-  <text x="460" y="1630" text-anchor="middle" font-size="11" fill="#94a3b8">services/event_processor/processor.py · persistence/unit_of_work.py · fraud/context.py + repository.py</text>
+  <text x="460" y="1630" text-anchor="middle" font-size="11" fill="#94a3b8">services/event_processor_go/internal: processor · persistence/unit_of_work.go · fraud/context.go + repository.go</text>
   <text x="460" y="1648" text-anchor="middle" font-size="10.5" fill="#b6bfcc">Source-derived diagram — see docs/architecture/README.md for the code path this traces</text>
 </svg>

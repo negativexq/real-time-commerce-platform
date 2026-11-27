@@ -90,41 +90,6 @@ def verify(run_tag: str) -> dict[str, Any]:
                 )
             )
 
-    retry_runs = summary["retry_dlq"]["retry"]["raw_runs"]
-    for run in retry_runs:
-        checks.append(
-            _check(
-                f"retry_dlq.retry[{run.get('isolated_consumer_group')}].offsets_committed_only_after_terminal",
-                run.get("offsets_committed_only_after_terminal_handling", False),
-                {
-                    "committed_offset_total": run.get("committed_offset_total"),
-                    "terminal_outcomes": run.get("terminal_outcomes"),
-                },
-                "Committed offset total must never exceed the log end offset "
-                "and must be consistent with the number of terminally "
-                "handled records - i.e. no offset is committed ahead of "
-                "terminal (success/DLQ) handling.",
-            )
-        )
-        checks.append(
-            _check(
-                f"retry_dlq.retry[{run.get('isolated_consumer_group')}].dlq_metadata_complete",
-                run.get("dlq_metadata_complete", False),
-                run.get("dlq_metadata_complete"),
-                "DLQ records produced by exhausted retries must contain all "
-                "required DlqEnvelope fields.",
-            )
-        )
-        checks.append(
-            _check(
-                f"retry_dlq.retry[{run.get('isolated_consumer_group')}].retry_then_success_observed",
-                run.get("retry_success_count", 0) > 0,
-                run.get("retry_success_count"),
-                "The retry sub-test must have actually observed at least one "
-                "event succeed after a controlled transient failure.",
-            )
-        )
-
     outbox_runs = summary["outbox"]["raw_runs"]
     for run in outbox_runs:
         checks.append(

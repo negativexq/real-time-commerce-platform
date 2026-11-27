@@ -5,8 +5,8 @@ from typing import Protocol, cast
 
 from confluent_kafka import Producer  # type: ignore[import-untyped]
 
-from services.event_processor.errors import FraudOutboxRetryableError
 from services.fraud_outbox_publisher.config import OutboxConfig
+from services.fraud_outbox_publisher.errors import FraudOutboxRetryableError
 from services.fraud_outbox_publisher.repository import OutboxRecord
 from shared.schemas import parse_event
 
@@ -35,14 +35,14 @@ class AlertPublisher:
     ) -> None:
         self.client = client or Producer(
             {
-                "bootstrap.servers": config.processor.kafka_bootstrap_servers,
+                "bootstrap.servers": config.connection.kafka_bootstrap_servers,
                 "client.id": "fraud-outbox-publisher",
                 "enable.idempotence": True,
                 "acks": "all",
                 "max.in.flight.requests.per.connection": 5,
             }
         )
-        self.timeout = config.processor.processor_dlq_delivery_timeout_ms / 1_000
+        self.timeout = config.connection.delivery_timeout_ms / 1_000
 
     def publish(self, record: OutboxRecord) -> int:
         event = parse_event(record.payload_bytes)

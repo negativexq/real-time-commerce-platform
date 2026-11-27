@@ -18,7 +18,7 @@ from scripts.benchmark.demo_api import DemoApiClient
 from scripts.benchmark.pg import query_all, query_one
 from scripts.benchmark.stats import percentiles
 
-FRAUD_OUTBOX_MAX_ATTEMPTS = 10  # services/event_processor/fraud/config.py default
+FRAUD_OUTBOX_MAX_ATTEMPTS = 10  # services/fraud_outbox_publisher/config.py default
 FRAUD_OUTBOX_CLAIM_TTL_SECONDS = 30
 
 

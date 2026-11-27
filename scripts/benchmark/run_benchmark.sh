@@ -22,8 +22,6 @@ THROUGHPUT_EVENT_COUNT="${BENCH_THROUGHPUT_EVENT_COUNT:-1500}"
 THROUGHPUT_RATE="${BENCH_THROUGHPUT_RATE:-100}"
 IDEMPOTENCY_EVENT_COUNT="${BENCH_IDEMPOTENCY_EVENT_COUNT:-300}"
 IDEMPOTENCY_RATE="${BENCH_IDEMPOTENCY_RATE:-50}"
-RETRY_BATCH_SIZE="${BENCH_RETRY_BATCH_SIZE:-60}"
-RETRY_EXHAUSTED_FRACTION="${BENCH_RETRY_EXHAUSTED_FRACTION:-0.2}"
 OUTBOX_EVENT_COUNT="${BENCH_OUTBOX_EVENT_COUNT:-150}"
 OUTBOX_RATE="${BENCH_OUTBOX_RATE:-30}"
 MALFORMED_EVENT_COUNT="${BENCH_MALFORMED_EVENT_COUNT:-40}"
@@ -109,14 +107,6 @@ echo
 echo "--- Retry & DLQ: malformed events (real pipeline, all cases) ---"
 "$PY" -m scripts.benchmark.retry_dlq_bench --run-tag "$RUN_TAG" malformed \
   --event-count "$MALFORMED_EVENT_COUNT" --events-per-second "$MALFORMED_RATE"
-echo
-
-echo "--- Retry & DLQ: transient retry (isolated harness, $REPEATS repeats) ---"
-for i in $(seq 0 $((REPEATS - 1))); do
-  "$PY" -m scripts.benchmark.retry_dlq_bench --run-tag "$RUN_TAG" retry \
-    --batch-size "$RETRY_BATCH_SIZE" --exhausted-fraction "$RETRY_EXHAUSTED_FRACTION" \
-    --repeat-index "$i"
-done
 echo
 
 echo "--- Transactional outbox ($REPEATS repeats) ---"

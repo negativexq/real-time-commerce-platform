@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 
-from services.event_processor.fraud.config import FraudConfig
+from services.fraud_outbox_publisher.config import OutboxSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +27,7 @@ class OutboxRepository:
         self.connection = connection
         self.recovered_claims = 0
 
-    def claim(self, config: FraudConfig) -> tuple[OutboxRecord, ...]:
+    def claim(self, config: OutboxSettings) -> tuple[OutboxRecord, ...]:
         token = uuid4()
         with self.connection.transaction(), self.connection.cursor() as cursor:
             cursor.execute(
@@ -125,7 +125,7 @@ class OutboxRepository:
                 raise RuntimeError("outbox publication claim was lost")
 
     def failed(
-        self, record: OutboxRecord, error: Exception, config: FraudConfig
+        self, record: OutboxRecord, error: Exception, config: OutboxSettings
     ) -> None:
         permanent = record.attempts >= config.fraud_outbox_max_attempts
         delay_ms = min(

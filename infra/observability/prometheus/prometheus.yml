@@ -22,6 +22,10 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["fraud-outbox-publisher:9103"]
+  - job_name: dlq-sink
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["dlq-sink:9104"]
   - job_name: demo-control-api
     metrics_path: /metrics
     static_configs:
