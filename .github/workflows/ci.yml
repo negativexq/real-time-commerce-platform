@@ -106,6 +106,9 @@ jobs:
     needs: quality
     timeout-minutes: 15
     env:
+      # compose defaults the processor to 8 CPUs (the benchmark budget); Docker
+      # refuses a limit above the runner's 4, and these tests need very little.
+      PROCESSOR_CPU_LIMIT: "2"
       BENCH_KAFKA_BOOTSTRAP: localhost:29092
       BENCH_REDIS_URL: redis://127.0.0.1:6379/0
       BENCH_POSTGRES_DSN: postgresql://commerce:commerce_local_dev@127.0.0.1:5432/commerce

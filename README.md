@@ -623,6 +623,10 @@ minutes. For logs, run
 host-port variable in `.env`. If you change a public web or API URL, update its
 `DEMO_WEB_PUBLIC_*` setting too.
 
+**"range of CPUs is from 0.01 to N".** The processor container asks for 8 CPUs by
+default. If Docker has fewer, set `PROCESSOR_CPU_LIMIT` in `.env` to at most that
+number.
+
 **The Overview says "Waiting for traffic".** This is normal before the first run.
 Start **Normal customer** (`make demo-run-normal`), wait one 10-second scrape,
 then refresh.
