@@ -62,7 +62,6 @@ def collect(run_tag: str) -> dict[str, Any]:
 
     throughput_runs = _load_repeats(phase_dir, "throughput_latency")
     idempotency_runs = _load_repeats(phase_dir, "idempotency")
-    retry_runs = _load_repeats(phase_dir, "retry_dlq_retry")
     outbox_runs = _load_repeats(phase_dir, "outbox")
 
     lag_burst = None
@@ -141,17 +140,6 @@ def collect(run_tag: str) -> dict[str, Any]:
         },
         "retry_dlq": {
             "malformed": malformed,
-            "retry": {
-                "n_runs": len(retry_runs),
-                "retry_attempts_total": _numeric_field_stats(
-                    retry_runs, ["retry_attempts_total"]
-                ),
-                "retry_success_rate": _numeric_field_stats(
-                    retry_runs, ["retry_success_rate"]
-                ),
-                "dlq_rate": _numeric_field_stats(retry_runs, ["dlq_rate"]),
-                "raw_runs": retry_runs,
-            },
         },
         "outbox": {
             "n_runs": len(outbox_runs),

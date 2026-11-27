@@ -1,5 +1,5 @@
-# Go port of the event processor. Drop-in for services/event_processor:
-# same env, same topics/tables/keys, same metrics port and health file.
+# The event processor (Go port of the retired Python processor): same env,
+# topics, tables, keys, metrics port and health file as before.
 # confluent-kafka-go links its bundled librdkafka (glibc), so CGO stays on.
 FROM golang:1.26-bookworm AS builder
 

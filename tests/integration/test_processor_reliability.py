@@ -1,9 +1,16 @@
-"""Real Kafka/Redis/PostgreSQL checks for processor reliability boundaries."""
+"""Black-box reliability checks for the Go event processor.
+
+Each test publishes to fresh topics, runs the real ``event-processor`` image
+in finite mode against the compose stack's Kafka, Redis and PostgreSQL, then
+asserts through the database, the DLQ topic, the committed offsets and the
+processor's own ``processor_stopped`` run summary.
+"""
 
 import json
-import random
+import os
+import shutil
+import subprocess
 from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -25,19 +32,6 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from scripts.benchmark.config import load_config
-from services.event_processor.config import ProcessorConfig
-from services.event_processor.consumer import KafkaEventConsumer
-from services.event_processor.dlq import DlqPublisher
-from services.event_processor.idempotency import RedisIdempotencyStore
-from services.event_processor.models import (
-    ProcessingOutcome,
-    ProcessingStatus,
-    RunSummary,
-)
-from services.event_processor.persistence.database import Database
-from services.event_processor.persistence.handlers import default_persistence_registry
-from services.event_processor.persistence.unit_of_work import UnitOfWorkFactory
-from services.event_processor.processor import MessageProcessor
 from shared.commerce_common.enums import Currency, CustomerPersona, EventType
 from shared.kafka_metadata import event_message_headers, event_message_key
 from shared.schemas import EventEnvelope, OrderCreatedPayload, UserRegisteredPayload
@@ -125,73 +119,101 @@ def topics(stack: Stack) -> Iterator[Topics]:
             future.result(10)
 
 
-def _processor_config(stack: Stack, topics: Topics, group_id: str) -> ProcessorConfig:
-    return ProcessorConfig(
-        kafka_bootstrap_servers=stack.kafka_bootstrap_servers,
-        processor_input_topic=topics.input,
-        processor_dlq_topic=topics.dlq,
-        processor_consumer_group=group_id,
-        processor_client_id=f"{group_id}-client",
-        processor_auto_offset_reset="earliest",
-        processor_poll_timeout_seconds=0.2,
-        processor_max_processing_attempts=3,
-        processor_retry_initial_backoff_ms=0,
-        processor_retry_max_backoff_ms=0,
-        processor_retry_jitter_ratio=0,
-        processor_idempotency_key_prefix=f"commerce:processor:integration:{group_id}",
-        redis_url=stack.redis_url,
-        postgres_dsn=stack.postgres_dsn,
-        processor_db_pool_min_size=1,
-        processor_db_pool_max_size=2,
-        processor_offset_commit_batch_size=1,
+MAX_PROCESSING_ATTEMPTS = 3
+PROCESSOR_RUN_TIMEOUT_SECONDS = 180
+
+
+@dataclass(frozen=True, slots=True)
+class RunConfig:
+    """What one finite Go processor run reads and writes."""
+
+    kafka_bootstrap_servers: str
+    input_topic: str
+    dlq_topic: str
+    consumer_group: str
+    idempotency_key_prefix: str
+
+
+def _run_config(stack: Stack, topics: Topics, group_id: str) -> RunConfig:
+    return RunConfig(
+        stack.kafka_bootstrap_servers,
+        topics.input,
+        topics.dlq,
+        group_id,
+        f"commerce:processor:integration:{group_id}",
     )
 
 
-@contextmanager
-def _running_processor(
-    config: ProcessorConfig,
-) -> Iterator[tuple[KafkaEventConsumer, MessageProcessor]]:
-    consumer = KafkaEventConsumer(config)
-    idempotency = RedisIdempotencyStore(config)
-    dlq = DlqPublisher(config)
-    database = Database(config)
-    try:
-        database.open()
-        consumer.subscribe()
-        processor = MessageProcessor(
-            config,
-            idempotency,
-            dlq,
-            consumer,
-            default_persistence_registry(),
-            RunSummary(),
-            processor_instance_id=f"integration-{uuid4().hex}",
-            persistence=UnitOfWorkFactory(database, config),
-            wait=lambda _seconds: None,
-            rng=random.Random(0),
-        )
-        yield consumer, processor
-    finally:
+def _run_go_processor(config: RunConfig, expected_count: int) -> dict[str, Any]:
+    """Run the Go processor container until it has handled expected_count
+    records and return its processor_stopped summary."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is required to run the Go processor")
+    overrides = {
+        "PROCESSOR_INPUT_TOPIC": config.input_topic,
+        "PROCESSOR_DLQ_TOPIC": config.dlq_topic,
+        "PROCESSOR_CONSUMER_GROUP": config.consumer_group,
+        "PROCESSOR_CLIENT_ID": f"{config.consumer_group}-client",
+        "PROCESSOR_IDEMPOTENCY_KEY_PREFIX": config.idempotency_key_prefix,
+        "PROCESSOR_POLL_TIMEOUT_SECONDS": "0.2",
+        "PROCESSOR_MAX_PROCESSING_ATTEMPTS": str(MAX_PROCESSING_ATTEMPTS),
+        "PROCESSOR_RETRY_INITIAL_BACKOFF_MS": "0",
+        "PROCESSOR_RETRY_MAX_BACKOFF_MS": "0",
+        "PROCESSOR_RETRY_JITTER_RATIO": "0",
+        "PROCESSOR_OFFSET_COMMIT_BATCH_SIZE": "1",
+        "PROCESSOR_DB_POOL_MAX_SIZE": "2",
+        "METRICS_ENABLED": "false",
+    }
+    command = [
+        "docker",
+        "compose",
+        "--profile",
+        "processor",
+        "run",
+        "--rm",
+        "--no-deps",
+        "-T",
+    ]
+    for name, value in overrides.items():
+        command += ["-e", f"{name}={value}"]
+    command += [
+        os.environ.get("PROCESSOR_INTEGRATION_SERVICE", "event-processor"),
+        "--max-messages",
+        str(expected_count),
+        "--idle-timeout",
+        "15",
+    ]
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=PROCESSOR_RUN_TIMEOUT_SECONDS,
+        check=False,
+    )
+    for line in completed.stdout.splitlines():
         try:
-            consumer.flush_pending()
-        finally:
-            consumer.close()
-            dlq.close()
-            idempotency.close()
-            database.close()
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("event") == "processor_stopped":
+            return cast(dict[str, Any], record)
+    pytest.fail(
+        f"Go processor exited {completed.returncode} without a run summary\n"
+        f"stdout:\n{completed.stdout[-4000:]}\nstderr:\n{completed.stderr[-4000:]}"
+    )
 
 
-def _publish_event(config: ProcessorConfig, event: EventEnvelope[Any]) -> None:
+def _publish_event(config: RunConfig, event: EventEnvelope[Any]) -> None:
     producer = Producer(
         {
             "bootstrap.servers": config.kafka_bootstrap_servers,
-            "client.id": f"{config.processor_client_id}-test-producer",
+            "client.id": f"{config.consumer_group}-test-producer",
             "enable.idempotence": True,
             "acks": "all",
         }
     )
     producer.produce(
-        config.processor_input_topic,
+        config.input_topic,
         key=event_message_key(event),
         value=event.model_dump_json().encode(),
         headers=event_message_headers(event),
@@ -199,39 +221,17 @@ def _publish_event(config: ProcessorConfig, event: EventEnvelope[Any]) -> None:
     assert producer.flush(10) == 0
 
 
-def _process_until(
-    consumer: KafkaEventConsumer,
-    processor: MessageProcessor,
-    expected_count: int,
-) -> list[ProcessingOutcome]:
-    deadline = monotonic() + POLL_DEADLINE_SECONDS
-    outcomes: list[ProcessingOutcome] = []
-    while len(outcomes) < expected_count and monotonic() < deadline:
-        message = consumer.poll()
-        if message is None:
-            consumer.maybe_flush_idle()
-            continue
-        outcomes.append(processor.process(message))
-    consumer.flush_pending()
-    assert len(outcomes) == expected_count, (
-        f"processed {len(outcomes)} of {expected_count} records before deadline"
-    )
-    return outcomes
-
-
-def _committed_offset(config: ProcessorConfig) -> int:
+def _committed_offset(config: RunConfig) -> int:
     observer = Consumer(
         {
             "bootstrap.servers": config.kafka_bootstrap_servers,
-            "group.id": config.processor_consumer_group,
+            "group.id": config.consumer_group,
             "enable.auto.commit": False,
             "auto.offset.reset": "earliest",
         }
     )
     try:
-        committed = observer.committed(
-            [TopicPartition(config.processor_input_topic, 0)], 5
-        )
+        committed = observer.committed([TopicPartition(config.input_topic, 0)], 5)
         offset = committed[0].offset
         assert offset >= 0
         return int(offset)
@@ -239,16 +239,16 @@ def _committed_offset(config: ProcessorConfig) -> int:
         observer.close()
 
 
-def _consume_dlq(config: ProcessorConfig) -> dict[str, Any]:
+def _consume_dlq(config: RunConfig) -> dict[str, Any]:
     observer = Consumer(
         {
             "bootstrap.servers": config.kafka_bootstrap_servers,
-            "group.id": f"{config.processor_consumer_group}-dlq-observer",
+            "group.id": f"{config.consumer_group}-dlq-observer",
             "enable.auto.commit": False,
             "auto.offset.reset": "earliest",
         }
     )
-    observer.subscribe([config.processor_dlq_topic])
+    observer.subscribe([config.dlq_topic])
     deadline = monotonic() + POLL_DEADLINE_SECONDS
     try:
         while monotonic() < deadline:
@@ -267,14 +267,13 @@ def _consume_dlq(config: ProcessorConfig) -> dict[str, Any]:
     pytest.fail("no DLQ record arrived before deadline")
 
 
-def _delete_idempotency_state(
-    stack: Stack, config: ProcessorConfig, event_id: UUID
-) -> None:
+def _delete_idempotency_state(stack: Stack, config: RunConfig, event_id: UUID) -> None:
     redis_client = Redis.from_url(stack.redis_url)
     try:
-        assert redis_client.delete(
-            f"{config.processor_idempotency_key_prefix}:{event_id}"
-        ) in (0, 1)
+        assert redis_client.delete(f"{config.idempotency_key_prefix}:{event_id}") in (
+            0,
+            1,
+        )
     finally:
         redis_client.close()
 
@@ -353,18 +352,16 @@ def test_duplicate_event_persists_business_effect_once(
 ) -> None:
     event_id = uuid4()
     customer_id = uuid4()
-    config = _processor_config(stack, topics, f"processor-idempotency-{uuid4().hex}")
+    config = _run_config(stack, topics, f"processor-idempotency-{uuid4().hex}")
     event = _user_registered_event(event_id, customer_id)
     try:
         _publish_event(config, event)
         _publish_event(config, event)
-        with _running_processor(config) as (consumer, processor):
-            outcomes = _process_until(consumer, processor, expected_count=2)
+        summary = _run_go_processor(config, expected_count=2)
 
-        assert [outcome.status for outcome in outcomes] == [
-            ProcessingStatus.PROCESSED,
-            ProcessingStatus.DUPLICATE,
-        ]
+        assert summary["processed_records"] == 1
+        assert summary["duplicate_records"] == 1
+        assert summary["unresolved_records"] == 0
         assert _committed_offset(config) >= 2
         with (
             psycopg.connect(stack.postgres_dsn) as connection,
@@ -390,18 +387,19 @@ def test_exhausted_processing_routes_to_dlq_before_source_commit(
 ) -> None:
     event_id = uuid4()
     event = _missing_cart_order_event(event_id)
-    config = _processor_config(stack, topics, f"processor-dlq-{uuid4().hex}")
+    config = _run_config(stack, topics, f"processor-dlq-{uuid4().hex}")
     try:
         _publish_event(config, event)
-        with _running_processor(config) as (consumer, processor):
-            outcomes = _process_until(consumer, processor, expected_count=1)
+        summary = _run_go_processor(config, expected_count=1)
 
-        assert outcomes[0].status is ProcessingStatus.DLQ
-        assert outcomes[0].attempts == config.processor_max_processing_attempts
+        assert summary["dlq_records"] == 1
+        assert summary["retry_exhausted"] == 1
+        assert summary["missing_dependency_errors"] == 1
+        assert summary["unresolved_records"] == 0
         record = _consume_dlq(config)
         assert record["original_event_id"] == str(event_id)
         assert record["error_category"] == "missing_business_dependency"
-        assert record["processing_attempts"] == config.processor_max_processing_attempts
+        assert record["processing_attempts"] == MAX_PROCESSING_ATTEMPTS
         assert _committed_offset(config) >= 1
         with (
             psycopg.connect(stack.postgres_dsn) as connection,

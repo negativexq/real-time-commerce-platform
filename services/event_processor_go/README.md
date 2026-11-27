@@ -2,7 +2,8 @@
 
 The event processor that runs in Compose: both `event-processor` and
 `demo-verification-processor` build from this directory. It is a Go port of
-`services/event_processor` and a drop-in replacement for it:
+the retired Python processor (`services/event_processor`, removed on
+2026-11-27; see git history) and kept its external contract:
 
 - the same environment variables and CLI flags;
 - the same Kafka topics and consumer-group semantics;
@@ -22,10 +23,10 @@ make processor-up        # build and start the Go processor
 make go-check            # gofmt, go vet, go test
 ```
 
-The Python processor stays in the repository for now. It still provides
-database migrations (`postgres-migrate`), the fraud configuration that
-`fraud_outbox_publisher` imports, and the in-process smoke scripts, which run
-in the `processor-tools` service.
+The Python processor has been removed. Database migrations moved to
+`services/db_migrations` (the `postgres-migrate` service), the outbox
+publisher reads its own configuration, and the fraud diagnostics are
+subcommands of this binary (`make fraud-rules`, `make fraud-config-check`).
 
 ## Parity guarantees
 
@@ -51,6 +52,24 @@ in the `processor-tools` service.
 - **Fraud engine**: the context queries, all 10 rules, aggregation and
   thresholds are ported, with the same evidence keys.
 
+### Frozen Python references
+
+Before the Python processor was deleted, its behaviour was recorded as test
+fixtures. They can no longer be regenerated, so treat them as the contract:
+
+- `internal/fraud/testdata/python_reference.json`: 600 seeded fraud contexts
+  around every rule boundary under four configurations, with the exact
+  rule-results JSON, score, decision, severity, evaluation ID and alert
+  message (payload bytes, key, headers). Checked by
+  `TestEvaluationsMatchPythonReference`.
+- `internal/dlq/testdata/validation_reference.json`: 33 Kafka records
+  covering every validation category, with the error hints and the exact
+  DLQ record bytes, key and headers. Checked by
+  `TestValidationAndDLQMatchPythonReference`.
+
+Change a fixture only for an intentional contract change, and say so in the
+commit.
+
 ### Differential check
 
 The check ran on 2026-11-27. The same Kafka topic held 2,085 records: five
@@ -70,13 +89,6 @@ fresh database. Results:
 - **Transport errors are retried.** A PostgreSQL failure without a SQLSTATE
   is classified as `RetryableDatabaseError` instead of being dead-lettered.
   Examples are a connection reset, a broken pipe or a timeout.
-- **pgx runs in `cache_describe` mode.** Queries go out as unnamed
-  statements, so PostgreSQL plans each execution against current
-  statistics. pgx's default mode creates a named prepared statement per
-  query instead. PostgreSQL can then pin a generic plan after five
-  executions; if that happens while tables are nearly empty, the plan stays
-  a sequential scan until the next ANALYZE. That happened in the first
-  repeat of the 2026-11-27 benchmark A/B.
 - **Redis scripts run with EVALSHA** through `redis.NewScript`. The script
   text is the same as in Python.
 - **SQL-statement classification for metrics is memoized**, since the SQL
@@ -94,8 +106,13 @@ cd services/event_processor_go
 go build ./... && go vet ./... && go test ./...
 ```
 
-To regenerate the golden fixtures after a contract change in the Python
-code, run this from the repository root:
+`make processor-smoke` builds the image and runs
+`tests/integration/test_processor_reliability.py`, which drives this
+container in finite mode against the Compose stack.
+
+The shared event contracts are still Python (`shared/schemas`). To regenerate
+the contract golden fixtures after a contract change, run this from the
+repository root:
 
 ```bash
 .venv/bin/python services/event_processor_go/internal/contracts/testdata/generate_golden.py

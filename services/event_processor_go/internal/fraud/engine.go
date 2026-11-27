@@ -68,6 +68,36 @@ func (e *Evaluation) MatchedRules() []RuleResult {
 	return out
 }
 
+// RuleVersion is the version every registered rule reports.
+const RuleVersion = "1.0"
+
+// RuleInfo describes one registered rule for read-only diagnostics.
+type RuleInfo struct {
+	ID       string
+	Version  string
+	Enabled  bool
+	MaxScore int
+}
+
+// Registry lists every rule in registration order, marking the ones
+// FRAUD_ENABLED_RULES turns on. It validates the configuration the same way
+// NewEngine does.
+func Registry(cfg *config.Fraud) ([]RuleInfo, error) {
+	if _, err := NewEngine(cfg); err != nil {
+		return nil, err
+	}
+	enabled := map[string]bool{}
+	for _, id := range cfg.EnabledRules {
+		enabled[id] = true
+	}
+	all := buildRules(cfg)
+	out := make([]RuleInfo, 0, len(all))
+	for _, r := range all {
+		out = append(out, RuleInfo{ID: r.id, Version: RuleVersion, Enabled: enabled[r.id], MaxScore: r.maxScore})
+	}
+	return out, nil
+}
+
 type rule struct {
 	id        string
 	supported map[contracts.EventType]bool
@@ -200,7 +230,7 @@ func result(c *Context, id string, matched bool, score int, severity Severity, r
 	if len(explanation) > 256 {
 		explanation = explanation[:256]
 	}
-	return RuleResult{RuleID: id, RuleVersion: "1.0", Matched: matched, Score: score, Severity: severity,
+	return RuleResult{RuleID: id, RuleVersion: RuleVersion, Matched: matched, Score: score, Severity: severity,
 		ReasonCode: reason, Explanation: explanation, Evidence: evidence, EvaluatedAt: c.EventTime}
 }
 

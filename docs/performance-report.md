@@ -1,8 +1,10 @@
 # Performance Engineering Report
 
 > **Note:** the benchmark directories cited below measured the retired
-> Python processor and were removed from the tree on 2026-11-27. Names are
-> kept for reference; recover a directory from git history as described in
+> Python processor and were removed from the tree on 2026-11-27, as was the
+> Python processor itself (`services/event_processor/`, its tests and smoke
+> scripts); the Go processor in `services/event_processor_go/` replaced it.
+> Names are kept for reference; recover them from git history as described in
 > [`artifacts/benchmark/README.md`](../artifacts/benchmark/README.md).
 
 This report tells the performance-engineering story from the first Demo
@@ -994,7 +996,7 @@ verified directly by SQL-class call-count metrics and by a counting-cursor
 test). Semantic equivalence verified against the exact legacy two-query
 sequence across 7 scenarios (own order, no order, missing order, another
 customer's order, unknown customer) in
-[`tests/integration/test_fraud_context_roundtrip.py`](../tests/integration/test_fraud_context_roundtrip.py).
+`tests/integration/test_fraud_context_roundtrip.py`.
 
 **Controlled A/B** (clean reset before each condition, `git stash`
 isolated the true baseline code, image rebuilt for each condition,

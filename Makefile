@@ -7,13 +7,11 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	generator-smoke generator-personas generator-normal generator-suspicious \
 	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
 	generator-anomaly-smoke go-check processor-build processor-up processor-down \
-	processor-run processor-logs processor-status processor-sample processor-smoke \
+	processor-run processor-logs processor-status processor-smoke \
 	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
 	processor-idempotency-status processor-clear-test-state clean clean-volumes \
 	db-migrate db-migration-status db-schema-check db-tables db-counts \
-	db-reset-test-data persistence-sample persistence-smoke \
-	persistence-duplicate-smoke persistence-recovery-smoke \
-	persistence-dependency-smoke persistence-refund-smoke \
+	db-reset-test-data \
 	fraud-rules fraud-config-check fraud-db-status fraud-sample-normal \
 	fraud-sample-suspicious fraud-sample-bot fraud-sample-takeover fraud-smoke \
 	fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke \
@@ -87,12 +85,10 @@ db-migrate:
 	docker compose --profile processor run --rm postgres-migrate
 
 db-migration-status:
-	docker compose --profile processor run --rm --entrypoint python \
-		postgres-migrate -m services.event_processor.persistence.migrations status
+	docker compose --profile processor run --rm postgres-migrate status
 
 db-schema-check:
-	docker compose --profile processor run --rm --entrypoint python \
-		postgres-migrate -m services.event_processor.persistence.migrations check
+	docker compose --profile processor run --rm postgres-migrate check
 
 db-tables: postgres-tables
 
@@ -204,55 +200,25 @@ processor-logs:
 processor-status:
 	docker compose --profile processor ps event-processor
 
-processor-sample:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/processor-smoke.py normal
+PROCESSOR_INTEGRATION = $(PYTHON) -m pytest -m integration tests/integration/test_processor_reliability.py
 
-processor-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/processor-smoke.py normal
+processor-smoke: processor-build
+	$(PROCESSOR_INTEGRATION)
 
-processor-duplicate-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/processor-smoke.py duplicate
+processor-duplicate-smoke: processor-build
+	$(PROCESSOR_INTEGRATION) -k duplicate
 
-processor-dlq-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/processor-smoke.py dlq
+processor-dlq-smoke: processor-build
+	$(PROCESSOR_INTEGRATION) -k dlq
 
 processor-retry-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/processor-smoke.py retry
-
-persistence-sample:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py sample
-
-persistence-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py normal
-
-persistence-duplicate-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py duplicate
-
-persistence-recovery-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py recovery
-
-persistence-dependency-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py dependency
-
-persistence-refund-smoke:
-	docker compose --profile processor --profile tools run --rm \
-		--entrypoint python processor-tools /app/scripts/persistence-smoke.py refund
+	cd services/event_processor_go && go test ./internal/processor -run 'Retry|Exhausted|Backoff'
 
 fraud-rules:
-	$(PYTHON) scripts/fraud-admin.py rules
+	docker compose --profile processor run --rm --no-deps event-processor fraud-rules
 
 fraud-config-check:
-	$(PYTHON) scripts/fraud-admin.py config
+	docker compose --profile processor run --rm --no-deps event-processor fraud-config
 
 fraud-db-status fraud-counts:
 	docker compose exec -T postgres sh -c \
@@ -275,7 +241,7 @@ fraud-sample-takeover:
 	$(MAKE) generator-takeover
 
 fraud-smoke fraud-score-smoke fraud-alert-smoke fraud-idempotency-smoke:
-	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py
+	cd services/event_processor_go && go test ./internal/fraud
 
 fraud-outbox-build:
 	docker compose --profile fraud build fraud-outbox-publisher
@@ -293,8 +259,7 @@ fraud-outbox-status:
 	docker compose --profile fraud ps fraud-outbox-publisher
 
 fraud-outbox-smoke:
-	$(PYTHON) -m pytest tests/unit/test_fraud_engine.py \
-		-k alert_event_is_deterministic
+	cd services/event_processor_go && go test ./internal/fraud -run 'Alert|PythonReference'
 
 fraud-outbox-recovery-smoke:
 	$(PYTHON) -m pytest tests/unit/test_fraud_outbox.py

@@ -1,8 +1,10 @@
 # Performance Optimization History
 
 > **Note:** the benchmark directories cited below measured the retired
-> Python processor and were removed from the tree on 2026-11-27. Names are
-> kept for reference; recover a directory from git history as described in
+> Python processor and were removed from the tree on 2026-11-27, as was the
+> Python processor itself (`services/event_processor/`, its tests and smoke
+> scripts); the Go processor in `services/event_processor_go/` replaced it.
+> Names are kept for reference; recover them from git history as described in
 > [`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
 
 This is the decision log for the performance work. Each entry records the
@@ -332,9 +334,9 @@ configuration was changed. This is attribution, not optimization.
   allocation as every prior stage.
 - **Instrumentation added:** none in application code. Sprint 8/9 already
   wrap every PostgreSQL call in `InstrumentedConnection`/`InstrumentedCursor`
-  ([`persistence/instrumentation.py`](../../services/event_processor/persistence/instrumentation.py))
+  (`persistence/instrumentation.py`)
   and record per-stage histograms in
-  [`persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py)
+  `persistence/unit_of_work.py`
   (`commerce_database_stage_duration_seconds{stage}` for pool acquire,
   `processed_events`, `business_persistence`, `fraud_context`,
   `fraud_persistence`, `commit`, connection release, plus
@@ -603,7 +605,7 @@ configuration was changed. This is attribution, not optimization.
   `customer_id`-only `Bitmap Heap Scan` with the `ordered_at` range applied
   as a post-scan `Filter`, unlike the already-indexed `payments` lookups in
   the same stage. The exact hot query, read from
-  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py):
+  `services/event_processor/fraud/context.py`:
 
   ```sql
   SELECT COUNT(*) FROM (
@@ -738,7 +740,7 @@ configuration was changed. This is attribution, not optimization.
 - **Hypothesis:** Stage 16 found `fraud_context_product_views` running the
   same `customer_id`-only Bitmap-Heap-Scan-plus-Filter pattern as the
   pre-index `orders` lookup. The exact hot query, from
-  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py):
+  `services/event_processor/fraud/context.py`:
 
   ```sql
   SELECT COUNT(*) FROM (
@@ -1470,7 +1472,7 @@ configuration was changed. This is attribution, not optimization.
   This experiment tests that hypothesis directly by removing one round
   trip and observing whether system behavior actually improves.
 - **Original query inventory** (from direct inspection of
-  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py),
+  `services/event_processor/fraud/context.py`,
   counted from the real code, not assumed):
 
   | # | Field | Query | Calls/fraud-eligible event | Depends on | Cost (baseline mean) |
@@ -1531,7 +1533,7 @@ configuration was changed. This is attribution, not optimization.
   fraud-eligible event**, a ~11.5% reduction in fraud-context round trips
   for this pair, ~10% of the full fraud-context call sequence).
 - **Semantic-equivalence tests:**
-  [`tests/integration/test_fraud_context_roundtrip.py`](../../tests/integration/test_fraud_context_roundtrip.py)
+  `tests/integration/test_fraud_context_roundtrip.py`
   (7 tests, run against the real local PostgreSQL, all fixture writes
   rolled back) directly compares the new
   `FraudContextBuilder._customer_and_order()` against the exact legacy
@@ -1752,7 +1754,7 @@ configuration was changed. This is attribution, not optimization.
   the transaction's own lifecycle dominates and grows" - read, write, or
   commit.
 - **Lifecycle model** (from direct inspection of
-  [`services/event_processor/persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
+  `services/event_processor/persistence/unit_of_work.py`,
   `UnitOfWorkFactory.persist()`):
 
   ```
@@ -1945,9 +1947,9 @@ configuration was changed. This is attribution, not optimization.
   to look at arrival-side/queueing dynamics directly instead of the
   transaction or PostgreSQL again.
 - **Real execution lifecycle** (from direct inspection of
-  [`services/event_processor/main.py`](../../services/event_processor/main.py)
+  `services/event_processor/main.py`
   `run_processor()` and
-  [`services/event_processor/consumer.py`](../../services/event_processor/consumer.py)
+  `services/event_processor/consumer.py`
   - not assumed):
 
   ```
@@ -2001,7 +2003,7 @@ configuration was changed. This is attribution, not optimization.
   would be negative (producer/consumer clock skew, dropped rather than fed
   into the histogram since it cannot reflect real queueing time). Unit
   tested in
-  [`tests/unit/test_processor_main_queue_wait.py`](../../tests/unit/test_processor_main_queue_wait.py)
+  `tests/unit/test_processor_main_queue_wait.py`
   (4 cases: missing timestamp, normal elapsed computation, zero-wait, and
   clock-skew rejection). Surfaced in `direct_saturation.py` as
   `consumer_queue_wait_ms`.
@@ -2314,14 +2316,14 @@ configuration was changed. This is attribution, not optimization.
   code (`fetchq_cnt`, `fetchq_size`, `consumer_lag`, `fetch_state` per
   topic-partition; `rtt.avg`/`p50`/`p95`/`p99` per broker connection, in
   microseconds). Added, in
-  [`services/event_processor/consumer.py`](../../services/event_processor/consumer.py):
+  `services/event_processor/consumer.py`:
   - `statistics.interval.ms: 1000` and a `stats_cb` wired only for the real
     client this instance constructs (`_real_client_config()`) - test doubles
     injected via the existing `client=` parameter are unaffected, and
     `kafka_config()` itself (reused by `processor-smoke.py` and
     `retry_dlq_bench.py` for raw watermark-reading consumers) is unchanged.
   - Two pure parsing functions, unit-tested in
-    [`tests/unit/test_consumer_stats.py`](../../tests/unit/test_consumer_stats.py)
+    `tests/unit/test_consumer_stats.py`
     (7 cases): `fetchq_records_total(stats)` (sum of `fetchq_cnt` across all
     assigned partitions - records already fetched from the broker and
     buffered locally by librdkafka, not yet returned by `poll()`) and
@@ -2334,7 +2336,7 @@ configuration was changed. This is attribution, not optimization.
     poll-to-*handler* gap) and counts poll calls that returned no record
     (`processor_empty_polls_total`) - both directly requested by this
     stage's own measurement list, tested in
-    [`tests/unit/test_processor_consumer_offset_batching.py`](../../tests/unit/test_processor_consumer_offset_batching.py).
+    `tests/unit/test_processor_consumer_offset_batching.py`.
   All four are diagnostic gauges/histograms/counters with no branching
   logic change - processing behavior, retry behavior, offset-commit
   behavior, and DLQ behavior are byte-identical to before this stage.
@@ -2489,7 +2491,7 @@ configuration was changed. This is attribution, not optimization.
   runtime/language itself imposes (e.g. the GIL)?
 - **Consumer lifecycle and offset-commit flow inspected before writing any
   code** (per instruction), confirming two things that shaped the design:
-  1. [`services/event_processor/offset_tracker.py`](../../services/event_processor/offset_tracker.py)'s
+  1. `services/event_processor/offset_tracker.py`'s
      `OffsetCommitTracker`/`_PartitionState` already use a min-heap to track
      the highest *contiguous* terminal offset per partition - it already
      tolerates terminal completions arriving out of order. Its own
@@ -2498,7 +2500,7 @@ configuration was changed. This is attribution, not optimization.
      model is introduced, this tracker's per-partition contiguous-offset
      bookkeeping is what must be preserved or replaced with an equivalent
      guarantee."
-  2. [`services/event_processor/processor.py`](../../services/event_processor/processor.py)'s
+  2. `services/event_processor/processor.py`'s
      `MessageProcessor.process()` already calls its injected `committer`
      synchronously, internally, for every terminal outcome (`_commit()`) -
      the committer is a constructor-injected dependency (`OffsetCommitter`
@@ -2523,7 +2525,7 @@ configuration was changed. This is attribution, not optimization.
   `test_offset_tracker.py` cases still pass unmodified, plus 5 new cases
   covering the exact failure mode this fixes and the corrected concurrent
   scenario. Documented in detail in
-  [`services/event_processor/main_pooled.py`](../../services/event_processor/main_pooled.py)'s
+  `services/event_processor/main_pooled.py`'s
   module docstring.
 - **Design (isolated, opt-in, default unchanged).** New
   `processor_worker_pool_size` config field (default `1`, env
@@ -2853,12 +2855,12 @@ configuration was changed. This is attribution, not optimization.
   inventory, not a benchmark - the call counts below are derived by
   reading the actual repository/SQL code, not measured under load.
 - **Lifecycle confirmed by direct inspection** of
-  [`services/event_processor/processor.py`](../../services/event_processor/processor.py),
-  [`services/event_processor/persistence/unit_of_work.py`](../../services/event_processor/persistence/unit_of_work.py),
+  `services/event_processor/processor.py`,
+  `services/event_processor/persistence/unit_of_work.py`,
   every repository under
-  [`services/event_processor/persistence/repositories/`](../../services/event_processor/persistence/repositories/),
+  `services/event_processor/persistence/repositories/`,
   and
-  [`services/event_processor/fraud/context.py`](../../services/event_processor/fraud/context.py)/[`repository.py`](../../services/event_processor/fraud/repository.py):
+  `services/event_processor/fraud/context.py`/`repository.py`:
 
   ```
   Kafka event -> Redis idempotency reserve

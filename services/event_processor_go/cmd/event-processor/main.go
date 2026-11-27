@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/config"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/contracts"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/dlq"
+	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/fraud"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/idempotency"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/kafkaconsumer"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/logging"
@@ -33,7 +35,37 @@ func main() {
 		}
 		os.Exit(0)
 	}
+	if len(os.Args) > 1 && (os.Args[1] == "fraud-config" || os.Args[1] == "fraud-rules") {
+		os.Exit(fraudAdmin(os.Args[1], os.Stdout))
+	}
 	os.Exit(run(os.Args[1:]))
+}
+
+// fraudAdmin prints read-only fraud diagnostics (formerly scripts/fraud-admin.py).
+func fraudAdmin(command string, out io.Writer) int {
+	cfg, err := config.LoadFraud(config.OSLookup)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fraud configuration invalid:", err)
+		return 1
+	}
+	rules, err := fraud.Registry(cfg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fraud configuration invalid:", err)
+		return 1
+	}
+	if command == "fraud-config" {
+		fmt.Fprintf(out, "Fraud configuration valid: review=%d, block=%d, ruleset=%s.\n",
+			cfg.ReviewThreshold, cfg.BlockThreshold, cfg.RulesetVersion)
+		return 0
+	}
+	for _, r := range rules {
+		enabled := "False"
+		if r.Enabled {
+			enabled = "True"
+		}
+		fmt.Fprintf(out, "%s\t%s\tenabled=%s\tmax_score=%d\n", r.ID, r.Version, enabled, r.MaxScore)
+	}
+	return 0
 }
 
 func touchHealth() {

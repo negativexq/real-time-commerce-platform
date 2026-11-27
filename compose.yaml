@@ -269,28 +269,6 @@ services:
     cpus: ${PROCESSOR_CPU_LIMIT:-8}
     restart: unless-stopped
 
-  # In-process Python smoke scripts (scripts/processor-smoke.py,
-  # scripts/persistence-smoke.py) import the legacy Python processor
-  # package; the running processor is the Go service above.
-  processor-tools:
-    profiles: ["tools"]
-    build:
-      context: .
-      dockerfile: services/event_processor/Dockerfile
-    depends_on:
-      kafka:
-        condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      postgres-migrate:
-        condition: service_completed_successfully
-    environment: *processor-environment
-    restart: "no"
-
   demo-verification-processor:
     profiles: ["demo-verification"]
     build:
@@ -334,15 +312,14 @@ services:
     profiles: ["processor", "fraud", "demo"]
     build:
       context: .
-      dockerfile: services/event_processor/Dockerfile
+      dockerfile: services/db_migrations/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
       PROCESSOR_REQUIRED_SCHEMA_VERSION: ${PROCESSOR_REQUIRED_SCHEMA_VERSION:-4}
-    entrypoint:
-      ["python", "-m", "services.event_processor.persistence.migrations", "migrate"]
+    command: ["migrate"]
     restart: "no"
 
   fraud-outbox-publisher:

@@ -157,15 +157,16 @@ health.
 ## Commands and smoke tests
 
 ```bash
-make persistence-sample
-make persistence-smoke
-make persistence-duplicate-smoke
-make persistence-recovery-smoke
-make persistence-dependency-smoke
-make persistence-refund-smoke
+make db-migrate
+make db-migration-status
+make db-schema-check
+make processor-smoke
 ```
 
-Smoke rows use unique sources and are deleted in foreign-key-safe order.
+Migrations run from `services/db_migrations` (the one-shot `postgres-migrate`
+service). `make processor-smoke` runs the Go processor against the live
+database and checks that a duplicate event persists once and that an event
+with a missing dependency is dead-lettered without partial writes.
 `db-reset-test-data` requires an explicit `TEST_RUN_ID`, never truncates
 tables, and never deletes migration history.
 

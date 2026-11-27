@@ -5,9 +5,10 @@
 > **Runtime:** the processor that runs in Compose is the Go port in
 > [`services/event_processor_go/`](../services/event_processor_go/README.md),
 > adopted on 2026-11-27 after a byte-level parity check and a benchmark A/B.
-> It keeps every behaviour described below. The Python package in
-> `services/event_processor/` remains the reference implementation and still
-> supplies migrations, fraud configuration and the in-process smoke tooling.
+> It keeps every behaviour described below. The Python package that used to
+> live in `services/event_processor/` was removed the same day; Python names
+> below (such as `MessageProcessor` or `OffsetCommitTracker`) refer to the
+> design the Go packages port one to one.
 
 Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
 validation, Redis leases, retries, DLQ, and manual offsets while replacing the
@@ -108,7 +109,7 @@ order. It favors auditable ownership over throughput.
 
 **Commits are batched, not per-event.** `commit_terminal()` (called once a
 record reaches success, duplicate-skip, or confirmed DLQ delivery) hands the
-offset to `services/event_processor/offset_tracker.py::OffsetCommitTracker`,
+offset to the offset tracker (`services/event_processor_go/internal/offsets`),
 which tracks the highest *contiguous* terminal offset per partition and only
 issues an actual `commit(asynchronous=False)` call once
 `PROCESSOR_OFFSET_COMMIT_BATCH_SIZE` terminal records have accumulated
@@ -203,10 +204,10 @@ between zero and one; and completed TTL must exceed processing TTL. CLI values
 override the environment:
 
 ```bash
-python -m services.event_processor.main
-python -m services.event_processor.main --max-messages 20 --idle-timeout 10
-python -m services.event_processor.main --max-messages 20 --from-beginning
-python -m services.event_processor.main --group-id local-test --log-level DEBUG
+docker compose --profile processor run --rm event-processor
+docker compose --profile processor run --rm event-processor --max-messages 20 --idle-timeout 10
+docker compose --profile processor run --rm event-processor --max-messages 20 --from-beginning
+docker compose --profile processor run --rm event-processor --group-id local-test --log-level DEBUG
 ```
 
 `--from-beginning` sets `auto.offset.reset=earliest`; it does not rewrite an
@@ -219,19 +220,19 @@ make processor-logs
 make processor-down
 ```
 
-The service has no host port. Startup opens a bounded psycopg pool, checks
-`SELECT 1` and schema version 2, then starts Kafka polling. SIGINT/SIGTERM stops
+The service has no host port. Startup opens a bounded pgx pool, checks
+`SELECT 1` and the required schema version, then starts Kafka polling. SIGINT/SIGTERM stops
 new polling, closes the consumer, flushes the DLQ producer boundedly, and closes
 Redis and PostgreSQL gracefully.
 
 Available bounded workflows:
 
 ```bash
-make processor-sample
-make processor-smoke
+make go-check                    # gofmt, go vet, Go unit tests
+make processor-smoke             # integration tests against the Go container
 make processor-duplicate-smoke
 make processor-dlq-smoke
-make processor-retry-smoke
+make processor-retry-smoke       # Go retry/backoff tests
 make processor-idempotency-status
 make processor-clear-test-state
 ```

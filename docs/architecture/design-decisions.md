@@ -18,7 +18,7 @@ business writes, fraud evaluation, or the outbox insert a second time.
 
 **Considered alternatives.**
 - *Redis only.* Fast (`reserve`/`complete` are single atomic Lua-script
-  round trips - see `services/event_processor/idempotency.py`), and
+  round trips - see `services/event_processor_go/internal/idempotency`), and
   naturally handles cross-instance coordination when multiple processor
   containers share a consumer group. But Redis in this deployment is
   reconstructible coordination state, not the system of record: a

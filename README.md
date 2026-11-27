@@ -383,9 +383,9 @@ primary consumer group offsets.
 | `infra/` | Prometheus rules/configuration and provisioned Grafana resources. |
 | `infrastructure/` | Kafka topic initialization script. |
 | `scripts/` | Deterministic smoke, verification, and scoped cleanup utilities. |
-| `services/` | Generator, processor (Go: `event_processor_go/`), outbox publisher, and Demo Control API services. The legacy Python processor in `event_processor/` still provides migrations, fraud configuration, and in-process smoke tooling. |
+| `services/` | Generator, Go event processor (`event_processor_go/`), database migration runner (`db_migrations/`), outbox publisher, and Demo Control API services. |
 | `shared/` | Versioned event schemas, common domain helpers, Kafka metadata, and metrics. |
-| `tests/` | Python unit and integration tests, plus event fixtures. |
+| `tests/` | Python unit and integration tests (the integration tests drive the Go processor container), plus event fixtures. Go tests live next to the Go code. |
 
 Root-level orchestration lives in `compose.yaml`, `Makefile`, `.env.example`,
 and `pyproject.toml`.

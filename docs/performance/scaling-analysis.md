@@ -1,8 +1,10 @@
 # Scaling Analysis: One, Two, and Three Workers
 
 > **Note:** the benchmark directories cited below measured the retired
-> Python processor and were removed from the tree on 2026-11-27. Names are
-> kept for reference; recover a directory from git history as described in
+> Python processor and were removed from the tree on 2026-11-27, as was the
+> Python processor itself (`services/event_processor/`, its tests and smoke
+> scripts); the Go processor in `services/event_processor_go/` replaced it.
+> Names are kept for reference; recover them from git history as described in
 > [`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
 
 This analysis covers the isolated `Kafka → event_processor → persistence`

@@ -104,6 +104,9 @@ jobs:
       - name: Apply database migrations
         run: docker compose --profile processor run --rm --build postgres-migrate
 
+      - name: Build Go processor image
+        run: docker compose --profile processor build event-processor
+
       - name: Run integration tests
         run: |
           python -m pytest -m integration -v --junitxml=integration-test-results.xml

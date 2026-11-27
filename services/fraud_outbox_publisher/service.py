@@ -25,7 +25,7 @@ class OutboxService:
         self, config: OutboxConfig, metrics: ApplicationMetrics | None = None
     ) -> None:
         self.config = config
-        self.connection = psycopg.connect(config.processor.postgres_dsn)
+        self.connection = psycopg.connect(config.connection.postgres_dsn)
         self.repository = OutboxRepository(self.connection)
         self.publisher = AlertPublisher(config)
         self.summary = OutboxSummary()
@@ -44,7 +44,7 @@ class OutboxService:
             batch_started = perf_counter()
             heartbeat.touch()
             claim_started = perf_counter()
-            records = self.repository.claim(self.config.fraud)
+            records = self.repository.claim(self.config.outbox)
             if self.metrics is not None:
                 self.metrics.outbox_claim_duration.observe(
                     perf_counter() - claim_started
@@ -71,12 +71,12 @@ class OutboxService:
                         self.metrics.outbox_last_success.set_to_current_time()
                         self.metrics.success()
                 except Exception as exc:
-                    self.repository.failed(record, exc, self.config.fraud)
+                    self.repository.failed(record, exc, self.config.outbox)
                     if self.metrics is not None:
                         result = (
                             "failed"
                             if record.attempts
-                            >= self.config.fraud.fraud_outbox_max_attempts
+                            >= self.config.outbox.fraud_outbox_max_attempts
                             else "retry"
                         )
                         self.metrics.outbox_publications.labels(result).inc()
@@ -84,12 +84,12 @@ class OutboxService:
                         self.metrics.outbox_publish_duration.labels(result).observe(
                             perf_counter() - publish_started
                         )
-                    if record.attempts >= self.config.fraud.fraud_outbox_max_attempts:
+                    if record.attempts >= self.config.outbox.fraud_outbox_max_attempts:
                         self.summary.permanent_failures += 1
                     else:
                         self.summary.publish_retries += 1
             if not records:
-                sleep(self.config.fraud.fraud_outbox_poll_interval_ms / 1_000)
+                sleep(self.config.outbox.fraud_outbox_poll_interval_ms / 1_000)
             if self.metrics is not None:
                 self.metrics.outbox_batch_duration.observe(
                     perf_counter() - batch_started
