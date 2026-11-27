@@ -106,6 +106,14 @@ cd services/event_processor_go
 go build ./... && go vet ./... && go test ./...
 ```
 
+The Redis lease scripts (`internal/idempotency`) and the persistence layer
+(`internal/persistence`, every handler plus the fraud context queries, run
+against a freshly migrated database per test) are tested against real
+services. They skip unless `PROCESSOR_TEST_REDIS_URL` and
+`PROCESSOR_TEST_POSTGRES_DSN` are set; `make go-service-test` sets them for
+the local Compose stack, and CI runs them with
+`PROCESSOR_TEST_REQUIRE_SERVICES=1`, so a missing service fails the build.
+
 `make processor-smoke` builds the image and runs
 `tests/integration/test_processor_reliability.py`, which drives this
 container in finite mode against the Compose stack.

@@ -1,13 +1,12 @@
 # Event Processor Architecture
 
 Diagrams and a design-decisions record tracing the actual code path for
-one Kafka event through the processor, derived directly from the retired
-Python processor (`services/event_processor/processor.py`,
-`persistence/unit_of_work.py`, and `fraud/context.py` +
-`fraud/repository.py`) - not an idealized or aspirational design. The Go
-processor in `services/event_processor_go/` (`internal/processor`,
-`internal/persistence`, `internal/fraud`) ports that path step for step, so
-the diagrams describe the running system. They are static, documentation-only
+one Kafka event through the processor, derived directly from
+`services/event_processor_go/internal/processor`,
+`internal/persistence/unit_of_work.go`, and `internal/fraud/context.go` +
+`internal/fraud/repository.go` - not an idealized or aspirational design.
+(The diagrams were first drawn from the retired Python processor, which the
+Go code ports step for step.) They are static, documentation-only
 artifacts; no runtime behavior changed to produce them.
 
 ## Design Decisions

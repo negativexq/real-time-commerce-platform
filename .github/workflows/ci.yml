@@ -32,6 +32,28 @@ jobs:
   go-processor:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.5-bookworm
+        env:
+          POSTGRES_USER: commerce
+          POSTGRES_PASSWORD: commerce_local_dev
+          POSTGRES_DB: commerce
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U commerce -d commerce"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7.4.5-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      # Redis and PostgreSQL tests fail instead of skipping in CI.
+      PROCESSOR_TEST_POSTGRES_DSN: postgresql://commerce:commerce_local_dev@127.0.0.1:5432/commerce
+      PROCESSOR_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      PROCESSOR_TEST_REQUIRE_SERVICES: "1"
 
     steps:
       - name: Check out repository

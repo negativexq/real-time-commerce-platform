@@ -6,7 +6,7 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	generator-down generator-logs generator-run generator-sample generator-status \
 	generator-smoke generator-personas generator-normal generator-suspicious \
 	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
-	generator-anomaly-smoke go-check processor-build processor-up processor-down \
+	generator-anomaly-smoke go-check go-service-test processor-build processor-up processor-down \
 	processor-run processor-logs processor-status processor-smoke \
 	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
 	processor-idempotency-status processor-clear-test-state clean clean-volumes \
@@ -44,6 +44,15 @@ check: lint format-check type-check test
 
 go-check:
 	cd services/event_processor_go && test -z "$$(gofmt -l .)" && go vet ./... && go test ./...
+
+# Go tests that need Redis and PostgreSQL, against the local Compose stack.
+# Each PostgreSQL test creates and drops its own database.
+go-service-test:
+	cd services/event_processor_go && \
+		PROCESSOR_TEST_POSTGRES_DSN=postgresql://commerce:commerce_local_dev@localhost:5432/commerce \
+		PROCESSOR_TEST_REDIS_URL=redis://localhost:6379/15 \
+		PROCESSOR_TEST_REQUIRE_SERVICES=1 \
+		go test -count=1 ./internal/idempotency ./internal/persistence
 
 compose-config:
 	docker compose config
