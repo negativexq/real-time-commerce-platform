@@ -206,11 +206,12 @@ rates. Accepted runs required the same correctness checks as normal traffic.
 - Fraud-evaluation counts matched the fraud-eligible event count.
 - The 0% profile generated exactly zero fraud-eligible events.
 
-The benchmark summaries and invalidation notes remain under
-[`artifacts/benchmark/`](artifacts/benchmark/), with the historical benchmark
-record preserved separately from the workload-composition observations. Raw
-per-run dumps are reproducible through the benchmark scripts but are not
-committed.
+These studies measured the retired Python processor. Their artifact
+directories were removed from the tree on 2026-11-27, when the processor
+moved to Go, and remain recoverable from git history.
+[`artifacts/benchmark/`](artifacts/benchmark/) now holds the Python vs Go
+runtime A/B. Raw per-run dumps can be reproduced with the benchmark scripts
+but are not committed.
 
 ### Performance engineering journey
 

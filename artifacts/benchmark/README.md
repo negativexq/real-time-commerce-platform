@@ -1,76 +1,28 @@
 # Benchmark Artifact Index
 
-High-volume generated telemetry is kept **locally only** and excluded from
-Git via `.gitignore`: `direct-saturation-<rate>.json` (full per-repeat
-sample series, `scripts/benchmark/direct_saturation.py`),
-`injector-<rate>-<repeat>.json` (full per-event injector output,
-`direct_injector.py`), and `postgres-diagnostics-raw-<label>.json` (full
-per-tick `pg_stat_activity`/`pg_locks` sample series,
-`postgres_diagnostics.py`). Not all raw benchmark JSON is preserved in Git.
-What Git **does** retain: compact, report-backed benchmark evidence -
-`postgres-diagnostics-summary-<label>.json` and equivalent small aggregate/
-summary files, EXPLAIN outputs, benchmark methodology, and other small
-reproducibility artifacts. Directories committed before this policy keep
-their historical raw JSON in Git history unchanged; only newly generated
-raw telemetry is excluded going forward. (Earlier tooling wrote one shared
-`direct-saturation.json`/`postgres-diagnostics-<label>.json` per rate or
-run; both tools now always produce rate/label-scoped filenames so a later
-invocation under the same `--run-tag` can never silently overwrite an
-earlier rate's results - see the "Benchmark artifact reliability" entry in
-[`optimization-history.md`](../../docs/performance/optimization-history.md).)
-The entries below are the experiments used by the performance-engineering
-report; exploratory and intermediate directories remain available beside
-them.
+The event processor has run as the Go service in `services/event_processor_go/`
+since 2026-11-27. The earlier benchmark directories measured the Python
+processor and were removed from the tree when it was retired. They include
+the Demo API baselines, worker scaling, index and fraud-context
+optimizations, saturation diagnoses, and the fraud-mix studies. The
+performance documents still cite those directories by name.
 
-| Artifact | Purpose | Important result | Report section |
-| --- | --- | --- | --- |
-| [`bench-20260802T004243Z`](bench-20260802T004243Z/) | Initial 100 evt/s Demo API benchmark | ~49.84 evt/s observed baseline | Initial baseline |
-| [`bench-after-refresh-final-20260807T114000Z`](bench-after-refresh-final-20260807T114000Z/) | Periodic/background progress-refresh stage | ~77–80 evt/s generation range | Progress refresh |
-| [`bench-fixed-rate-final-20260807T151000Z`](bench-fixed-rate-final-20260807T151000Z/) | Monotonic fixed-rate pacing | ~97.93 evt/s median at 100 requested | Fixed-rate pacing |
-| [`bench-tx-decomposition-200-final-20260808T030000Z`](bench-tx-decomposition-200-final-20260808T030000Z/) | PostgreSQL transaction decomposition | Payment-history SELECTs were the expensive SQL class | Transaction decomposition |
-| [`bench-tx-combined-payments-20260808T080000Z`](bench-tx-combined-payments-20260808T080000Z/) | Combined recent/prior query experiment | System performance regressed; reverted | Rejected experiment |
-| [`bench-tx-index-20260808T090000Z`](bench-tx-index-20260808T090000Z/) | Composite-index read experiment | Seq Scan replaced by indexed access; lookup latency fell sharply | Composite index |
-| [`bench-tx-index-write-20260808T100000Z`](bench-tx-index-write-20260808T100000Z/) | Index write-side validation | Insert/transaction/WAL impact retained for review | Composite index |
-| [`bench-direct-processor-20260808T150000Z`](bench-direct-processor-20260808T150000Z/) | Direct injector and isolated processor sweep | Direct injection removed the Demo path from processor measurement | Direct injector |
-| [`bench-worker-scale-1w-20260808T160000Z`](bench-worker-scale-1w-20260808T160000Z/) | One-worker baseline | ~500 evt/s sustainable; 600 saturated | Scaling |
-| [`bench-worker-scale-2w-resource-20260808T180000Z`](bench-worker-scale-2w-resource-20260808T180000Z/) | Two-worker controlled scaling | 2/1 assignment; non-linear improvement | Scaling |
-| [`bench-worker-scale-3w-20260808T191000Z`](bench-worker-scale-3w-20260808T191000Z/) | Three-worker, three-partition sweep | ~750 evt/s sustainable; 900 saturated | Scaling |
-| [`bench-worker-scale-3w-boundary-775-20260808T210000Z`](bench-worker-scale-3w-boundary-775-20260808T210000Z/) | One permitted binary-search boundary rate | 775 evt/s non-sustainable in all repeats | Final boundary |
-| [`bench-batched-commit-3w-boundary`](bench-batched-commit-3w-boundary/) | Same 750/775/800 evt/s boundary re-tested after batching offset commits | 775 and 800 evt/s became sustainable (lag slope ≤+2.03/s in all 9 repeats) | Bounded batched offset commits |
-| [`bench-batched-commit-3w-ceiling-broad`](bench-batched-commit-3w-ceiling-broad/) | Broad post-batching saturation sweep at 850/900/950/1000 evt/s | 850 and 900 sustainable; 950 escalating across repeats; 1000 saturated | Stage 14 - ceiling discovery |
-| [`bench-batched-commit-3w-ceiling-refinement`](bench-batched-commit-3w-ceiling-refinement/) | Boundary refinement at 925 evt/s | Low/non-escalating lag slope but E2E p95 reached >1000ms in 2/3 repeats; classified as transition band, not a clean ceiling | Stage 14 - ceiling discovery |
-| [`bench-info-baseline-control-3w-boundary`](bench-info-baseline-control-3w-boundary/) | Fresh INFO-level control at 900/925/950 evt/s, pre-change image | 456,181 `event_processed` lines / ~254MB stdout+stderr in the measured window | Stage 15 - logging cost isolation |
-| [`bench-debug-success-log-3w-boundary`](bench-debug-success-log-3w-boundary/) | Same 900/925/950 evt/s after moving `event_processed` to DEBUG | 0 `event_processed` lines / ~7KB in the measured window; ~2-point processor CPU delta, no material PostgreSQL/throughput change | Stage 15 - logging cost isolation |
-| [`bench-tx-decomposition-v2-3w-boundary`](bench-tx-decomposition-v2-3w-boundary/) | Diagnosis-only transaction/SQL-class decomposition at 900/925/950 evt/s, reusing existing production instrumentation | `fraud_context` is the largest DB-side stage (~46-59% of transaction time); `orders`/`product_views` lack the composite index `payments` has (EXPLAIN-proven 4-20x cost gap); pool contention and fraud-rule CPU ruled out | Transaction decomposition v2 |
-| [`bench-orders-index-baseline-3w-boundary`](bench-orders-index-baseline-3w-boundary/) | Fresh controlled baseline (reset tables) at 900/925/950 evt/s before adding an `orders` composite index | Correctness-clean 9/9 repeats; lag slope +1.2 to +6.7/s from a clean, low-data-volume starting state | Orders composite index |
-| [`bench-orders-index-3w-boundary`](bench-orders-index-3w-boundary/) | Same controlled sweep after adding `idx_orders_customer_ordered_at (customer_id, ordered_at DESC)` | Lag slope and E2E p95 improved at every rate (e.g. 900 evt/s: +3.06→+1.48/s, 230→120 ms); EXPLAIN plan changed to Index Only Scan, ~2.7x faster | Orders composite index |
-| [`bench-product-views-index-baseline-3w-boundary`](bench-product-views-index-baseline-3w-boundary/) | Fresh controlled baseline (reset tables, orders index retained) at 900/925/950 evt/s before adding a `product_views` composite index | Correctness-clean 9/9 repeats; lag slope +0.56 to +4.79/s | Product-views composite index |
-| [`bench-product-views-index-3w-boundary`](bench-product-views-index-3w-boundary/) | Same controlled sweep after adding `idx_product_views_customer_viewed_at (customer_id, viewed_at DESC)` | Clear win at 900 evt/s (+3.06→+1.20/s, 263→113 ms); wash at 925; noise-dominated at 950; EXPLAIN plan changed to Index Only Scan, ~3.6x faster, no write-cost regression at any rate | Product-views composite index |
-| [`bench-post-index-3w-ceiling-broad`](bench-post-index-3w-ceiling-broad/) | Fresh-reset ceiling sweep at 950/1000/1050/1100 evt/s with both new indexes retained | 1000/1050 evt/s clean (3/3 repeats); 1100 evt/s non-sustainable (1/3 clean); injector kept pace at 99.4-99.9% throughout | Post-index capacity discovery |
-| [`bench-post-index-3w-ceiling-refinement`](bench-post-index-3w-ceiling-refinement/) | Refinement at 1075 evt/s to bracket the transition interval | 2/3 repeats degraded (slope +10.0/+3.0/+34.8/s) - confirms transition interval ~1050-1075 evt/s | Post-index capacity discovery |
-| [`bench-postgres-saturation-diagnosis-3w`](bench-postgres-saturation-diagnosis-3w/) | External `pg_stat_activity`/`pg_locks`/`pg_stat_io` sampling at 1050/1075/1100 evt/s (`postgres-diagnostics-summary-<rate>.json`, tracked; `postgres-diagnostics-raw-<rate>.json`, local-only) alongside the usual saturation sweep | No lock/LWLock/IO wait contention at any rate; active backends nearly flat; longest active-query age grows 0.66s→3.21s→4.55s; query-class mean latency flat - aggregate call-volume-driven CPU is the strongest supported mechanism | PostgreSQL saturation diagnosis |
-| [`bench-cpu-scheduling-diagnosis-3w`](bench-cpu-scheduling-diagnosis-3w/) | External cgroup/PSI/host-scheduler/fixed-cost-probe sampling at 1050/1075/1100 evt/s (`cpu-scheduling-summary-<rate>.json`, tracked; `cpu-scheduling-raw-<rate>.json`, local-only) | No cgroup throttling (structurally impossible, unlimited quota); PSI/load/context-switches flat; fixed-cost `SELECT 1` probe never inflates beyond single-digit ms - rules out host/container scheduling, raising confidence in aggregate PostgreSQL execution CPU to STRONG | Host/container CPU scheduling diagnosis |
-| [`bench-fraud-context-roundtrip-baseline-3w`](bench-fraud-context-roundtrip-baseline-3w/) | Clean-reset baseline at 1000/1050/1075 evt/s before merging the fraud-context `customers`+`orders` lookups | Correctness-clean 9/9 repeats; 10 round trips/fraud-eligible event confirmed from real code inspection | Fraud-context round-trip reduction |
-| [`bench-fraud-context-roundtrip-candidate-3w`](bench-fraud-context-roundtrip-candidate-3w/) | Same sweep after merging `customers`+`orders` into one `LEFT JOIN` (9 round trips/event) | `fraud_context` latency -13% to -37%, lag slope -17% to -59%, E2E p95 -61%/-65% at 1000/1050, no WAL regression - **kept** | Fraud-context round-trip reduction |
-| [`bench-fraud-context-roundtrip-explain`](bench-fraud-context-roundtrip-explain/) | `EXPLAIN (ANALYZE, BUFFERS)` for the baseline two-query sequence and the candidate combined query | Identical access paths (same two Index Scans), now inside one Nested Loop Left Join - no new scan type, no cartesian risk | Fraud-context round-trip reduction |
-| [`bench-post-fraud-context-ceiling-3w`](bench-post-fraud-context-ceiling-3w/) | Post-optimization ceiling sweep at 1000/1050/1075/1100/1125/1150 evt/s with the fraud-context round-trip reduction active | 1150 evt/s non-sustainable in all 3 repeats (E2E p50 in seconds); 1075/1100 remain mixed, same character as pre-optimization - capacity boundary not established, README claim unchanged | Post fraud-context optimization capacity discovery |
-| [`bench-transaction-lifecycle-v3-3w`](bench-transaction-lifecycle-v3-3w/) | Transaction phase (read/write/commit) decomposition at 1000/1050/1075/1100 evt/s using a new `phase_group_breakdown_ms` derived field | No phase (read, write, commit) grows with degradation - the most severely-lagged repeat's internal phase costs are nearly identical to a clean repeat's at the same rate; rules out transaction-lifecycle cost, points toward a transient arrival-burst hypothesis | Transaction lifecycle decomposition v3 |
-| [`bench-consumer-queueing-diagnosis-3w`](bench-consumer-queueing-diagnosis-3w/) | Consumer-side queueing/backpressure diagnosis at 1000/1050/1075/1100 evt/s using a new `consumer_queue_wait_seconds` metric (Kafka producer timestamp to poll-return) | Handler execution stays flat (~2.6ms median) in all 12 repeats regardless of degradation; queue wait grows sharply with degradation (p50 up to 261ms, p95 up to 4530ms in the worst repeat) - Outcome A, waiting happens before handler execution, in the Kafka topic, matching a ~1154 evt/s structural ceiling from 3 single-threaded consumers | Consumer queueing and backpressure diagnosis |
-| [`bench-injector-arrival-variance-3w`](bench-injector-arrival-variance-3w/) | Producer-side inter-arrival gap and sliding-window (100ms/500ms/1s) burst-rate diagnosis at 1050/1075/1100 evt/s using new pure benchmark-tool functions, no new metric | Inter-arrival gap p50 tracks the requested rate's reciprocal almost exactly at every rate/repeat; window-rate maxima are nearly identical across repeats at a given rate even as lag slope varies 3-8x - arrival-burst hypothesis not supported, producer side ruled out | Injector arrival variance diagnosis |
-| [`bench-consumer-fetch-boundary-3w`](bench-consumer-fetch-boundary-3w/) | Kafka consumer fetch/poll boundary diagnosis at 1050/1075/1100 evt/s using librdkafka's own `stats_cb` (fetch-queue depth, broker RTT) plus new poll-duration/empty-poll instrumentation | Broker RTT and poll() duration stay flat regardless of degradation; librdkafka's internal fetch queue holds hundreds-to-thousands of already-fetched, not-yet-consumed records at every rate/repeat - a real client-side buffer invisible to Stage 25's `processor_inflight_events`, refining (not overturning) the single-threaded-consumer ceiling explanation | Kafka consumer fetch boundary diagnosis |
-| [`bench-worker-pool-baseline-3w`](bench-worker-pool-baseline-3w/) | Baseline (unchanged synchronous, `processor_worker_pool_size=1`) sweep at 1050/1100/1150/1200 evt/s before the worker-pool concurrency experiment | Correctness-clean 12/12 repeats; lag slope +92.2 to +288.1/s (mean per rate) | Consumer scaling model experiment |
-| [`bench-worker-pool-candidate-3w`](bench-worker-pool-candidate-3w/) | Same sweep with a bounded 4-thread worker pool per instance (`processor_worker_pool_size=4`, matching the DB pool max size) | Correctness invariant violated in 12/12 repeats (662-948 missing rows per repeat); lag slope 1.5-2.8x worse than baseline at every rate; 11,326 events dead-lettered (missing-business-dependency/database-integrity errors) from causally-dependent same-partition events racing across worker threads - **reverted**, default stays at pool size 1 | Consumer scaling model experiment |
-| [`bench-partition-scaling-6p-6w`](bench-partition-scaling-6p-6w/) | Isolated topic/group (`commerce.events.scale6`, 6 partitions, dedicated consumer group) at 1050/1500/2000/2300 evt/s with 6 workers, one per partition - production topic/group untouched throughout | Correctness-clean 12/12 repeats even at 2300 evt/s (2.2x the old ceiling), preserving Kafka's ordering guarantees unlike Stage 28's worker pool; mean service rate stayed pinned at 977-1,233 evt/s across the entire range - scaling from 3 to 6 partitions/consumers preserved correctness but did not materially increase throughput on this shared local host; PostgreSQL CPU stayed flat (108-155%, not saturated); host CPU contention is the leading environment-level hypothesis (processor CPU across 6 containers reached ~530% of 600% possible) but is not proven - **Kafka partition count ruled out** as the bottleneck in this environment/workload, not a claim about Kafka in general | Kafka partition scaling experiment |
-| [`bench-cpu-budget-A-0.5cpu-6w`](bench-cpu-budget-A-0.5cpu-6w/) | Container-level CPU quota A/B, configuration A: `cpus: 0.5` per processor container (~3 CPU aggregate), same isolated topic/group/topology as Stage 29, at 1050/1500/2000 evt/s | Correctness-clean 9/9 repeats; quota verified via `cgroup cpu.max`; service rate 977-1,227 evt/s | Processor CPU budget A/B |
-| [`bench-cpu-budget-B-1cpu-6w`](bench-cpu-budget-B-1cpu-6w/) | Same sweep, configuration B: `cpus: 1.0` per processor container (~6 CPU aggregate, double A) | Correctness-clean 9/9 repeats; quota verified; service rate 935-1,053 evt/s - **no improvement over A despite double the CPU budget**, and CPU actually used barely changed (~250-370% in both configs); `nr_throttled` ~0.45% of periods even in B - **container CPU quota ruled out** as the constraint on this host | Processor CPU budget A/B |
+To recover one, find the commit that deleted it and check out the tree from
+the commit before:
 
-The broader reliability run
-[`bench-fixed-rate-final-20260807T151000Z`](bench-fixed-rate-final-20260807T151000Z/)
-also contains idempotency, retry/DLQ, outbox, lag, and verification artifacts.
+```bash
+git log --diff-filter=D --oneline -- artifacts/benchmark
+git checkout <deleting-commit>^ -- artifacts/benchmark/<directory>
+```
 
-The highest persisted injector artifact is in
-[`bench-worker-scale-3w-20260808T191000Z`](bench-worker-scale-3w-20260808T191000Z/):
-900 requested and approximately 889.4/s median actual injection. A standalone
-1000-rate validation was previously recorded as approximately 975.7/s, but no
-matching JSON file exists in this artifact tree; the documentation does not
-treat it as artifact-verifiable capacity.
+High-volume raw telemetry (`direct-saturation-*.json`, `injector-*.json`,
+`postgres-diagnostics-raw-*.json`, `cpu-scheduling-raw-*.json`) is
+gitignored and was only ever kept locally. Only report-backed summaries and
+notes are committed.
+
+## Current artifacts
+
+| Artifact | Purpose | Result |
+| --- | --- | --- |
+| [`runtime-ab-20261127`](runtime-ab-20261127/README.md) | Python vs Go processor A/B: 3 workers, reset state, 1000–1700 evt/s | Go sustained 1400 evt/s where Python did not. It processed about 13% more at 1700 evt/s, with 4–19x lower E2E p95 and 30–35% less processor CPU. |
+| [`runtime-ab-go-refine-20261127`](runtime-ab-go-refine-20261127/README.md) | Go cold-start check and ceiling refinement at 1500/1600 evt/s with pgx `cache_describe` | The cold first repeat was fixed, but database time per transaction rose about 40%. pgx stays in `cache_statement` mode. |

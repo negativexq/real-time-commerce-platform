@@ -1,5 +1,10 @@
 # Scaling Analysis: One, Two, and Three Workers
 
+> **Note:** the benchmark directories cited below measured the retired
+> Python processor and were removed from the tree on 2026-11-27. Names are
+> kept for reference; recover a directory from git history as described in
+> [`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
+
 This analysis covers the isolated `Kafka → event_processor → persistence`
 pipeline using the direct Kafka injector. It is not the Demo Control API full
 path.
@@ -24,11 +29,11 @@ path.
 | 900 evt/s | — | — | ~888.6/s, positive lag slope |
 
 The one-worker artifact is
-[`bench-worker-scale-1w-20260808T160000Z`](../../artifacts/benchmark/bench-worker-scale-1w-20260808T160000Z/).
+`bench-worker-scale-1w-20260808T160000Z`.
 The resource-complete two-worker artifact is
-[`bench-worker-scale-2w-resource-20260808T180000Z`](../../artifacts/benchmark/bench-worker-scale-2w-resource-20260808T180000Z/).
+`bench-worker-scale-2w-resource-20260808T180000Z`.
 The three-worker sweep is
-[`bench-worker-scale-3w-20260808T191000Z`](../../artifacts/benchmark/bench-worker-scale-3w-20260808T191000Z/).
+`bench-worker-scale-3w-20260808T191000Z`.
 
 ## Lag and latency
 

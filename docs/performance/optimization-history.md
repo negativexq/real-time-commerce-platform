@@ -1,5 +1,10 @@
 # Performance Optimization History
 
+> **Note:** the benchmark directories cited below measured the retired
+> Python processor and were removed from the tree on 2026-11-27. Names are
+> kept for reference; recover a directory from git history as described in
+> [`artifacts/benchmark/README.md`](../../artifacts/benchmark/README.md).
+
 This is the decision log for the performance work. Each entry records the
 hypothesis, measurement, change, and decision. Failed experiments are kept on
 purpose.
@@ -130,7 +135,7 @@ purpose.
 - **Measurement:** isolated 3-worker/3-partition direct-injector sweep at
   750/775/800 evt/s, 10s warmup, 45s steady state, 3 repeats each (same
   methodology as the horizontal-scaling boundary sweep), artifact
-  [`bench-batched-commit-3w-boundary`](../../artifacts/benchmark/bench-batched-commit-3w-boundary/).
+  `bench-batched-commit-3w-boundary`.
 
   | Rate | Lag slope (3 repeats) | E2E p95 (3 repeats) | Correctness |
   | ---: | --- | --- | --- |
@@ -183,9 +188,9 @@ purpose.
   requested injection rate varied.
 - **Measurement:** broad sweep at 850/900/950/1000 evt/s (10s warmup, 45s
   steady state, 3 repeats,
-  [`bench-batched-commit-3w-ceiling-broad`](../../artifacts/benchmark/bench-batched-commit-3w-ceiling-broad/)),
+  `bench-batched-commit-3w-ceiling-broad`),
   followed by a refinement rate at 925 evt/s (same methodology,
-  [`bench-batched-commit-3w-ceiling-refinement`](../../artifacts/benchmark/bench-batched-commit-3w-ceiling-refinement/)).
+  `bench-batched-commit-3w-ceiling-refinement`).
 
   | Rate | Lag slope (3 repeats, events/s) | E2E p95 (3 repeats) | Classification |
   | ---: | --- | --- | --- |
@@ -251,9 +256,9 @@ purpose.
   sweeps at 900/925/950 evt/s (10s warmup, 45s steady state, 3 repeats each,
   same rates the capacity-discovery stage used):
   a fresh `INFO` control run
-  ([`bench-info-baseline-control-3w-boundary`](../../artifacts/benchmark/bench-info-baseline-control-3w-boundary/),
+  (`bench-info-baseline-control-3w-boundary`,
   pre-change image) followed by the `DEBUG` experiment
-  ([`bench-debug-success-log-3w-boundary`](../../artifacts/benchmark/bench-debug-success-log-3w-boundary/),
+  (`bench-debug-success-log-3w-boundary`,
   rebuilt image, containers recreated so log volume could be measured from a
   clean window).
 
@@ -357,7 +362,7 @@ configuration was changed. This is attribution, not optimization.
 - **Benchmark:** direct Kafka injection (not the Demo API, which cannot
   sustain 900+ evt/s cleanly — see the direct-injector stage) at 900, 925,
   950 evt/s; 10s warmup, 45s steady state, 3 repeats per rate; artifact tag
-  [`bench-tx-decomposition-v2-3w-boundary`](../../artifacts/benchmark/bench-tx-decomposition-v2-3w-boundary/).
+  `bench-tx-decomposition-v2-3w-boundary`.
   Commands:
 
   ```bash
@@ -622,7 +627,7 @@ configuration was changed. This is attribution, not optimization.
   `idx_orders_customer_id`, `Recheck Cond` on `customer_id`, `Filter` on the
   `ordered_at` range, followed by a `Sort` (quicksort) and `Limit`. 39 shared
   buffer hits, 0.195 ms execution time. Full plan retained at
-  [`artifacts/benchmark/bench-orders-index-explain/baseline-orders-query-explain.txt`](../../artifacts/benchmark/bench-orders-index-explain/baseline-orders-query-explain.txt).
+  `artifacts/benchmark/bench-orders-index-explain/baseline-orders-query-explain.txt`.
 - **Change:** exactly one migration,
   [`database/migrations/006_orders_customer_ordered_at.sql`](../../database/migrations/006_orders_customer_ordered_at.sql):
   `CREATE INDEX idx_orders_customer_ordered_at ON orders (customer_id,
@@ -634,7 +639,7 @@ configuration was changed. This is attribution, not optimization.
   covers all three predicates, `Heap Fetches: 0`, no `Sort` step (the index
   already returns rows in `ordered_at DESC` order). 5 shared buffer hits,
   0.073 ms execution time. Full plan retained at
-  [`artifacts/benchmark/bench-orders-index-explain/indexed-orders-query-explain.txt`](../../artifacts/benchmark/bench-orders-index-explain/indexed-orders-query-explain.txt).
+  `artifacts/benchmark/bench-orders-index-explain/indexed-orders-query-explain.txt`.
   Execution time improved ~2.7x; buffer hits fell ~7.8x; the heap access and
   sort step were both eliminated entirely.
 - **Controlled reset methodology:** the live database had accumulated over
@@ -662,7 +667,7 @@ configuration was changed. This is attribution, not optimization.
   empty starting volume.
 - **Baseline benchmark:** 3 workers, 3 partitions, re-verified 1/1/1
   assignment, 900/925/950 evt/s, 10s warmup, 45s steady state, 3 repeats;
-  tag [`bench-orders-index-baseline-3w-boundary`](../../artifacts/benchmark/bench-orders-index-baseline-3w-boundary/).
+  tag `bench-orders-index-baseline-3w-boundary`.
   Command: `python -m scripts.benchmark.direct_saturation --rates 900,925,950
   --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag
   bench-orders-index-baseline-3w-boundary`. All 9 repeats correctness-clean
@@ -670,7 +675,7 @@ configuration was changed. This is attribution, not optimization.
   cleaner than the earlier confounded sweep (lag slope +1.2 to +6.7/s vs.
   up to +42/s), confirming that prior sweep's data-volume hypothesis.
 - **Indexed benchmark:** identical parameters and topology; tag
-  [`bench-orders-index-3w-boundary`](../../artifacts/benchmark/bench-orders-index-3w-boundary/).
+  `bench-orders-index-3w-boundary`.
   Same command with `--run-tag bench-orders-index-3w-boundary`. All 9
   repeats correctness-clean; lag slope +0.6 to +2.2/s.
 - **System-level result (mean of 3 repeats per rate):**
@@ -757,7 +762,7 @@ configuration was changed. This is attribution, not optimization.
   `idx_product_views_customer_id`, `Recheck Cond` on `customer_id`,
   `Filter` on the `viewed_at` range, `Sort` (quicksort), `Limit`. 60 shared
   buffer hits, 0.613 ms execution time. Retained at
-  [`artifacts/benchmark/bench-product-views-index-explain/baseline-product-views-query-explain.txt`](../../artifacts/benchmark/bench-product-views-index-explain/baseline-product-views-query-explain.txt).
+  `artifacts/benchmark/bench-product-views-index-explain/baseline-product-views-query-explain.txt`.
 - **Change:** exactly one migration,
   [`database/migrations/007_product_views_customer_viewed_at.sql`](../../database/migrations/007_product_views_customer_viewed_at.sql):
   `CREATE INDEX idx_product_views_customer_viewed_at ON product_views
@@ -769,7 +774,7 @@ configuration was changed. This is attribution, not optimization.
   idx_product_views_customer_viewed_at`, `Index Cond` covers all three
   predicates, `Heap Fetches: 0`, no `Sort`. 5 shared buffers (4 hit + 1
   read), 0.172 ms execution time. Retained at
-  [`artifacts/benchmark/bench-product-views-index-explain/indexed-product-views-query-explain.txt`](../../artifacts/benchmark/bench-product-views-index-explain/indexed-product-views-query-explain.txt).
+  `artifacts/benchmark/bench-product-views-index-explain/indexed-product-views-query-explain.txt`.
   Execution time improved ~3.6x; buffer usage fell ~12x; heap access and
   sort both eliminated - directionally the same mechanism as the `orders`
   index, though the `orders` EXPLAIN improved by a larger relative margin
@@ -791,10 +796,10 @@ configuration was changed. This is attribution, not optimization.
   accumulated-data-volume confound.
 - **Baseline benchmark:** 3 workers/3 partitions/1/1/1, 900/925/950 evt/s,
   10s warmup, 45s steady, 3 repeats; tag
-  [`bench-product-views-index-baseline-3w-boundary`](../../artifacts/benchmark/bench-product-views-index-baseline-3w-boundary/).
+  `bench-product-views-index-baseline-3w-boundary`.
   All 9 repeats correctness-clean; lag slope +0.56 to +4.79/s.
 - **Indexed benchmark:** identical parameters; tag
-  [`bench-product-views-index-3w-boundary`](../../artifacts/benchmark/bench-product-views-index-3w-boundary/).
+  `bench-product-views-index-3w-boundary`.
   All 9 repeats correctness-clean; lag slope +1.20 to +2.21/s.
 - **System-level result (mean of 3 repeats per rate):**
 
@@ -891,7 +896,7 @@ configuration was changed. This is attribution, not optimization.
   `kafka-consumer-groups.sh --describe` before the broad sweep.
 - **Broad sweep** (950/1000/1050/1100 evt/s, 10s warmup, 45s steady, 3
   repeats; tag
-  [`bench-post-index-3w-ceiling-broad`](../../artifacts/benchmark/bench-post-index-3w-ceiling-broad/)):
+  `bench-post-index-3w-ceiling-broad`):
 
   | Rate | Repeats clean | Lag slope range | E2E p95 range | Peak PG CPU |
   | --- | --- | --- | --- | --- |
@@ -904,7 +909,7 @@ configuration was changed. This is attribution, not optimization.
   through 1100 evt/s - the degradation above 1000 evt/s is genuine
   processor/PostgreSQL saturation, not an injector limitation.
 - **Refinement** (1075 evt/s, same 10s/45s/3-repeat methodology; tag
-  [`bench-post-index-3w-ceiling-refinement`](../../artifacts/benchmark/bench-post-index-3w-ceiling-refinement/)):
+  `bench-post-index-3w-ceiling-refinement`):
   slope +10.0, +3.0, +34.8/s across the 3 repeats; E2E p95 407/552/2275ms.
   2 of 3 repeats show meaningful degradation (slope >9/s, one severely so)
   - the same "one clean repeat, two degraded" pattern the methodology
@@ -969,7 +974,7 @@ configuration was changed. This is attribution, not optimization.
   same 3-worker/1/1/1 topology, re-verified before starting from a
   `scripts/reset-benchmark-data.sql`-clean state with all 7 migrations and
   all three composite indexes confirmed present. Tag
-  [`bench-postgres-saturation-diagnosis-3w`](../../artifacts/benchmark/bench-postgres-saturation-diagnosis-3w/).
+  `bench-postgres-saturation-diagnosis-3w`.
   Command per rate:
   `python -m scripts.benchmark.direct_saturation --rates <rate> --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-postgres-saturation-diagnosis-3w`.
 - **Diagnostic sampler:** new
@@ -1283,7 +1288,7 @@ configuration was changed. This is attribution, not optimization.
   three composite indexes confirmed present; no extra processor/smoke
   consumers active; lag=0 and injector idle before starting; a full
   `scripts/reset-benchmark-data.sql` reset before the sweep. Tag
-  [`bench-cpu-scheduling-diagnosis-3w`](../../artifacts/benchmark/bench-cpu-scheduling-diagnosis-3w/).
+  `bench-cpu-scheduling-diagnosis-3w`.
   Benchmark command per rate:
   `python -m scripts.benchmark.direct_saturation --rates <rate> --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-cpu-scheduling-diagnosis-3w`
   (using the collision-safe per-rate artifact naming from the prior fix -
@@ -1542,12 +1547,12 @@ configuration was changed. This is attribution, not optimization.
 - **Baseline EXPLAIN** (representative customer/order pair): two separate
   `Index Scan`s (`customers_pkey`, `orders_pkey`), 3+4=7 buffers combined,
   0.053ms + 0.034ms execution. Retained at
-  [`artifacts/benchmark/bench-fraud-context-roundtrip-explain/baseline-two-query-explain.txt`](../../artifacts/benchmark/bench-fraud-context-roundtrip-explain/baseline-two-query-explain.txt).
+  `artifacts/benchmark/bench-fraud-context-roundtrip-explain/baseline-two-query-explain.txt`.
 - **Candidate EXPLAIN:** `Nested Loop Left Join` over the *same* two
   `Index Scan`s (`customers_pkey`, `orders_pkey`) - identical access paths,
   no new scan type, 7 buffers total (unchanged). No cartesian risk: both
   sides are PK-equality-scoped to at most one row. Retained at
-  [`artifacts/benchmark/bench-fraud-context-roundtrip-explain/candidate-combined-explain.txt`](../../artifacts/benchmark/bench-fraud-context-roundtrip-explain/candidate-combined-explain.txt).
+  `artifacts/benchmark/bench-fraud-context-roundtrip-explain/candidate-combined-explain.txt`.
   Execution time at this sub-0.2ms scale is measurement noise on a single
   sample and not the basis for the keep/revert decision - the query plan
   confirms no accidental expense was introduced, which is what EXPLAIN is
@@ -1560,9 +1565,9 @@ configuration was changed. This is attribution, not optimization.
   The stash was then popped (candidate code), the image rebuilt again, a
   second full reset performed, 1/1/1 re-verified, and the candidate sweep
   ran from the same equivalent empty starting state. Baseline tag
-  [`bench-fraud-context-roundtrip-baseline-3w`](../../artifacts/benchmark/bench-fraud-context-roundtrip-baseline-3w/),
+  `bench-fraud-context-roundtrip-baseline-3w`,
   candidate tag
-  [`bench-fraud-context-roundtrip-candidate-3w`](../../artifacts/benchmark/bench-fraud-context-roundtrip-candidate-3w/).
+  `bench-fraud-context-roundtrip-candidate-3w`.
   Commands (both conditions):
   `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag <tag>`.
 - **Baseline vs. candidate (mean of 3 repeats per rate):**
@@ -1659,7 +1664,7 @@ configuration was changed. This is attribution, not optimization.
   reset was performed before this sweep (task instruction: "do not reset
   back" - measuring the system in its current, already-benchmarked
   state). Tag
-  [`bench-post-fraud-context-ceiling-3w`](../../artifacts/benchmark/bench-post-fraud-context-ceiling-3w/).
+  `bench-post-fraud-context-ceiling-3w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100,1125,1150 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-post-fraud-context-ceiling-3w`.
 - **Rate table (mean/range across 3 repeats):**
@@ -1805,7 +1810,7 @@ configuration was changed. This is attribution, not optimization.
   optimization active, unmodified in this stage), 1000/1050/1075/1100
   evt/s only (per instruction, not extending the ceiling search further),
   10s warmup, 45s steady, 3 repeats. Tag
-  [`bench-transaction-lifecycle-v3-3w`](../../artifacts/benchmark/bench-transaction-lifecycle-v3-3w/).
+  `bench-transaction-lifecycle-v3-3w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-transaction-lifecycle-v3-3w`.
 - **Transaction phase breakdown (per repeat, ms - showing the full
@@ -2004,7 +2009,7 @@ configuration was changed. This is attribution, not optimization.
   processor image rebuilt with the new metric, 1000/1050/1075/1100 evt/s
   only (per instruction - bracketing the known transition band, not a new
   ceiling search), 10s warmup, 45s steady, 3 repeats. Tag
-  [`bench-consumer-queueing-diagnosis-3w`](../../artifacts/benchmark/bench-consumer-queueing-diagnosis-3w/).
+  `bench-consumer-queueing-diagnosis-3w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1000,1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-consumer-queueing-diagnosis-3w`.
 - **Results (per repeat):**
@@ -2173,7 +2178,7 @@ configuration was changed. This is attribution, not optimization.
   unmodified processor image (no production code touched this stage),
   1050/1075/1100 evt/s only (per instruction), 10s warmup, 45s steady, 3
   repeats. Tag
-  [`bench-injector-arrival-variance-3w`](../../artifacts/benchmark/bench-injector-arrival-variance-3w/).
+  `bench-injector-arrival-variance-3w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-injector-arrival-variance-3w`.
 - **Results (per repeat):**
@@ -2336,7 +2341,7 @@ configuration was changed. This is attribution, not optimization.
 - **Benchmark:** 3 workers, 1/1/1 verified (lag 0 before and after),
   processor image rebuilt with the new instrumentation, 1050/1075/1100
   evt/s only, 10s warmup, 45s steady, 3 repeats. Tag
-  [`bench-consumer-fetch-boundary-3w`](../../artifacts/benchmark/bench-consumer-fetch-boundary-3w/).
+  `bench-consumer-fetch-boundary-3w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1050,1075,1100 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-consumer-fetch-boundary-3w`.
 - **Results (per repeat):**
@@ -2574,12 +2579,12 @@ configuration was changed. This is attribution, not optimization.
   processor image rebuilt, 1050/1100/1150/1200 evt/s, 10s warmup, 45s
   steady, 3 repeats each, same database/indexes/methodology as every prior
   stage. Baseline (`processor_worker_pool_size=1`, unchanged default) tag
-  [`bench-worker-pool-baseline-3w`](../../artifacts/benchmark/bench-worker-pool-baseline-3w/);
+  `bench-worker-pool-baseline-3w`;
   candidate (`processor_worker_pool_size=4`, chosen to exactly match the
   existing `processor_db_pool_max_size` default of 4 so no worker would
   contend for a database connection the others didn't already have their
   own of) tag
-  [`bench-worker-pool-candidate-3w`](../../artifacts/benchmark/bench-worker-pool-candidate-3w/).
+  `bench-worker-pool-candidate-3w`.
   Commands identical except `--run-tag`, with `PROCESSOR_WORKER_POOL_SIZE`
   exported before `docker compose up` for the candidate.
 - **Results (mean of 3 repeats per rate):**
@@ -2721,7 +2726,7 @@ configuration was changed. This is attribution, not optimization.
   ceiling the Stage 25 formula would predict (`6 x (1/0.0026s) ~= 2308
   evt/s`): 1050, 1500, 2000, 2300 evt/s, 10s warmup, 45s steady, 3 repeats.
   Tag
-  [`bench-partition-scaling-6p-6w`](../../artifacts/benchmark/bench-partition-scaling-6p-6w/).
+  `bench-partition-scaling-6p-6w`.
   Command:
   `python -m scripts.benchmark.direct_saturation --rates 1050,1500,2000,2300 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --run-tag bench-partition-scaling-6p-6w --events-topic commerce.events.scale6 --consumer-group commerce-event-processor-scale6-v1`.
   A 12-partition/12-worker run was in scope ("if environment allows") but
@@ -3014,9 +3019,9 @@ configuration was changed. This is attribution, not optimization.
   per container (~3 CPU aggregate processor budget). Configuration B:
   `cpus: 1.0` per container (~6 CPU aggregate budget, double A's). Rates
   1050/1500/2000 evt/s, 10s warmup, 45s steady, 3 repeats each. Tags
-  [`bench-cpu-budget-A-0.5cpu-6w`](../../artifacts/benchmark/bench-cpu-budget-A-0.5cpu-6w/)
+  `bench-cpu-budget-A-0.5cpu-6w`
   and
-  [`bench-cpu-budget-B-1cpu-6w`](../../artifacts/benchmark/bench-cpu-budget-B-1cpu-6w/).
+  `bench-cpu-budget-B-1cpu-6w`.
   Commands identical except `--run-tag` and `PROCESSOR_CPU_LIMIT`:
   `python -m scripts.benchmark.direct_saturation --rates 1050,1500,2000 --warmup-seconds 10 --steady-seconds 45 --repeats 3 --events-topic commerce.events.scale6 --consumer-group commerce-event-processor-scale6-v1`.
 - **Results (mean of 3 repeats per rate):**
