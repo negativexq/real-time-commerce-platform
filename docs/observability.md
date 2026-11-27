@@ -104,9 +104,34 @@ Thresholds are `HEALTH_MAX_POLL_STALENESS_SECONDS`,
 
 Prometheus uses Compose DNS, a ten-second interval, five-second timeout, and
 seven-day/2 GB local retention. Recording rules cover processor rates, error
-ratio and p95, Kafka lag, fraud decisions, and outbox backlog/age. Local-demo
-alerts cover processor down, lag, DLQ, database/Redis availability, outbox
-backlog/failure, and latency. There is no receiver or paging integration.
+ratio and p95, Kafka lag of the live processor group
+(`commerce-event-processor-v1`; abandoned smoke and benchmark groups are left
+out so their frozen lag cannot hold the alert on), fraud decisions, and outbox
+backlog/age. Local-demo alerts cover processor down, lag, DLQ, database/Redis
+availability, outbox backlog/failure, latency, and the DLQ sink (down, failing
+to write, falling behind). There is no receiver or paging integration.
+
+The fraud outbox publisher sets `commerce_database_healthy` from its own
+claims: 1 after each successful claim, 0 when a claim fails on a database
+error just before the process exits.
+
+The demo console shows active alerts behind a bell in its sidebar, read from
+`GET /api/v1/platform/alerts`. Warnings can be cleared and come back if they
+fire again; critical alerts stay until they resolve. Cleared alerts are
+remembered per browser.
+
+### Console load
+
+The console polls, so its cost grows with open tabs. To keep that small:
+
+- The API borrows connections from one pool (`DEMO_DB_POOL_MAX_SIZE`, default
+  8) instead of opening a PostgreSQL connection per query.
+- Prometheus answers are cached for as long as Prometheus takes to change:
+  5 s for the metric summary (`DEMO_METRICS_CACHE_SECONDS`) and 10 s for
+  alerts (`DEMO_ALERTS_CACHE_SECONDS`). Concurrent requests share one
+  refresh. Dependency health was already cached for 5 s.
+- Pages stop polling while their tab is hidden and refresh as soon as it is
+  visible again. A refresh is skipped while the previous one is still running.
 
 Pinned images are Prometheus 3.12.0, Grafana 13.1.0, Kafka exporter 1.9.0,
 PostgreSQL exporter 0.17.1, and Redis exporter 1.74.0. Exporters remain internal

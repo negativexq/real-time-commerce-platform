@@ -1,2 +1,16 @@
-import {api} from "../../lib/api"; import type {Scenario} from "../../lib/types"; import {ScenarioForm} from "../../components/scenario-form"; import {Card} from "../../components/ui";
-export default async function Scenarios(){const scenarios=await api<Scenario[]>("/api/v1/scenarios");return <div className="grid"><section className="card wide"><h2>Scenario launcher</h2><ScenarioForm scenarios={scenarios}/></section><section className="card wide"><h2>Allow-listed catalog</h2><div className="cards">{scenarios.map(s=><article className="mini" key={s.scenario_type}><h3>{s.title}</h3><p>{s.purpose}</p><small>{s.expected_outcome}</small></article>)}</div></section></div>}
+import {ScenarioForm} from "../../components/scenario-form";
+import {PageHeader} from "../../components/ui";
+import {api} from "../../lib/api";
+import type {Scenario} from "../../lib/types";
+
+export const dynamic = "force-dynamic";
+
+export default async function Scenarios() {
+  const scenarios = await api<Scenario[]>("/api/v1/scenarios");
+  return (
+    <div className="grid gap-5">
+      <PageHeader title="Scenarios" description="Send a reproducible burst of commerce traffic through the pipeline and watch how fraud rules respond." />
+      <ScenarioForm scenarios={scenarios} />
+    </div>
+  );
+}

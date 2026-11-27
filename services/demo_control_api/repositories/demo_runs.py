@@ -1,6 +1,7 @@
 """Parameterized run persistence and manifest-based read models."""
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, cast
@@ -8,6 +9,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from services.demo_control_api.metrics import REPOSITORY_CONNECTION_DURATION
 from services.demo_control_api.models.overview import OverviewScope
@@ -27,14 +29,26 @@ class InvalidTransitionError(RuntimeError):
 
 
 class DemoRunRepository:
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, pool: ConnectionPool | None = None) -> None:
         self._dsn = dsn
+        self._pool = pool
 
-    def _connect(self) -> psycopg.Connection[dict[str, Any]]:
+    @contextmanager
+    def _connect(self) -> Iterator[psycopg.Connection[dict[str, Any]]]:
+        """A connection for one unit of work, committed when the block exits.
+
+        With a pool the connection is borrowed and returned instead of opened
+        and closed, so polling pages do not fork a PostgreSQL backend per query.
+        """
         started = perf_counter()
-        connection = psycopg.connect(self._dsn, row_factory=dict_row)
-        REPOSITORY_CONNECTION_DURATION.observe(perf_counter() - started)
-        return connection
+        if self._pool is None:
+            with psycopg.connect(self._dsn, row_factory=dict_row) as connection:
+                REPOSITORY_CONNECTION_DURATION.observe(perf_counter() - started)
+                yield connection
+            return
+        with self._pool.connection() as pooled:
+            REPOSITORY_CONNECTION_DURATION.observe(perf_counter() - started)
+            yield cast(psycopg.Connection[dict[str, Any]], pooled)
 
     @staticmethod
     def _model(row: dict[str, Any]) -> DemoRun:
@@ -210,16 +224,24 @@ class DemoRunRepository:
                     LEFT JOIN fraud_alerts fa ON fa.source_event_id=m.event_id
                     LEFT JOIN fraud_outbox fo ON fo.aggregate_id=fa.alert_id
                     WHERE m.run_id=%s
+                ),
+                dead AS (
+                    -- Separate from counts: one event can dead-letter more
+                    -- than once, which would inflate the joined counts.
+                    SELECT count(DISTINCT dl.original_event_id)::int dlq
+                    FROM demo_run_event_manifest m
+                    JOIN dead_letters dl ON dl.original_event_id=m.event_id
+                    WHERE m.run_id=%s
                 )
                 UPDATE demo_runs d SET
                   generated_event_count=COALESCE(%s, generated_event_count),
                   processed_event_count=c.processed, approve_count=c.approve,
                   review_count=c.review, block_count=c.block,
                   fraud_alert_count=c.alerts, outbox_published_count=c.published,
-                  updated_at=CURRENT_TIMESTAMP
-                FROM counts c WHERE d.run_id=%s RETURNING d.*
+                  dlq_count=dead.dlq, updated_at=CURRENT_TIMESTAMP
+                FROM counts c, dead WHERE d.run_id=%s RETURNING d.*
                 """,
-                (run_id, generated, run_id),
+                (run_id, run_id, generated, run_id),
             )
             row = cursor.fetchone()
             if row is None:

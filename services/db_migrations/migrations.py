@@ -198,6 +198,7 @@ def schema_check(dsn: str, required_version: int) -> None:
         "fraud_alerts",
         "demo_runs",
         "demo_run_event_manifest",
+        "dead_letters",
     }
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations")

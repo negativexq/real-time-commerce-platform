@@ -23,6 +23,15 @@ make processor-up        # build and start the Go processor
 make go-check            # gofmt, go vet, go test
 ```
 
+The binary has these subcommands besides the processor itself:
+
+- `dlq-sink` copies `commerce.events.dlq` into the PostgreSQL `dead_letters`
+  table (the `dlq-sink` Compose service, port 9104). See
+  [docs/event-processor.md](../../docs/event-processor.md#dlq-sink).
+- `healthcheck [file]` exits 0 if the health file exists. It defaults to
+  `/tmp/event-processor-healthy`; the sink uses `/tmp/dlq-sink-healthy`.
+- `fraud-rules` and `fraud-config` are the fraud diagnostics (`make fraud-rules`, `make fraud-config-check`).
+
 The Python processor has been removed. Database migrations moved to
 `services/db_migrations` (the `postgres-migrate` service), the outbox
 publisher reads its own configuration, and the fraud diagnostics are

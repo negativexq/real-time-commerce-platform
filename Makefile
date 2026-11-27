@@ -1,6 +1,6 @@
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 
-.PHONY: lint format format-check type-check test check compose-config up down logs ps \
+.PHONY: lint format format-check type-check test check web-check compose-config up down logs ps \
 	kafka-topics kafka-describe kafka-smoke postgres-shell postgres-tables redis-cli \
 	storage-smoke storage-status storage-logs generator-build generator-up \
 	generator-down generator-logs generator-run generator-sample generator-status \
@@ -42,6 +42,10 @@ test:
 
 check: lint format-check type-check test
 
+# The demo console: the same steps as the demo-web CI job.
+web-check:
+	cd apps/demo_control_web && npm run typecheck && npm test && npm run build
+
 go-check:
 	cd services/event_processor_go && test -z "$$(gofmt -l .)" && go vet ./... && go test ./...
 
@@ -52,7 +56,7 @@ go-service-test:
 		PROCESSOR_TEST_POSTGRES_DSN=postgresql://commerce:commerce_local_dev@localhost:5432/commerce \
 		PROCESSOR_TEST_REDIS_URL=redis://localhost:6379/15 \
 		PROCESSOR_TEST_REQUIRE_SERVICES=1 \
-		go test -count=1 ./internal/idempotency ./internal/persistence
+		go test -count=1 ./internal/idempotency ./internal/persistence ./internal/dlqsink
 
 compose-config:
 	docker compose config

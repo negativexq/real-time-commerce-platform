@@ -57,3 +57,24 @@ groups:
         annotations:
           summary: Processor p95 latency is high
           description: Five-minute p95 processing latency exceeds the demo threshold.
+      - alert: DLQSinkDown
+        expr: up{job="dlq-sink"} == 0
+        for: 1m
+        labels: {severity: critical, scope: local_demo}
+        annotations:
+          summary: DLQ sink is down
+          description: Dead letters stay in Kafka but stop reaching the dead_letters table until the sink is back.
+      - alert: DLQSinkStoreErrors
+        expr: increase(commerce_dlq_sink_store_errors_total[5m]) > 0
+        for: 1m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: DLQ sink cannot write to PostgreSQL
+          description: The sink is retrying failed inserts; new dead letters are not being stored.
+      - alert: DLQSinkBehind
+        expr: sum(kafka_consumergroup_lag{consumergroup="commerce-dlq-sink-v1"}) > 50
+        for: 5m
+        labels: {severity: warning, scope: local_demo}
+        annotations:
+          summary: DLQ sink is falling behind
+          description: More than 50 dead letters have waited in Kafka for five minutes without being stored.

@@ -13,6 +13,12 @@ from confluent_kafka.admin import AdminClient  # type: ignore[import-untyped]
 from services.demo_control_api.config import DemoConfig
 
 MONITORED_STATES = {"HEALTHY", "DEGRADED", "UNHEALTHY"}
+EXPORTER_JOBS = {
+    "kafka-exporter": "Kafka Exporter",
+    "postgres-exporter": "PostgreSQL Exporter",
+    "redis-exporter": "Redis Exporter",
+}
+EXPORTER_UP_QUERY = 'up{job=~"' + "|".join(EXPORTER_JOBS) + '"}'
 
 
 class PlatformHealth:
@@ -68,6 +74,7 @@ class PlatformHealth:
         required_urls = {
             "Event Processor": self.config.processor_health_url,
             "Fraud Outbox Publisher": self.config.outbox_health_url,
+            "DLQ Sink": self.config.dlq_sink_health_url,
             "Prometheus": f"{self.config.prometheus_url}/-/ready",
             "Grafana": self.config.grafana_health_url,
             "Kafka UI": self.config.kafka_ui_health_url,
@@ -87,14 +94,27 @@ class PlatformHealth:
                 except httpx.HTTPError:
                     state = "UNHEALTHY"
                 results.append({"name": name, "state": state})
-        for name in (
-            "Kafka Exporter",
-            "PostgreSQL Exporter",
-            "Redis Exporter",
-        ):
-            results.append({"name": name, "state": "UNKNOWN"})
+            results.extend(await self._exporters(client))
         results.append({"name": "Demo Control API", "state": "HEALTHY"})
         return results
+
+    async def _exporters(self, client: httpx.AsyncClient) -> list[dict[str, str]]:
+        """Exporter health from Prometheus' own scrape result (`up`)."""
+        states = dict.fromkeys(EXPORTER_JOBS.values(), "UNKNOWN")
+        try:
+            response = await client.get(
+                f"{self.config.prometheus_url}/api/v1/query",
+                params={"query": EXPORTER_UP_QUERY},
+            )
+            response.raise_for_status()
+            for sample in response.json()["data"]["result"]:
+                name = EXPORTER_JOBS.get(sample["metric"].get("job", ""))
+                if name is not None:
+                    up = float(sample["value"][1]) >= 1
+                    states[name] = "HEALTHY" if up else "UNHEALTHY"
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            pass
+        return [{"name": name, "state": state} for name, state in states.items()]
 
     def _postgres(self) -> None:
         with psycopg.connect(self.config.postgres_dsn, connect_timeout=2) as connection:

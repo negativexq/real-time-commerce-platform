@@ -78,8 +78,8 @@ def run_malformed(
             config.postgres_dsn,
             """
             SELECT COUNT(*) AS rows
-            FROM dead_letter_events
-            WHERE failed_at >= to_timestamp(%s) AND original_topic = %s
+            FROM dead_letters
+            WHERE failed_at >= to_timestamp(%s) AND source_topic = %s
             """,
             (started_at - 2, config.events_topic),
         )
@@ -112,13 +112,11 @@ def run_malformed(
         "cases": cases,
         "all_metadata_complete": all(c["dlq_metadata_complete"] for c in cases),
         "note": (
-            "dlq_records_from_postgres_time_window is consistently 0: nothing "
-            "in the current codebase writes to the legacy dead_letter_events "
-            "table (grep confirms only a read path in demo_control_api/main.py "
-            "GET /api/v1/dlq). The event-processor's actual DLQ mechanism "
-            "(services/event_processor_go/internal/dlq) publishes exclusively to the "
-            "commerce.events.dlq Kafka topic, which is the authoritative "
-            "source used for dlq_records_from_kafka above."
+            "The processor publishes dead letters only to the commerce.events.dlq "
+            "Kafka topic (dlq_records_from_kafka). The dlq-sink copies them into "
+            "the dead_letters table, so dlq_records_from_postgres_time_window "
+            "should match once the sink has caught up; a lower number means the "
+            "sink is behind or not running."
         ),
         "captured_at": now_iso(),
     }

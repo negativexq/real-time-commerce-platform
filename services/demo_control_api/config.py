@@ -12,6 +12,8 @@ class DemoConfig(BaseModel):
     )
     redis_url: str = "redis://redis:6379/0"
     kafka_bootstrap_servers: str = "kafka:9092"
+    # Topics a dead letter may be replayed to: the source topic must be one of them.
+    demo_dlq_replay_topics: str = "commerce.events"
     demo_max_concurrent_runs: int = Field(2, ge=1, le=10)
     demo_run_timeout_seconds: int = Field(3600, ge=1, le=3600)
     demo_run_stop_timeout_seconds: int = Field(15, ge=1, le=60)
@@ -28,6 +30,11 @@ class DemoConfig(BaseModel):
     demo_history_page_size: int = Field(20, ge=1, le=100)
     demo_history_max_page_size: int = Field(100, ge=1, le=100)
     demo_health_cache_seconds: int = Field(5, ge=1, le=60)
+    demo_db_pool_max_size: int = Field(8, ge=1, le=50)
+    # Prometheus scrapes every 10 s and evaluates rules every 10 s; asking it
+    # more often only repeats the same answer for every open console tab.
+    demo_metrics_cache_seconds: float = Field(5, ge=0, le=60)
+    demo_alerts_cache_seconds: float = Field(10, ge=0, le=60)
     demo_prometheus_timeout_seconds: float = Field(3, gt=0, le=10)
     demo_sse_heartbeat_seconds: int = Field(10, ge=2, le=60)
     prometheus_url: str = "http://prometheus:9090"
@@ -36,6 +43,7 @@ class DemoConfig(BaseModel):
     generator_health_url: str = "http://event-generator:9102/health"
     processor_health_url: str = "http://event-processor:9101/health"
     outbox_health_url: str = "http://fraud-outbox-publisher:9103/health"
+    dlq_sink_health_url: str = "http://dlq-sink:9104/health"
     grafana_health_url: str = "http://grafana:3000/api/health"
     kafka_ui_health_url: str = "http://kafka-ui:8080"
 

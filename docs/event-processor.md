@@ -176,6 +176,62 @@ delivery, and never recursively dead-letters its own failure. A crash after DLQ
 delivery but before source commit can still create duplicate Kafka records;
 downstream readers should deduplicate by `dlq_record_id`.
 
+## DLQ sink
+
+The processor only publishes to Kafka. A separate consumer, the `dlq-sink`
+Compose service (`event-processor dlq-sink`, consumer group
+`commerce-dlq-sink-v1`), copies every DLQ envelope into the PostgreSQL
+`dead_letters` table so the demo console can search and triage it:
+
+- Rows are keyed by `dlq_record_id` and inserted with `ON CONFLICT DO
+  NOTHING`, so duplicate Kafka records and replays are harmless, and a triage
+  status already set on a row is never overwritten.
+- The Kafka offset is committed only after the row is stored. A database
+  outage is retried with capped backoff (200 ms to 5 s) instead of skipping
+  records.
+- A record that is not a valid envelope is still stored, as
+  `unreadable_dlq_record`, with an ID derived from its DLQ coordinate.
+- When an envelope has no original event ID or type (malformed JSON, for
+  example), the sink takes them from the sanitized source headers. That is
+  how such records count towards a run's `dlq_count`.
+- `status` starts as `NEW`. Operators move records to `TRIAGED` or
+  `DISCARDED` (with an optional note), reopen them as `NEW`, or replay them.
+
+It serves `/metrics` and `/health` on port 9104 (`DLQ_SINK_METRICS_PORT`) and
+exports `commerce_dlq_sink_records_total{result}`,
+`commerce_dlq_sink_store_errors_total` and
+`commerce_dlq_sink_last_record_timestamp_seconds`. The table is created by
+`database/migrations/008_dead_letters.sql`. Migration 009 added the triage
+columns and dropped the older `dead_letter_events` table, which no processor
+ever wrote; the migration refuses to drop it if it holds any rows.
+
+## Triage and replay
+
+The demo console's Dead letters page and the Demo Control API work on the
+stored rows:
+
+- `POST /api/v1/dlq/{id}/status` sets `TRIAGED`, `DISCARDED` or `NEW` with an
+  optional note (500 characters).
+- `POST /api/v1/dlq/bulk-status` moves every `NEW` record of one category to
+  `TRIAGED` or `DISCARDED`. Records already handled are left alone.
+- `POST /api/v1/dlq/{id}/replay` rebuilds the original Kafka record from the
+  envelope (key, value and the sanitized headers, which include every header
+  the processor requires), adds a `replayed_from_dlq_record_id` header and
+  produces it to its source topic with `acks=all`. The row is locked while
+  this happens, so a double click cannot replay it twice, and if Kafka does
+  not confirm the record the row is left unchanged.
+
+Only failures that a second attempt can fix are replayable:
+`retry_exhausted` and `missing_business_dependency`, with the full payload
+stored (not truncated), from an allowed topic (`DEMO_DLQ_REPLAY_TOPICS`,
+default `commerce.events`). Validation failures and integrity errors fail the
+same way every time and are refused with the reason.
+
+Replay is safe for the processor's idempotency: a dead-lettered event's Redis
+lease is released, so the replay is processed rather than skipped. The event
+then either applies (the record shows *Applied*) or dead-letters again as a
+new record, which the replayed record links to. Replay never hides a failure.
+
 ## Delivery semantics and limitations
 
 This is at-least-once consumption with PostgreSQL durable idempotency and

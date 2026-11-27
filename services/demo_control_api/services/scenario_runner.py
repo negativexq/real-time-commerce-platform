@@ -16,7 +16,7 @@ from services.demo_control_api.metrics import (
     GENERATOR_STAGE_DURATION,
 )
 from services.demo_control_api.models.runs import TERMINAL_STATUSES, DemoRun, RunStatus
-from services.demo_control_api.models.scenarios import ScenarioType
+from services.demo_control_api.models.scenarios import RunCreate, ScenarioType
 from services.demo_control_api.repositories.demo_runs import DemoRunRepository
 from services.event_generator.anomalies import AnomalyInjector
 from services.event_generator.config import GeneratorConfig
@@ -36,6 +36,63 @@ PERSONA_MAP = {
 }
 
 PROGRESS_REFRESH_INTERVAL_SECONDS = 0.5
+
+
+def build_generator_config(request: RunCreate, demo: DemoConfig) -> GeneratorConfig:
+    """Translate a run request into generator settings.
+
+    Single-persona scenarios pin the journey branches (always add to cart,
+    always check out) so every journey reaches the fraud engine. Mixed
+    traffic must not: the generator only honours persona weights while the
+    branch probabilities keep their defaults, and otherwise falls back to
+    the normal persona for every customer.
+    """
+    persona = PERSONA_MAP.get(request.scenario_type)
+    weights = request.persona_distribution
+    weight_string = (
+        ",".join(f"{name}={value}" for name, value in weights.items())
+        if weights
+        else None
+    )
+    defaults = GeneratorConfig()
+    add_to_cart: float = 1 if request.transaction_enabled else 0
+    checkout: float = 1 if request.transaction_enabled else 0
+    refund: float = 1 if request.scenario_type is ScenarioType.REFUND else 0
+    if request.scenario_type is ScenarioType.MIXED and request.transaction_enabled:
+        add_to_cart = defaults.generator_add_to_cart_probability
+        checkout = defaults.generator_checkout_probability
+        refund = defaults.generator_refund_probability
+    return GeneratorConfig(
+        kafka_bootstrap_servers=demo.kafka_bootstrap_servers,
+        generator_seed=request.seed,
+        generator_persona=persona,
+        generator_persona_weights=weight_string or defaults.generator_persona_weights,
+        generator_add_to_cart_probability=add_to_cart,
+        generator_checkout_probability=checkout,
+        generator_refund_probability=refund,
+        generator_anomalies_enabled=request.scenario_type
+        in {ScenarioType.DUPLICATE, ScenarioType.MALFORMED, ScenarioType.MIXED},
+        generator_duplicate_event_probability=1
+        if request.scenario_type is ScenarioType.DUPLICATE
+        else request.duplicate_rate,
+        generator_malformed_json_probability=1
+        if request.scenario_type is ScenarioType.MALFORMED
+        and request.malformed_case == "malformed_json"
+        else request.malformed_rate,
+        generator_missing_field_probability=1
+        if request.scenario_type is ScenarioType.MALFORMED
+        and request.malformed_case == "missing_field"
+        else 0,
+        generator_unknown_event_type_probability=1
+        if request.scenario_type is ScenarioType.MALFORMED
+        and request.malformed_case == "unknown_event_type"
+        else 0,
+        generator_payload_mismatch_probability=1
+        if request.scenario_type is ScenarioType.MALFORMED
+        and request.malformed_case == "payload_mismatch"
+        else 0,
+        generator_max_anomalies_per_journey=2,
+    )
 
 
 class ConcurrencyLimitError(RuntimeError):
@@ -121,47 +178,7 @@ class ScenarioRunner:
     async def _generate(self, run: DemoRun) -> None:
         generation_started = perf_counter()
         request = run.parameters
-        persona = PERSONA_MAP.get(request.scenario_type)
-        weights = request.persona_distribution
-        weight_string = None
-        if weights:
-            weight_string = ",".join(
-                f"{name}={value}" for name, value in weights.items()
-            )
-        config = GeneratorConfig(
-            kafka_bootstrap_servers=self.config.kafka_bootstrap_servers,
-            generator_seed=request.seed,
-            generator_persona=persona,
-            generator_persona_weights=weight_string
-            or GeneratorConfig().generator_persona_weights,
-            generator_add_to_cart_probability=1 if request.transaction_enabled else 0,
-            generator_checkout_probability=1 if request.transaction_enabled else 0,
-            generator_refund_probability=1
-            if request.scenario_type is ScenarioType.REFUND
-            else 0,
-            generator_anomalies_enabled=request.scenario_type
-            in {ScenarioType.DUPLICATE, ScenarioType.MALFORMED, ScenarioType.MIXED},
-            generator_duplicate_event_probability=1
-            if request.scenario_type is ScenarioType.DUPLICATE
-            else request.duplicate_rate,
-            generator_malformed_json_probability=1
-            if request.scenario_type is ScenarioType.MALFORMED
-            and request.malformed_case == "malformed_json"
-            else request.malformed_rate,
-            generator_missing_field_probability=1
-            if request.scenario_type is ScenarioType.MALFORMED
-            and request.malformed_case == "missing_field"
-            else 0,
-            generator_unknown_event_type_probability=1
-            if request.scenario_type is ScenarioType.MALFORMED
-            and request.malformed_case == "unknown_event_type"
-            else 0,
-            generator_payload_mismatch_probability=1
-            if request.scenario_type is ScenarioType.MALFORMED
-            and request.malformed_case == "payload_mismatch"
-            else 0,
-            generator_max_anomalies_per_journey=2,
-        )
+        config = build_generator_config(request, self.config)
         rng = random.Random(request.seed)
         synthetic = SyntheticGenerator(rng, SeededUuidFactory(request.seed))
         builder = JourneyBuilder(config, synthetic, SystemClock())

@@ -83,6 +83,16 @@ func (p *Processor) Process(m *model.ConsumedMessage) (model.ProcessingOutcome, 
 	if p.metrics != nil {
 		p.metrics.Inflight.Inc()
 	}
+	// Every exit, dead letters and unresolved records included, is observed exactly once,
+	// so the terminal counter matches the DLQ counter and the in-flight gauge returns to zero.
+	eventType := "unknown"
+	outcome, err := p.process(m, &eventType)
+	p.observeTerminal(eventType, outcome, started)
+	return outcome, err
+}
+
+func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (model.ProcessingOutcome, error) {
+	started := time.Now()
 	p.summary.ConsumedRecords++
 	validationStarted := time.Now()
 	result := validation.ValidateMessage(m)
@@ -96,12 +106,11 @@ func (p *Processor) Process(m *model.ConsumedMessage) (model.ProcessingOutcome, 
 			p.metrics.EventsReceived.WithLabelValues("unknown", m.Topic).Inc()
 			p.metrics.ValidationFailures.WithLabelValues(string(e.Category)).Inc()
 		}
-		outcome, err := p.deadLetter(m, e, 1)
-		p.observeTerminal("unknown", outcome, started)
-		return outcome, err
+		return p.deadLetter(m, e, 1)
 	}
 	event := result.Event
 	eventType := string(event.EventType)
+	*observedType = eventType
 	if p.metrics != nil {
 		p.metrics.EventsReceived.WithLabelValues(eventType, m.Topic).Inc()
 	}
@@ -139,16 +148,12 @@ func (p *Processor) Process(m *model.ConsumedMessage) (model.ProcessingOutcome, 
 		if recoveredPersisted {
 			p.summary.AlreadyPersistedEvents++
 		}
-		outcome := model.ProcessingOutcome{Status: model.Duplicate, Attempts: 1, EventType: event.EventType}
-		p.observeTerminal(eventType, outcome, started)
-		return outcome, nil
+		return model.ProcessingOutcome{Status: model.Duplicate, Attempts: 1, EventType: event.EventType}, nil
 	case idempotency.Processing:
 		slog.Warn("active_processing_lease", "event_id", event.EventID.String(), "topic", m.Topic,
 			"partition", m.Partition, "offset", m.Offset)
 		p.summary.UnresolvedRecords++
-		outcome := model.ProcessingOutcome{Status: model.Unresolved, Attempts: 1}
-		p.observeTerminal(eventType, outcome, started)
-		return outcome, nil
+		return model.ProcessingOutcome{Status: model.Unresolved, Attempts: 1}, nil
 	}
 
 	handler, ok := p.handlers[event.EventType]
@@ -211,9 +216,7 @@ func (p *Processor) Process(m *model.ConsumedMessage) (model.ProcessingOutcome, 
 			"already_persisted", res.AlreadyPersisted, "affected_tables", res.AffectedTables,
 			"database_duration_ms", res.DurationMs)
 	}
-	outcome := model.ProcessingOutcome{Status: model.Processed, Attempts: attempts, EventType: event.EventType}
-	p.observeTerminal(eventType, outcome, started)
-	return outcome, nil
+	return model.ProcessingOutcome{Status: model.Processed, Attempts: attempts, EventType: event.EventType}, nil
 }
 
 // persistRecoveryFailure ports the except branches of _persist_with_retry.

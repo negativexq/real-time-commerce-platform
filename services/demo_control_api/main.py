@@ -5,7 +5,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from time import perf_counter
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
@@ -14,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from prometheus_client import make_asgi_app
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool, PoolTimeout
+from pydantic import BaseModel, ConfigDict, Field
 
 from services.demo_control_api.config import DemoConfig
 from services.demo_control_api.metrics import (
@@ -39,6 +41,15 @@ from services.demo_control_api.repositories.demo_runs import (
     InvalidTransitionError,
 )
 from services.demo_control_api.services.dashboard_catalog import dashboard_catalog
+from services.demo_control_api.services.dead_letters import (
+    BulkStatus,
+    DeadLetterNotFoundError,
+    DeadLetterService,
+    KafkaReplayProducer,
+    ReplayDeliveryError,
+    ReplayNotAllowedError,
+    TriageStatus,
+)
 from services.demo_control_api.services.overview import build_fraud_summary
 from services.demo_control_api.services.platform_health import PlatformHealth
 from services.demo_control_api.services.prometheus_client import (
@@ -51,18 +62,48 @@ from services.demo_control_api.services.scenario_runner import (
 )
 
 config = DemoConfig.from_environment()
-repository = DemoRunRepository(config.postgres_dsn)
+# One shared pool for every query the API makes. The console polls several
+# endpoints every few seconds per open tab; borrowing a connection is far
+# cheaper for PostgreSQL than a new backend process per request.
+pool = ConnectionPool(
+    config.postgres_dsn,
+    min_size=1,
+    max_size=config.demo_db_pool_max_size,
+    timeout=5,
+    kwargs={"row_factory": dict_row, "connect_timeout": 2},
+    open=False,
+    name="demo-control-api",
+)
+repository = DemoRunRepository(config.postgres_dsn, pool)
+dead_letters = DeadLetterService(
+    pool,
+    frozenset(
+        topic.strip()
+        for topic in config.demo_dlq_replay_topics.split(",")
+        if topic.strip()
+    ),
+)
+replay_producer = KafkaReplayProducer(config.kafka_bootstrap_servers)
 runner = ScenarioRunner(config, repository)
 health_service = PlatformHealth(config)
 prometheus = RestrictedPrometheusClient(
-    config.prometheus_url, config.demo_prometheus_timeout_seconds
+    config.prometheus_url,
+    config.demo_prometheus_timeout_seconds,
+    summary_ttl=config.demo_metrics_cache_seconds,
+    alerts_ttl=config.demo_alerts_cache_seconds,
 )
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    await asyncio.to_thread(repository.reconcile)
-    yield
+    # wait=False: the API still starts while PostgreSQL is down, and /ready
+    # reports it; the pool keeps trying to reach min_size in the background.
+    pool.open(wait=False)
+    try:
+        await asyncio.to_thread(repository.reconcile)
+        yield
+    finally:
+        pool.close()
 
 
 app = FastAPI(
@@ -117,10 +158,10 @@ def health() -> dict[str, str]:
 @app.get("/api/v1/ready")
 def ready() -> dict[str, str]:
     try:
-        with psycopg.connect(config.postgres_dsn, connect_timeout=2) as connection:
+        with pool.connection(timeout=2) as connection:
             connection.execute("SELECT 1")
         return {"status": "ready"}
-    except psycopg.Error as exc:
+    except (psycopg.Error, PoolTimeout) as exc:
         raise HTTPException(503, "PostgreSQL is unavailable") from exc
 
 
@@ -248,6 +289,11 @@ async def metrics_summary() -> dict[str, Any]:
     return await prometheus.summary()
 
 
+@app.get("/api/v1/platform/alerts")
+async def platform_alerts() -> dict[str, Any]:
+    return await prometheus.alerts()
+
+
 @app.get(
     "/api/v1/overview/fraud-summary",
     response_model=OverviewFraudSummary,
@@ -277,20 +323,51 @@ async def services() -> dict[str, Any]:
 
 
 def db_list(query: str, parameters: tuple[object, ...]) -> list[dict[str, Any]]:
-    with psycopg.connect(config.postgres_dsn, row_factory=dict_row) as connection:
+    with pool.connection() as connection:
         return [dict(row) for row in connection.execute(query, parameters).fetchall()]
 
 
 @app.get("/api/v1/fraud/alerts")
 def fraud_alerts(page_size: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
+    # created_at is the source event's business time, which the generator's
+    # logical clock can push into the future. Newest-first means newest
+    # *detected*, so order by insert sequence and expose processed_at.
     return {
         "items": db_list(
-            """SELECT alert_id, source_event_id, score, decision, severity, status, reason_codes, created_at,
-      (SELECT run_id FROM demo_run_event_manifest WHERE event_id=fraud_alerts.source_event_id ORDER BY created_at DESC LIMIT 1) run_id,
-      (SELECT status FROM fraud_outbox WHERE aggregate_id=fraud_alerts.alert_id LIMIT 1) outbox_status
-      FROM fraud_alerts ORDER BY created_at DESC LIMIT %s""",
+            """SELECT fa.alert_id, fa.source_event_id, fa.score, fa.decision, fa.severity, fa.status,
+      fa.reason_codes, fa.created_at, pe.processed_at detected_at,
+      (SELECT run_id FROM demo_run_event_manifest WHERE event_id=fa.source_event_id ORDER BY created_at DESC LIMIT 1) run_id,
+      (SELECT status FROM fraud_outbox WHERE aggregate_id=fa.alert_id LIMIT 1) outbox_status
+      FROM fraud_alerts fa LEFT JOIN processed_events pe ON pe.event_id=fa.source_event_id
+      ORDER BY fa.legacy_id DESC LIMIT %s""",
             (page_size,),
         )
+    }
+
+
+@app.get("/api/v1/fraud/summary")
+def fraud_summary() -> dict[str, Any]:
+    decisions = {
+        row["decision"]: row["count"]
+        for row in db_list(
+            "SELECT decision, count(*)::int AS count FROM fraud_evaluations GROUP BY decision",
+            (),
+        )
+    }
+    severities = {
+        row["severity"]: row["count"]
+        for row in db_list(
+            "SELECT severity, count(*)::int AS count FROM fraud_alerts GROUP BY severity",
+            (),
+        )
+    }
+    return {
+        "decisions": {
+            name: decisions.get(name, 0) for name in ("APPROVE", "REVIEW", "BLOCK")
+        },
+        "total_evaluations": sum(decisions.values()),
+        "alert_severities": severities,
+        "total_alerts": sum(severities.values()),
     }
 
 
@@ -315,25 +392,67 @@ def fraud_alert(alert_id: UUID) -> dict[str, Any]:
     return rows[0]
 
 
+DlqStatus = Literal["NEW", "TRIAGED", "REPLAYED", "DISCARDED"]
+
+
+class DeadLetterStatusChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: TriageStatus
+    note: str | None = Field(None, max_length=500)
+
+
+class DeadLetterBulkStatusChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    error_category: str = Field(min_length=1, max_length=100)
+    status: BulkStatus
+
+
 @app.get("/api/v1/dlq")
-def dlq(page_size: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
-    return {
-        "items": db_list(
-            "SELECT id, original_topic, original_partition, original_offset, error_type, left(error_message, 300) error_message, failed_at FROM dead_letter_events ORDER BY failed_at DESC LIMIT %s",
-            (page_size,),
-        )
-    }
+def dlq(
+    page_size: int = Query(20, ge=1, le=100),
+    status: DlqStatus | None = None,
+    error_category: str | None = Query(None, max_length=100),
+) -> dict[str, Any]:
+    # dead_letters is filled from the commerce.events.dlq topic by the
+    # dlq-sink service; the processor itself only publishes to the topic.
+    return dead_letters.page(page_size, status, error_category)
 
 
-@app.get("/api/v1/dlq/{event_id}")
-def dlq_detail(event_id: int) -> dict[str, Any]:
-    rows = db_list(
-        "SELECT id, original_topic, original_partition, original_offset, error_type, left(error_message, 300) error_message, failed_at FROM dead_letter_events WHERE id=%s",
-        (event_id,),
-    )
-    if not rows:
-        raise HTTPException(404, "DLQ record not found")
-    return rows[0]
+@app.get("/api/v1/dlq/{dlq_record_id}")
+def dlq_detail(dlq_record_id: UUID) -> dict[str, Any]:
+    try:
+        return dead_letters.detail(dlq_record_id)
+    except DeadLetterNotFoundError as exc:
+        raise HTTPException(404, "DLQ record not found") from exc
+
+
+@app.post("/api/v1/dlq/bulk-status", dependencies=[Depends(token_guard)])
+def dlq_bulk_status(request: DeadLetterBulkStatusChange) -> dict[str, int]:
+    """Moves every NEW record of one category to TRIAGED or DISCARDED."""
+    return {"updated": dead_letters.bulk_status(request.error_category, request.status)}
+
+
+@app.post("/api/v1/dlq/{dlq_record_id}/status", dependencies=[Depends(token_guard)])
+def dlq_set_status(
+    dlq_record_id: UUID, request: DeadLetterStatusChange
+) -> dict[str, Any]:
+    try:
+        return dead_letters.set_status(dlq_record_id, request.status, request.note)
+    except DeadLetterNotFoundError as exc:
+        raise HTTPException(404, "DLQ record not found") from exc
+
+
+@app.post("/api/v1/dlq/{dlq_record_id}/replay", dependencies=[Depends(token_guard)])
+def dlq_replay(dlq_record_id: UUID) -> dict[str, Any]:
+    """Sends the original record back to its source topic."""
+    try:
+        return dead_letters.replay(dlq_record_id, replay_producer.send)
+    except DeadLetterNotFoundError as exc:
+        raise HTTPException(404, "DLQ record not found") from exc
+    except ReplayNotAllowedError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ReplayDeliveryError as exc:
+        raise HTTPException(502, str(exc)) from exc
 
 
 @app.get("/api/v1/dashboards")

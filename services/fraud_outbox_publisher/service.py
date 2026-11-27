@@ -44,8 +44,16 @@ class OutboxService:
             batch_started = perf_counter()
             heartbeat.touch()
             claim_started = perf_counter()
-            records = self.repository.claim(self.config.outbox)
+            try:
+                records = self.repository.claim(self.config.outbox)
+            except psycopg.Error:
+                # The process exits on a database error; report it on the way out.
+                if self.metrics is not None:
+                    self.metrics.database_healthy.set(0)
+                raise
             if self.metrics is not None:
+                # A successful claim is a real round trip to PostgreSQL.
+                self.metrics.database_healthy.set(1)
                 self.metrics.outbox_claim_duration.observe(
                     perf_counter() - claim_started
                 )

@@ -430,10 +430,10 @@ def render(run_tag: str) -> str:
         "which bounds the time resolution of peak-throughput and lag-curve readings."
     )
     lines.append(
-        "- The legacy `dead_letter_events` Postgres table is never written to "
-        "by the current codebase (only read by `GET /api/v1/dlq`); DLQ "
-        "verification in this report is based entirely on the "
-        "`commerce.events.dlq` Kafka topic, the actual current DLQ mechanism."
+        "- DLQ verification in this report is based on the "
+        "`commerce.events.dlq` Kafka topic, where the processor publishes "
+        "dead letters. The `dead_letters` table is a copy made by the "
+        "dlq-sink and can lag behind the topic."
     )
     lines.append(
         "- `demo_runs.duplicate_count` and `demo_runs.dlq_count` are never "

@@ -16,6 +16,7 @@ import (
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/config"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/contracts"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/dlq"
+	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/dlqsink"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/fraud"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/idempotency"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/kafkaconsumer"
@@ -30,15 +31,41 @@ const healthFile = "/tmp/event-processor-healthy"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		if _, err := os.Stat(healthFile); err != nil {
+		// `healthcheck [file]`: the processor's file by default; the DLQ sink
+		// passes its own.
+		file := healthFile
+		if len(os.Args) > 2 {
+			file = os.Args[2]
+		}
+		if _, err := os.Stat(file); err != nil {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "dlq-sink" {
+		os.Exit(runDLQSink())
 	}
 	if len(os.Args) > 1 && (os.Args[1] == "fraud-config" || os.Args[1] == "fraud-rules") {
 		os.Exit(fraudAdmin(os.Args[1], os.Stdout))
 	}
 	os.Exit(run(os.Args[1:]))
+}
+
+// runDLQSink copies dead letters from the DLQ topic into PostgreSQL.
+func runDLQSink() int {
+	logging.Configure("INFO")
+	cfg, err := dlqsink.LoadConfig(config.OSLookup)
+	if err != nil {
+		slog.Error("dlq_sink_failed", "error", err.Error())
+		return 1
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := dlqsink.Run(ctx, cfg); err != nil {
+		slog.Error("dlq_sink_failed", "error", err.Error())
+		return 1
+	}
+	return 0
 }
 
 // fraudAdmin prints read-only fraud diagnostics (formerly scripts/fraud-admin.py).

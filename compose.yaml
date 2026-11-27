@@ -322,6 +322,40 @@ services:
     command: ["migrate"]
     restart: "no"
 
+  dlq-sink:
+    # Copies DLQ envelopes from commerce.events.dlq into the dead_letters
+    # table; same binary as the processor, `dlq-sink` subcommand.
+    profiles: ["processor"]
+    build:
+      context: .
+      dockerfile: services/event_processor_go/Dockerfile
+    command: ["dlq-sink"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
+    environment:
+      METRICS_HOST: 0.0.0.0
+      DLQ_SINK_METRICS_PORT: ${DLQ_SINK_METRICS_PORT:-9104}
+      DLQ_SINK_CONSUMER_GROUP: ${DLQ_SINK_CONSUMER_GROUP:-commerce-dlq-sink-v1}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      PROCESSOR_DLQ_TOPIC: ${PROCESSOR_DLQ_TOPIC:-commerce.events.dlq}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://commerce:commerce_local_dev@postgres:5432/commerce}
+    healthcheck:
+      test: ["CMD", "event-processor", "healthcheck", "/tmp/dlq-sink-healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    stop_grace_period: 15s
+    mem_limit: 128m
+    restart: unless-stopped
+
   fraud-outbox-publisher:
     profiles: ["fraud"]
     build:

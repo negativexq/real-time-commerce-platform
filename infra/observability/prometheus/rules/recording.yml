@@ -11,7 +11,9 @@ groups:
       - record: commerce:processor_latency_seconds:p95
         expr: histogram_quantile(0.95, sum by (le) (rate(commerce_processor_event_processing_duration_seconds_bucket[5m])))
       - record: commerce:kafka_consumer_lag:sum
-        expr: sum(kafka_consumergroup_lag)
+        # The live processor's group only: abandoned smoke or benchmark groups
+        # keep their last lag forever and would hold the alert on.
+        expr: sum(kafka_consumergroup_lag{consumergroup="commerce-event-processor-v1"})
       - record: commerce:fraud_decisions:rate5m
         expr: sum by (decision) (rate(commerce_fraud_evaluations_total[5m]))
       - record: commerce:outbox_pending:sum
