@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/config"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/contracts"
+	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/dbtx"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/model"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/procerr"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/testenv"
@@ -323,5 +325,181 @@ func TestRefundAbovePaidAmountIsRejected(t *testing.T) {
 	}
 	if n := h.count("refunds", ""); n != 0 {
 		t.Fatalf("refund row written: %d", n)
+	}
+}
+
+// The batched fraud context builder must produce exactly what the old
+// one-query-per-round-trip builder did, including its error and NULL paths:
+// a payment without a session (resolved through the order), an order or
+// payment that does not exist, and an unknown customer.
+func TestBatchedFraudContextMatchesSequentialReference(t *testing.T) {
+	h := newHarness(t)
+	id := newIDs()
+	events := journey(h, id)
+	for _, e := range events {
+		if _, err := h.persist(e); err != nil {
+			t.Fatalf("%s: %v", e.EventType, err)
+		}
+	}
+	c := id.customer.String()
+	// A view before the session started: counted from the lookback start, not
+	// from the session's start, so the two windows give different counts.
+	early := h.event("product_viewed", 30*time.Second, map[string]any{"session_id": id.session.String(),
+		"customer_id": c, "product_id": uuid.NewString(), "category": "books", "unit_price": "9.95",
+		"currency": "TRY", "quantity_available": 3})
+	if _, err := h.persist(early); err != nil {
+		t.Fatal(err)
+	}
+	ts := base.Add(10 * time.Minute).Format(time.RFC3339)
+	probes := append([]*contracts.Envelope{}, events...)
+	probes = append(probes,
+		h.event("payment_completed", 10*time.Minute, map[string]any{"payment_id": uuid.NewString(),
+			"order_id": uuid.NewString(), "customer_id": c, "amount": "10.00", "currency": "TRY",
+			"payment_method": "credit_card", "device_id": uuid.NewString(), "ip_address": "2001:db8::2",
+			"country_code": "DE", "completed_at": ts}),
+		h.event("checkout_started", 10*time.Minute, map[string]any{"session_id": uuid.NewString(), "customer_id": c,
+			"cart_id": uuid.NewString(), "item_count": 1, "subtotal": "5.00", "discount_amount": "0",
+			"total_amount": "5.00", "currency": "EUR"}),
+		h.event("refund_requested", 10*time.Minute, map[string]any{"refund_id": uuid.NewString(),
+			"payment_id": id.payment.String(), "order_id": id.order.String(), "customer_id": uuid.NewString(),
+			"amount": "1.00", "currency": "TRY", "reason": "x", "requested_at": ts}),
+	)
+	ctx := context.Background()
+	compared := 0
+	for _, e := range probes {
+		if !fraudEligible(e) {
+			continue
+		}
+		pgxTx, err := h.pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx := dbtx.New(ctx, pgxTx, nil)
+		got, gotErr := h.uow.builder.Build(tx, e)
+		want, wantErr := referenceBuild(h.uow.builder, h.uow.fraudCfg, tx, e)
+		_ = pgxTx.Rollback(ctx)
+		if (gotErr == nil) != (wantErr == nil) || (gotErr != nil && gotErr.Error() != wantErr.Error()) {
+			t.Fatalf("%s: error %v, reference %v", e.EventType, gotErr, wantErr)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: context differs\n batched   %+v\n reference %+v", e.EventType, got, want)
+		}
+		compared++
+	}
+	if compared != 8 {
+		t.Fatalf("compared %d contexts, want 8", compared)
+	}
+}
+
+// A fraud evaluation insert that hits the existing row for its source event
+// is accepted only when the stored evaluation is identical.
+func TestFraudEvaluationConflictComparesStoredEvaluation(t *testing.T) {
+	h := newHarness(t)
+	events := journey(h, newIDs())
+	for _, e := range events[:8] { // up to and including payment_completed
+		if _, err := h.persist(e); err != nil {
+			t.Fatalf("%s: %v", e.EventType, err)
+		}
+	}
+	payment := events[7]
+	ctx := context.Background()
+	pgxTx, err := h.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pgxTx.Rollback(ctx) }()
+	tx := dbtx.New(ctx, pgxTx, nil)
+	fctx, err := h.uow.builder.Build(tx, payment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := h.uow.engine.Evaluate(fctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := h.uow.fraudStore.Persist(tx, ev, payment)
+	if err != nil || rows["fraud_evaluations"] != 0 {
+		t.Fatalf("same evaluation again: rows %v, error %v", rows, err)
+	}
+	changed := *ev
+	changed.TotalScore++
+	if _, err := h.uow.fraudStore.Persist(tx, &changed, payment); !procerr.Is(err, procerr.FraudEvaluationIntegrity) {
+		t.Fatalf("conflicting evaluation: error %v", err)
+	}
+}
+
+func (h *harness) group(events []*contracts.Envelope) ([]*Result, error) {
+	items := make([]GroupItem, len(events))
+	for i, e := range events {
+		h.offset++
+		m := &model.ConsumedMessage{Topic: "commerce.events", Partition: 0, Offset: h.offset}
+		items[i] = GroupItem{Event: e, Message: m, Handler: Handlers[e.EventType],
+			Context: model.ProcessingContext{Topic: m.Topic, Offset: m.Offset, ConsumerGroup: "go-test",
+				ProcessorInstanceID: "go-test-1", Attempt: 1}}
+	}
+	return h.uow.PersistGroup(items)
+}
+
+// One transaction for the whole journey writes what one transaction per
+// event writes, with the same fraud decisions: each event's reads see the
+// group's earlier writes.
+func TestGroupTransactionMatchesOneTransactionPerEvent(t *testing.T) {
+	single, grouped := newHarness(t), newHarness(t)
+	id := newIDs()
+	singleEvents, groupedEvents := journey(single, id), journey(grouped, id)
+	var want []*Result
+	for _, e := range singleEvents {
+		res, err := single.persist(e)
+		if err != nil {
+			t.Fatalf("%s: %v", e.EventType, err)
+		}
+		want = append(want, res)
+	}
+	got, err := grouped.group(groupedEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range want {
+		w, g := want[i], got[i]
+		if g.AlreadyPersisted || fmt.Sprint(g.RowsWritten) != fmt.Sprint(w.RowsWritten) ||
+			g.FraudDecision != w.FraudDecision || g.FraudScore != w.FraudScore ||
+			fmt.Sprint(g.MatchedRuleIDs) != fmt.Sprint(w.MatchedRuleIDs) {
+			t.Fatalf("%s: grouped %+v, one by one %+v", singleEvents[i].EventType, g, w)
+		}
+	}
+	for _, table := range []string{"processed_events", "customers", "sessions", "product_views", "carts",
+		"cart_items", "orders", "payments", "refunds", "fraud_evaluations", "fraud_alerts", "fraud_outbox"} {
+		if a, b := single.count(table, ""), grouped.count(table, ""); a != b {
+			t.Errorf("%s: %d rows grouped, %d one by one", table, b, a)
+		}
+	}
+}
+
+// A failing event rolls back the whole group; events already in the ledger
+// are skipped while the new ones in the same group commit.
+func TestGroupTransactionRollsBackOnFailureAndSkipsPersistedEvents(t *testing.T) {
+	h := newHarness(t)
+	events := journey(h, newIDs())
+	orphanOrder := journey(h, newIDs())[5] // its customer, session and cart do not exist
+	if _, err := h.group([]*contracts.Envelope{events[0], events[1], orphanOrder}); !procerr.IsMissingDependency(err) {
+		t.Fatalf("error %v", err)
+	}
+	if n := h.count("processed_events", ""); n != 0 {
+		t.Fatalf("%d ledger rows survived the rollback", n)
+	}
+	if _, err := h.group(events[:2]); err != nil {
+		t.Fatal(err)
+	}
+	// Redelivered at the same coordinates: the first two are known, the third is new.
+	h.offset = 0
+	results, err := h.group(events[:3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !results[0].AlreadyPersisted || !results[1].AlreadyPersisted || results[2].AlreadyPersisted {
+		t.Fatalf("results %+v %+v %+v", results[0], results[1], results[2])
+	}
+	if n := h.count("processed_events", ""); n != 3 {
+		t.Fatalf("%d ledger rows, want 3", n)
 	}
 }

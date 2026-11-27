@@ -37,6 +37,7 @@ type Metrics struct {
 	PollToHandler        prometheus.Histogram
 	LoopGap              prometheus.Histogram
 	QueueWait            prometheus.Histogram
+	BatchSize            prometheus.Histogram
 	PollDuration         prometheus.Histogram
 	EmptyPolls           prometheus.Counter
 	FetchqRecords        prometheus.Gauge
@@ -132,6 +133,8 @@ func New(service, namespace string) *Metrics {
 		PollToHandler:      plainHistogram("processor_poll_to_handler_duration_seconds", "Kafka poll through dispatch into the processor handler.", nil),
 		LoopGap:            plainHistogram("processor_loop_gap_duration_seconds", "Time from one terminal process return to the next Kafka poll.", nil),
 		QueueWait:          plainHistogram("processor_consumer_queue_wait_duration_seconds", "Kafka record timestamp through poll() return.", nil),
+		BatchSize: plainHistogram("processor_batch_records",
+			"Records processed together per batch (consecutive new events share a transaction).", []float64{1, 2, 5, 10, 25, 50, 100, 250, 500, 1000}),
 		PollDuration:       plainHistogram("processor_poll_duration_seconds", "Time actually blocked inside the Kafka client's poll() call.", nil),
 		EmptyPolls:         emptyPolls,
 		FetchqRecords:      plainGauge("processor_consumer_fetchq_records", "librdkafka's internal fetch-queue depth."),

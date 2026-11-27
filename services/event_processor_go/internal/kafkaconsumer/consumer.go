@@ -147,6 +147,32 @@ func (c *Consumer) Poll() (*model.ConsumedMessage, error) {
 	return nil, nil
 }
 
+// PollReady returns a record only if one is already fetched, without
+// waiting: it fills a batch from the local queue after Poll returned one.
+func (c *Consumer) PollReady() (*model.ConsumedMessage, error) {
+	for {
+		switch e := c.client.Poll(0).(type) {
+		case nil:
+			return nil, nil
+		case *kafka.Message:
+			if e.TopicPartition.Error != nil {
+				return nil, procerr.Wrap(procerr.FatalInfrastructure, fmt.Sprintf("Kafka consume failed: %v", e.TopicPartition.Error), e.TopicPartition.Error)
+			}
+			return toConsumed(e), nil
+		case kafka.Error:
+			if e.Code() == kafka.ErrPartitionEOF {
+				return nil, nil
+			}
+			if e.IsFatal() || e.Code() == kafka.ErrUnknownTopicOrPart || e.Code() == kafka.ErrUnknownTopic {
+				return nil, procerr.Wrap(procerr.FatalInfrastructure, "Kafka consume failed: "+e.Error(), e)
+			}
+			slog.Warn("kafka_client_error", "error", e.Error())
+		case *kafka.Stats:
+			c.recordStats(e.String())
+		}
+	}
+}
+
 func toConsumed(m *kafka.Message) *model.ConsumedMessage {
 	headers := make([]model.Header, len(m.Headers))
 	for i, h := range m.Headers {

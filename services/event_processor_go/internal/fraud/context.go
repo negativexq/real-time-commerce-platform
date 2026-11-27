@@ -138,56 +138,54 @@ func (b *Builder) Build(tx *dbtx.Tx, e *contracts.Envelope) (*Context, error) {
 	limit := b.cfg.MaxHistoryRecords
 	cust := dbtx.UUID(customerID)
 
+	// Every read below depends only on the event, so they go to PostgreSQL as
+	// one batch: one round trip instead of one per query.
+	q := &dbtx.Batch{}
+
 	var homeCountry string
 	var orderedAt pgtype.Timestamptz
 	var orderTotal pgtype.Numeric
 	var orderCurrency, billingCountry pgtype.Text
-	err := tx.QueryRow(`
+	customerFound := false
+	q.QueryRow(`
             SELECT c.home_country, o.ordered_at, o.total, o.currency,
                    o.billing_country
             FROM customers c
             LEFT JOIN orders o ON o.order_id = $1
             WHERE c.customer_id = $2
-            `, []any{dbtx.NullableUUID(pf.order), cust}, &homeCountry, &orderedAt, &orderTotal, &orderCurrency, &billingCountry)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, procerr.New(procerr.FraudContextDependency, "customer fraud context is unavailable")
-	}
-	if err != nil {
-		return nil, err
-	}
-	hasOrder := orderedAt.Valid
+            `, []any{dbtx.NullableUUID(pf.order), cust}, func(row pgx.Row) error {
+		err := row.Scan(&homeCountry, &orderedAt, &orderTotal, &orderCurrency, &billingCountry)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		customerFound = err == nil
+		return err
+	})
 
-	session := pf.session
-	if session == nil && pf.order != nil {
-		var sid pgtype.UUID
-		err := tx.QueryRow("SELECT session_id FROM orders WHERE order_id = $1", []any{dbtx.UUID(*pf.order)}, &sid)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return nil, err
-		}
-		if err == nil && sid.Valid {
-			session = ref(uuid.UUID(sid.Bytes))
-		}
-	}
-	var sessionStarted *time.Time
+	// The session is the payload's, else the order's. Product views count from
+	// the session's start, else from the lookback start.
+	var sessionID pgtype.UUID
 	var started pgtype.Timestamptz
-	err = tx.QueryRow("SELECT started_at FROM sessions WHERE session_id = $1", []any{dbtx.NullableUUID(session)}, &started)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
-	}
-	if err == nil && started.Valid {
-		sessionStarted = ref(started.Time)
-	}
-	orderMatches := true
-	if hasOrder && amount != nil {
-		total, err := dbtx.Numeric(orderTotal)
-		if err != nil {
-			return nil, err
-		}
-		orderMatches = total.Equal(*amount) && pf.currency != nil && orderCurrency.String == *pf.currency
-	}
+	var viewCount int64
+	q.QueryRow(`
+            SELECT x.session_id, s.started_at, (
+                SELECT COUNT(*) FROM (
+                    SELECT 1 FROM product_views
+                    WHERE customer_id = $3 AND viewed_at <= $4
+                      AND viewed_at >= COALESCE(s.started_at, $5)
+                    ORDER BY viewed_at DESC LIMIT $6
+                ) bounded
+            )
+            FROM (
+                SELECT COALESCE($1::uuid,
+                    (SELECT session_id FROM orders WHERE order_id = $2::uuid)) AS session_id
+            ) x
+            LEFT JOIN sessions s ON s.session_id = x.session_id
+            `, []any{dbtx.NullableUUID(pf.session), dbtx.NullableUUID(pf.order), cust, e.EventTime, lookback, limit},
+		func(row pgx.Row) error { return row.Scan(&sessionID, &started, &viewCount) })
 
 	var payments []paymentRow
-	err = tx.QueryEach(`
+	q.QueryEach(`
                 SELECT status, amount, currency, device_id, country,
                        attempted_at, failure_reason
                 FROM payments
@@ -213,11 +211,8 @@ func (b *Builder) Build(tx *dbtx.Tx, e *contracts.Envelope) (*Context, error) {
 		payments = append(payments, r)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 	var prior []paymentRow
-	err = tx.QueryEach(`
+	q.QueryEach(`
                 SELECT status, amount, currency, device_id, country, attempted_at
                 FROM payments
                 WHERE customer_id = $1 AND attempted_at < $2
@@ -237,48 +232,74 @@ func (b *Builder) Build(tx *dbtx.Tx, e *contracts.Envelope) (*Context, error) {
 		prior = append(prior, r)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	refunds := 0
-	err = tx.QueryEach(`
-                SELECT requested_at, amount FROM refunds
-                WHERE customer_id = $1 AND requested_at <= $2 AND requested_at >= $3
-                ORDER BY requested_at DESC, refund_id LIMIT $4
-                `, []any{cust, e.EventTime, lookback, limit}, func(pgx.Rows) error {
-		refunds++
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
+	var refunds int64
+	q.QueryRow(`
+                SELECT COUNT(*) FROM (
+                    SELECT 1 FROM refunds
+                    WHERE customer_id = $1 AND requested_at <= $2 AND requested_at >= $3
+                    ORDER BY requested_at DESC LIMIT $4
+                ) bounded
+                `, []any{cust, e.EventTime, lookback, limit}, func(row pgx.Row) error { return row.Scan(&refunds) })
 	var recentOrders int64
-	if err := tx.QueryRow(`
+	q.QueryRow(`
                 SELECT COUNT(*) FROM (
                     SELECT 1 FROM orders
                     WHERE customer_id = $1 AND ordered_at <= $2 AND ordered_at >= $3
                     ORDER BY ordered_at DESC LIMIT $4
                 ) bounded
-                `, []any{cust, e.EventTime, lookback, limit}, &recentOrders); err != nil {
+                `, []any{cust, e.EventTime, lookback, limit}, func(row pgx.Row) error { return row.Scan(&recentOrders) })
+	var refundable *contracts.Decimal
+	var secondsSince *int
+	if pf.payment != nil {
+		q.QueryRow(`
+            SELECT p.amount - COALESCE(SUM(r.amount), 0), p.attempted_at
+            FROM payments p LEFT JOIN refunds r ON r.payment_id = p.payment_id
+            WHERE p.payment_id = $1 GROUP BY p.amount, p.attempted_at
+            `, []any{dbtx.UUID(*pf.payment)}, func(row pgx.Row) error {
+			var remaining pgtype.Numeric
+			var attemptedAt time.Time
+			err := row.Scan(&remaining, &attemptedAt)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			d, err := dbtx.Numeric(remaining)
+			if err != nil {
+				return err
+			}
+			s := int(e.EventTime.Sub(attemptedAt).Seconds())
+			if s < 0 {
+				s = 0
+			}
+			refundable, secondsSince = &d, &s
+			return nil
+		})
+	}
+	if err := tx.SendBatch(q); err != nil {
 		return nil, err
 	}
-	viewsFrom := lookback
-	if sessionStarted != nil {
-		viewsFrom = *sessionStarted
+	if !customerFound {
+		return nil, procerr.New(procerr.FraudContextDependency, "customer fraud context is unavailable")
 	}
-	var viewCount int64
-	if err := tx.QueryRow(`
-                SELECT COUNT(*) FROM (
-                    SELECT 1 FROM product_views
-                    WHERE customer_id = $1 AND viewed_at <= $2 AND viewed_at >= $3
-                    ORDER BY viewed_at DESC LIMIT $4
-                ) bounded
-                `, []any{cust, e.EventTime, viewsFrom, limit}, &viewCount); err != nil {
-		return nil, err
+
+	hasOrder := orderedAt.Valid
+	var session *uuid.UUID
+	if sessionID.Valid {
+		session = ref(uuid.UUID(sessionID.Bytes))
 	}
-	refundable, secondsSince, err := refundFacts(tx, pf.payment, e.EventTime)
-	if err != nil {
-		return nil, err
+	var sessionStarted *time.Time
+	if started.Valid {
+		sessionStarted = ref(started.Time)
+	}
+	orderMatches := true
+	if hasOrder && amount != nil {
+		total, err := dbtx.Numeric(orderTotal)
+		if err != nil {
+			return nil, err
+		}
+		orderMatches = total.Equal(*amount) && pf.currency != nil && orderCurrency.String == *pf.currency
 	}
 
 	var successful []paymentRow
@@ -361,7 +382,7 @@ func (b *Builder) Build(tx *dbtx.Tx, e *contracts.Envelope) (*Context, error) {
 		RecentDistinctDevices:      len(devices),
 		RecentDistinctCountries:    len(countries),
 		RecentOrders:               int(recentOrders),
-		RecentRefunds:              refunds,
+		RecentRefunds:              int(refunds),
 		LifetimeSuccessfulPayments: len(successful),
 		LifetimeFailedPayments:     failedLifetime,
 		RefundableAmount:           refundable,
@@ -371,32 +392,4 @@ func (b *Builder) Build(tx *dbtx.Tx, e *contracts.Envelope) (*Context, error) {
 		SecondsSincePayment:        secondsSince,
 		PaymentAmountMatchesOrder:  orderMatches,
 	}, nil
-}
-
-func refundFacts(tx *dbtx.Tx, payment *uuid.UUID, eventTime time.Time) (*contracts.Decimal, *int, error) {
-	if payment == nil {
-		return nil, nil, nil
-	}
-	var remaining pgtype.Numeric
-	var attemptedAt time.Time
-	err := tx.QueryRow(`
-            SELECT p.amount - COALESCE(SUM(r.amount), 0), p.attempted_at
-            FROM payments p LEFT JOIN refunds r ON r.payment_id = p.payment_id
-            WHERE p.payment_id = $1 GROUP BY p.amount, p.attempted_at
-            `, []any{dbtx.UUID(*payment)}, &remaining, &attemptedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	d, err := dbtx.Numeric(remaining)
-	if err != nil {
-		return nil, nil, err
-	}
-	s := int(eventTime.Sub(attemptedAt).Seconds())
-	if s < 0 {
-		s = 0
-	}
-	return &d, &s, nil
 }

@@ -71,3 +71,28 @@ func repeat(err error, n int) []error {
 	}
 	return out
 }
+
+// A batch that stops early still leaves nothing in flight, and counts only
+// the records it processed.
+func TestBatchLeavesNothingInFlight(t *testing.T) {
+	m := metrics.New("test-processor", "commerce")
+	h := &harness{completeOK: true,
+		reserveSeq: []idempotency.ReservationState{idempotency.Reserved, idempotency.Reserved,
+			// held by another worker: still held when asked again after the group
+			idempotency.Processing, idempotency.Processing}}
+	p, _ := newProcessor(t, h, true)
+	p.metrics = m
+	outcomes, err := p.ProcessBatch(messages(t, 5))
+	if err != nil || len(outcomes) != 3 {
+		t.Fatalf("outcomes %v err %v", outcomes, err)
+	}
+	if got := value(t, m.EventsTerminal.WithLabelValues("order_created", string(model.Processed))); got != 2 {
+		t.Fatalf("processed = %v, want 2", got)
+	}
+	if got := value(t, m.EventsTerminal.WithLabelValues("order_created", string(model.Unresolved))); got != 1 {
+		t.Fatalf("unresolved = %v, want 1", got)
+	}
+	if got := value(t, m.Inflight); got != 0 {
+		t.Fatalf("inflight = %v, want 0", got)
+	}
+}

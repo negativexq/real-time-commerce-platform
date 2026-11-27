@@ -52,7 +52,7 @@ applied lands in a dead-letter queue, where you can triage it and replay it.
 | 🚨 **Scores fraud as it streams** | Deterministic rules (payment velocity, failed-payment bursts, new devices, country mismatch, rapid checkout, takeover and refund-abuse patterns) produce APPROVE, REVIEW or BLOCK with an explainable score. Alerts leave through a transactional outbox. |
 | 📮 **Keeps failures recoverable** | Transient failures retry with capped, jittered backoff. Invalid or exhausted records go to a DLQ topic, a sink copies them into PostgreSQL, and the console lets you triage, discard or replay them. Replay is offered only for failures where a second try can succeed. |
 | 🔭 **Shows its work** | Prometheus metrics with bounded labels on every service, recording and alert rules, seven provisioned Grafana dashboards, and a console with live run progress, service health and a notification bell. |
-| ⚡ **Measured, not guessed** | The Go processor replaced a Python one after an A/B on the same benchmark. Go held 1,400 evt/s, where Python fell behind, at 19 times lower p95 latency, using 30–35% less CPU. |
+| ⚡ **Measured, not guessed** | The Go processor replaced a Python one after an A/B on the same benchmark. Go held 1,400 evt/s, where Python fell behind, at 19 times lower p95 latency, using 30–35% less CPU. Committing each fetched batch in one transaction then raised its saturated throughput about 25%, to roughly 2,800 evt/s on six workers. |
 
 It all starts with one `make demo-up`: Kafka, PostgreSQL, Redis, the processor,
 the DLQ sink, the outbox publisher, Prometheus, Grafana, exporters, Kafka UI, and
@@ -299,6 +299,31 @@ processed exactly the events it injected, with zero errors. Medians of two
 repeats, measured locally in Docker. These are not production SLAs. Details,
 including a cold-start effect from PostgreSQL's plan cache, are in
 [`artifacts/benchmark/runtime-ab-20261127`](artifacts/benchmark/runtime-ab-20261127/README.md).
+
+### One transaction per batch
+
+The processor used to open one PostgreSQL transaction per event, so every event
+paid for its own `COMMIT`. It now takes the records already fetched from Kafka
+(up to `PROCESSOR_BATCH_MAX_EVENTS`, default 50) and commits their new events
+together. A batch that fails is retried one event at a time, so one bad event
+never takes the others down with it. How duplicates, held leases and offsets
+are handled is in [Event processor](docs/event-processor.md).
+
+The same image was measured with the variable at 1 and at 50: 6 workers, a reset
+database, runs interleaved 1, 50, 50, 1 because each run grows the database by
+about 1.8 GB and that alone costs up to 27%.
+
+| | Highest service rate | Mean of each run's best rate |
+|---|---:|---:|
+| One transaction per event | 2,572 evt/s | ~2,220 evt/s |
+| **One per batch (default)** | **3,018 evt/s** | **~2,800 evt/s** |
+
+PostgreSQL commits fell from about 900–1,700 a second to 40–55. All rates in
+this sweep were above the sustainable boundary, so these are saturated
+throughputs. At this point the Docker VM's 8 CPUs are full, so the next gain
+needs CPU, not code. Eight unused indexes were also dropped
+(`010_drop_unused_indexes.sql`). Details:
+[`artifacts/benchmark/group-commit-ab-20261128`](artifacts/benchmark/group-commit-ab-20261128/README.md).
 
 <details>
 <summary>Capacity depends on the workload</summary>

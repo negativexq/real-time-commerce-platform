@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/config"
 	"github.com/negativexq/real-time-commerce-platform/services/event_processor_go/internal/contracts"
@@ -99,29 +100,11 @@ func NewRepository(cfg *config.Fraud, m *metrics.Metrics) *Repository {
 
 func (r *Repository) Persist(tx *dbtx.Tx, ev *Evaluation, source *contracts.Envelope) (map[string]int, error) {
 	encoded, _ := ruleResultsJSON(ev)
-	var score int64
-	var decision, severity, engineVersion, rulesetVersion string
-	var existingResults []byte
-	err := tx.QueryRow(`
-                SELECT total_score, decision, severity, engine_version,
-                       ruleset_version, rule_results
-                FROM fraud_evaluations WHERE source_event_id = $1
-                `, []any{dbtx.UUID(ev.SourceEventID)}, &score, &decision, &severity, &engineVersion, &rulesetVersion, &existingResults)
-	switch {
-	case err == nil:
-		var actual, expected any
-		sameResults := json.Unmarshal(existingResults, &actual) == nil &&
-			json.Unmarshal(encoded, &expected) == nil && reflect.DeepEqual(actual, expected)
-		if int(score) != ev.TotalScore || decision != string(ev.Decision) || severity != string(ev.Severity) ||
-			engineVersion != ev.EngineVersion || rulesetVersion != ev.RulesetVersion || !sameResults {
-			return nil, procerr.New(procerr.FraudEvaluationIntegrity, "source event has conflicting deterministic fraud evaluation")
-		}
-		return map[string]int{"fraud_evaluations": 0}, nil
-	case !errors.Is(err, pgx.ErrNoRows):
-		return nil, err
-	}
 	matched := ev.MatchedRules()
-	if _, err := tx.Exec(`
+	// Insert first; only a conflict (a redelivered source event) pays for the
+	// read that checks the stored evaluation is the same.
+	var inserted pgtype.UUID
+	err := tx.QueryRow(`
                 INSERT INTO fraud_evaluations (
                     evaluation_id, source_event_id, customer_id, order_id,
                     payment_id, total_score, decision, severity, engine_version,
@@ -129,9 +112,15 @@ func (r *Repository) Persist(tx *dbtx.Tx, ev *Evaluation, source *contracts.Enve
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13
                 )
-                `, dbtx.UUID(ev.EvaluationID), dbtx.UUID(ev.SourceEventID), dbtx.UUID(ev.CustomerID),
+                ON CONFLICT (source_event_id) DO NOTHING
+                RETURNING evaluation_id
+                `, []any{dbtx.UUID(ev.EvaluationID), dbtx.UUID(ev.SourceEventID), dbtx.UUID(ev.CustomerID),
 		dbtx.NullableUUID(ev.OrderID), dbtx.NullableUUID(ev.PaymentID), ev.TotalScore, string(ev.Decision),
-		string(ev.Severity), ev.EngineVersion, ev.RulesetVersion, len(matched), string(encoded), ev.EvaluatedAt); err != nil {
+		string(ev.Severity), ev.EngineVersion, ev.RulesetVersion, len(matched), string(encoded), ev.EvaluatedAt}, &inserted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r.compareExisting(tx, ev, encoded)
+	}
+	if err != nil {
 		return nil, err
 	}
 	rows := map[string]int{"fraud_evaluations": 1}
@@ -144,7 +133,9 @@ func (r *Repository) Persist(tx *dbtx.Tx, ev *Evaluation, source *contracts.Enve
 		reasonCodes = append(reasonCodes, m.ReasonCode)
 	}
 	reasonJSON, _ := json.Marshal(reasonCodes)
-	if _, err := tx.Exec(`
+	// The alert and its outbox row go in one round trip.
+	writes := &dbtx.Batch{}
+	writes.Exec(`
                 INSERT INTO fraud_alerts (
                     alert_id, evaluation_id, source_event_id, customer_id,
                     order_id, payment_id, score, decision, severity, status,
@@ -156,18 +147,15 @@ func (r *Repository) Persist(tx *dbtx.Tx, ev *Evaluation, source *contracts.Enve
                 `, dbtx.UUID(message.AlertID), dbtx.UUID(ev.EvaluationID), dbtx.UUID(ev.SourceEventID),
 		dbtx.UUID(ev.CustomerID), dbtx.NullableUUID(ev.OrderID), dbtx.NullableUUID(ev.PaymentID), ev.TotalScore,
 		string(ev.Decision), string(ev.Severity), string(reasonJSON), dbtx.UUID(message.AlertEventID),
-		ev.EvaluatedAt, ev.EvaluatedAt); err != nil {
-		return nil, err
-	}
+		ev.EvaluatedAt, ev.EvaluatedAt)
 	rows["fraud_alerts"] = 1
 	if r.cfg.OutboxEnabled {
-		started := time.Now()
 		headerPairs := make([][]string, 0, len(message.Headers))
 		for _, h := range message.Headers {
 			headerPairs = append(headerPairs, []string{h.Key, string(h.Value)})
 		}
 		headersJSON, _ := json.Marshal(headerPairs)
-		if _, err := tx.Exec(`
+		writes.Exec(`
                     INSERT INTO fraud_outbox (
                         outbox_id, aggregate_type, aggregate_id, event_id,
                         event_type, event_version, topic, message_key,
@@ -179,13 +167,40 @@ func (r *Repository) Persist(tx *dbtx.Tx, ev *Evaluation, source *contracts.Enve
                     )
                     `, dbtx.UUID(message.OutboxID), dbtx.UUID(message.AlertID), dbtx.UUID(message.AlertEventID),
 			string(message.Event.EventType), message.Event.EventVersion, r.cfg.AlertTopic, message.Key,
-			string(headersJSON), string(message.PayloadBytes), message.PayloadBytes); err != nil {
-			return nil, err
-		}
-		if r.metrics != nil {
-			r.metrics.OutboxWriteDuration.Observe(time.Since(started).Seconds())
-		}
+			string(headersJSON), string(message.PayloadBytes), message.PayloadBytes)
 		rows["fraud_outbox"] = 1
 	}
+	started := time.Now()
+	if err := tx.SendBatch(writes); err != nil {
+		return nil, err
+	}
+	if r.metrics != nil && r.cfg.OutboxEnabled {
+		// The outbox row now shares its round trip with the alert row.
+		r.metrics.OutboxWriteDuration.Observe(time.Since(started).Seconds())
+	}
 	return rows, nil
+}
+
+// compareExisting checks that the evaluation already stored for the source
+// event is the one this run computed: the engine is deterministic, so any
+// difference is an integrity failure.
+func (r *Repository) compareExisting(tx *dbtx.Tx, ev *Evaluation, encoded []byte) (map[string]int, error) {
+	var score int64
+	var decision, severity, engineVersion, rulesetVersion string
+	var existingResults []byte
+	if err := tx.QueryRow(`
+                SELECT total_score, decision, severity, engine_version,
+                       ruleset_version, rule_results
+                FROM fraud_evaluations WHERE source_event_id = $1
+                `, []any{dbtx.UUID(ev.SourceEventID)}, &score, &decision, &severity, &engineVersion, &rulesetVersion, &existingResults); err != nil {
+		return nil, err
+	}
+	var actual, expected any
+	sameResults := json.Unmarshal(existingResults, &actual) == nil &&
+		json.Unmarshal(encoded, &expected) == nil && reflect.DeepEqual(actual, expected)
+	if int(score) != ev.TotalScore || decision != string(ev.Decision) || severity != string(ev.Severity) ||
+		engineVersion != ev.EngineVersion || rulesetVersion != ev.RulesetVersion || !sameResults {
+		return nil, procerr.New(procerr.FraudEvaluationIntegrity, "source event has conflicting deterministic fraud evaluation")
+	}
+	return map[string]int{"fraud_evaluations": 0}, nil
 }

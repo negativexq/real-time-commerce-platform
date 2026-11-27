@@ -287,19 +287,46 @@ func runProcessor(ctx context.Context, cfg *config.Processor, fraudCfg *config.F
 		}
 		lastRecordAt = time.Now()
 		m.PollToHandler.Observe(time.Since(pollStarted).Seconds())
-		if wait, ok := queueWaitSeconds(message.Timestamp, time.Now()); ok {
-			m.QueueWait.Observe(wait)
+		// Fill the batch from records already fetched, never waiting for more.
+		batch := []*model.ConsumedMessage{message}
+		limit := cfg.BatchMaxEvents
+		if cfg.MaxMessages > 0 && cfg.MaxMessages-terminalCount < limit {
+			limit = cfg.MaxMessages - terminalCount
 		}
-		outcome, perr := proc.Process(message)
+		for len(batch) < limit {
+			next, perr := consumer.PollReady()
+			if perr != nil {
+				return 1, perr
+			}
+			if next == nil {
+				break
+			}
+			batch = append(batch, next)
+		}
+		now := time.Now()
+		for _, r := range batch {
+			if wait, ok := queueWaitSeconds(r.Timestamp, now); ok {
+				m.QueueWait.Observe(wait)
+			}
+		}
+		m.BatchSize.Observe(float64(len(batch)))
+		outcomes, perr := proc.ProcessBatch(batch)
 		previousProcessEnd = time.Now()
 		if perr != nil {
 			// processor.FatalError: the offset commit path failed.
 			return 1, perr
 		}
-		if !outcome.Terminal() {
+		stopped := len(outcomes) < len(batch)
+		for _, outcome := range outcomes {
+			if !outcome.Terminal() {
+				stopped = true
+				break
+			}
+			terminalCount++
+		}
+		if stopped {
 			break
 		}
-		terminalCount++
 	}
 	return 0, nil
 }
