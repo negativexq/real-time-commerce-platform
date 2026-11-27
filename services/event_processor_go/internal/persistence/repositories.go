@@ -35,21 +35,54 @@ func exists(tx *dbtx.Tx, table string, id uuid.UUID) (bool, error) {
 func integrity(msg string) error { return procerr.New(procerr.PermanentDatabaseIntegrity, msg) }
 func missing(msg string) error   { return procerr.New(procerr.MissingBusinessDependency, msg) }
 
-// insertProcessedEvent ports ProcessedEventRepository.insert_identity.
-func insertProcessedEvent(tx *dbtx.Tx, e *contracts.Envelope, m *model.ConsumedMessage,
-	ctx model.ProcessingContext, persistRawJSON bool) error {
-	digest := e.PayloadSHA256()
-	var existingTopic, existingDigestN pgtype.Text
-	var existingPartition pgtype.Int4
-	var existingOffset pgtype.Int8
+// queueProcessedEventInsert queues the ledger insert for e. ON CONFLICT DO
+// NOTHING keeps the common case (a new event) to this one statement; *inserted
+// reports whether the row was written. When it was not, the caller resolves
+// why with resolveProcessedEventConflict.
+func queueProcessedEventInsert(b *dbtx.Batch, e *contracts.Envelope, m *model.ConsumedMessage,
+	ctx model.ProcessingContext, persistRawJSON bool, inserted *bool) {
+	payloadJSON := "{}"
+	if persistRawJSON {
+		payloadJSON = string(e.CanonicalJSON())
+	}
+	b.QueryRow(`
+                INSERT INTO processed_events (
+                    event_id, event_type, event_version, correlation_id, source,
+                    event_time, produced_at, kafka_topic, kafka_partition,
+                    kafka_offset, kafka_key, payload_json, payload_sha256,
+                    processed_at, processor_instance_id
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                    $12::jsonb, $13, CURRENT_TIMESTAMP, $14
+                )
+                ON CONFLICT DO NOTHING
+                RETURNING event_id
+                `, []any{
+		dbtx.UUID(e.EventID), string(e.EventType), e.EventVersion, dbtx.UUID(e.CorrelationID),
+		e.Source, e.EventTime, e.ProducedAt, m.Topic, m.Partition, m.Offset, m.Key,
+		payloadJSON, e.PayloadSHA256(), ctx.ProcessorInstanceID,
+	}, func(row pgx.Row) error {
+		var id pgtype.UUID
+		err := row.Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		*inserted = err == nil
+		return err
+	})
+}
+
+// resolveProcessedEventConflict explains a ledger insert that hit a unique
+// constraint: the same event again (AlreadyPersisted), different content under
+// the same event_id, or a Kafka coordinate already taken by another event.
+func resolveProcessedEventConflict(tx *dbtx.Tx, e *contracts.Envelope, m *model.ConsumedMessage) error {
+	var existingDigest pgtype.Text
 	err := tx.QueryRow(`
-                SELECT payload_sha256, kafka_topic, kafka_partition, kafka_offset
-                FROM processed_events
-                WHERE event_id = $1
-                `, []any{dbtx.UUID(e.EventID)}, &existingDigestN, &existingTopic, &existingPartition, &existingOffset)
+                SELECT payload_sha256 FROM processed_events WHERE event_id = $1
+                `, []any{dbtx.UUID(e.EventID)}, &existingDigest)
 	switch {
 	case err == nil:
-		if existingDigestN.Valid && existingDigestN.String == digest {
+		if existingDigest.Valid && existingDigest.String == e.PayloadSHA256() {
 			return procerr.New(procerr.AlreadyPersisted, e.EventID.String())
 		}
 		return integrity("event_id conflicts with different canonical event content")
@@ -67,25 +100,7 @@ func insertProcessedEvent(tx *dbtx.Tx, e *contracts.Envelope, m *model.ConsumedM
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	payloadJSON := "{}"
-	if persistRawJSON {
-		payloadJSON = string(e.CanonicalJSON())
-	}
-	_, err = tx.Exec(`
-                INSERT INTO processed_events (
-                    event_id, event_type, event_version, correlation_id, source,
-                    event_time, produced_at, kafka_topic, kafka_partition,
-                    kafka_offset, kafka_key, payload_json, payload_sha256,
-                    processed_at, processor_instance_id
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                    $12::jsonb, $13, CURRENT_TIMESTAMP, $14
-                )
-                `,
-		dbtx.UUID(e.EventID), string(e.EventType), e.EventVersion, dbtx.UUID(e.CorrelationID),
-		e.Source, e.EventTime, e.ProducedAt, m.Topic, m.Partition, m.Offset, m.Key,
-		payloadJSON, digest, ctx.ProcessorInstanceID)
-	return err
+	return integrity("processed event insert conflicted on an unknown constraint")
 }
 
 func registerCustomer(tx *dbtx.Tx, p *contracts.UserRegistered, eventID uuid.UUID) (int, error) {

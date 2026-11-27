@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -51,15 +52,29 @@ type harness struct {
 	dlqErr      error
 	commitErr   error
 	dlqRecords  []*dlq.Envelope
+	// Per-call overrides for batch tests, consumed in order.
+	reserveSeq  []idempotency.ReservationState
+	completeSeq []bool
+	groupErr    error
 }
 
 func (h *harness) Reserve(context.Context, uuid.UUID, string, *model.ConsumedMessage, time.Time) (idempotency.ReservationState, error) {
 	h.calls = append(h.calls, "reserve")
+	if len(h.reserveSeq) > 0 {
+		state := h.reserveSeq[0]
+		h.reserveSeq = h.reserveSeq[1:]
+		return state, nil
+	}
 	return h.reserve, h.reserveErr
 }
 
 func (h *harness) Complete(context.Context, uuid.UUID, string, time.Time) (bool, error) {
 	h.calls = append(h.calls, "complete")
+	if len(h.completeSeq) > 0 {
+		ok := h.completeSeq[0]
+		h.completeSeq = h.completeSeq[1:]
+		return ok, nil
+	}
 	return h.completeOK, nil
 }
 
@@ -89,6 +104,18 @@ func (h *harness) Persist(*contracts.Envelope, *model.ConsumedMessage, model.Pro
 		}
 	}
 	return &persistence.Result{AlreadyPersisted: h.alreadyDone, RowsWritten: map[string]int{"orders": 1}}, nil
+}
+
+func (h *harness) PersistGroup(items []persistence.GroupItem) ([]*persistence.Result, error) {
+	h.calls = append(h.calls, fmt.Sprintf("persist_group:%d", len(items)))
+	if h.groupErr != nil {
+		return nil, h.groupErr
+	}
+	results := make([]*persistence.Result, len(items))
+	for i := range items {
+		results[i] = &persistence.Result{RowsWritten: map[string]int{"orders": 1}}
+	}
+	return results, nil
 }
 
 func processorConfig(t *testing.T) *config.Processor {

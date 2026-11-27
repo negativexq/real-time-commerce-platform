@@ -31,6 +31,7 @@ type Committer interface {
 // Persister is the transactional persistence boundary.
 type Persister interface {
 	Persist(*contracts.Envelope, *model.ConsumedMessage, model.ProcessingContext, persistence.Handler) (*persistence.Result, error)
+	PersistGroup([]persistence.GroupItem) ([]*persistence.Result, error)
 }
 
 // Idempotency is the Redis lease store.
@@ -92,7 +93,35 @@ func (p *Processor) Process(m *model.ConsumedMessage) (model.ProcessingOutcome, 
 }
 
 func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (model.ProcessingOutcome, error) {
-	started := time.Now()
+	pr := p.prepare(m)
+	*observedType = pr.eventType
+	return p.finish(pr)
+}
+
+// prepared is a record after validation and its Redis reservation.
+type prepared struct {
+	m         *model.ConsumedMessage
+	started   time.Time
+	eventType string
+	invalid   *model.ValidationErrorInfo
+	event     *contracts.Envelope
+	token     string
+	state     idempotency.ReservationState
+	redisErr  error
+}
+
+// fresh reports whether the record is a new event this processor now holds
+// the lease for and can persist: the only kind a group transaction takes.
+func (pr *prepared) fresh(handlers map[contracts.EventType]persistence.Handler) bool {
+	if pr.invalid != nil || pr.redisErr != nil || pr.state != idempotency.Reserved {
+		return false
+	}
+	_, ok := handlers[pr.event.EventType]
+	return ok
+}
+
+func (p *Processor) prepare(m *model.ConsumedMessage) *prepared {
+	pr := &prepared{m: m, started: time.Now(), eventType: "unknown"}
 	p.summary.ConsumedRecords++
 	validationStarted := time.Now()
 	result := validation.ValidateMessage(m)
@@ -106,25 +135,34 @@ func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (mod
 			p.metrics.EventsReceived.WithLabelValues("unknown", m.Topic).Inc()
 			p.metrics.ValidationFailures.WithLabelValues(string(e.Category)).Inc()
 		}
-		return p.deadLetter(m, e, 1)
+		pr.invalid = e
+		return pr
 	}
-	event := result.Event
-	eventType := string(event.EventType)
-	*observedType = eventType
+	pr.event = result.Event
+	pr.eventType = string(pr.event.EventType)
 	if p.metrics != nil {
-		p.metrics.EventsReceived.WithLabelValues(eventType, m.Topic).Inc()
+		p.metrics.EventsReceived.WithLabelValues(pr.eventType, m.Topic).Inc()
 	}
 	p.summary.ValidRecords++
-	token := uuid.NewString()
-	ctx := context.Background()
-	state, err := p.store.Reserve(ctx, event.EventID, token, m, p.now().UTC())
-	if err != nil {
+	pr.token = uuid.NewString()
+	pr.state, pr.redisErr = p.store.Reserve(context.Background(), pr.event.EventID, pr.token, m, p.now().UTC())
+	return pr
+}
+
+// finish takes a prepared record to its outcome on its own, with its own
+// transaction and retries.
+func (p *Processor) finish(pr *prepared) (model.ProcessingOutcome, error) {
+	m, event := pr.m, pr.event
+	if pr.invalid != nil {
+		return p.deadLetter(m, pr.invalid, 1)
+	}
+	if pr.redisErr != nil {
 		p.summary.RedisErrors++
 		p.summary.UnresolvedRecords++
 		return model.ProcessingOutcome{Status: model.Unresolved, Attempts: 1}, nil
 	}
-
-	switch state {
+	ctx := context.Background()
+	switch pr.state {
 	case idempotency.Completed:
 		recoveredPersisted := false
 		handler, ok := p.handlers[event.EventType]
@@ -158,15 +196,16 @@ func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (mod
 
 	handler, ok := p.handlers[event.EventType]
 	var res *persistence.Result
+	var err error
 	attempts := 1
 	if !ok {
-		err = procerr.New(procerr.PermanentProcessing, "no handler registered for "+eventType)
+		err = procerr.New(procerr.PermanentProcessing, "no handler registered for "+pr.eventType)
 	} else {
 		res, attempts, err = p.runWithRetry(handler, event, m)
 	}
 	if err != nil {
 		p.summary.ProcessingFailures++
-		p.safeRelease(ctx, event.EventID, token)
+		p.safeRelease(ctx, event.EventID, pr.token)
 		if procerr.IsPermanent(err) {
 			if procerr.Is(err, procerr.FraudEvaluationIntegrity) {
 				p.summary.FraudIntegrityFailures++
@@ -195,8 +234,16 @@ func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (mod
 		}
 		return p.deadLetter(m, processingError(event, err, category), p.cfg.MaxProcessingAttempts)
 	}
+	return p.persisted(pr, res, attempts)
+}
+
+// persisted completes a record whose transaction committed: the Redis lease
+// becomes completed, then the offset is marked terminal.
+func (p *Processor) persisted(pr *prepared, res *persistence.Result, attempts int) (model.ProcessingOutcome, error) {
+	m, event := pr.m, pr.event
+	ctx := context.Background()
 	p.recordPersistence(res)
-	completed, err := p.store.Complete(ctx, event.EventID, token, p.now().UTC())
+	completed, err := p.store.Complete(ctx, event.EventID, pr.token, p.now().UTC())
 	if err != nil || !completed {
 		p.summary.RedisErrors++
 		p.summary.UnresolvedRecords++
@@ -205,18 +252,151 @@ func (p *Processor) process(m *model.ConsumedMessage, observedType *string) (mod
 	if err := p.commit(m); err != nil {
 		return model.ProcessingOutcome{Status: model.Unresolved, Attempts: attempts}, err
 	}
-	durationMs := float64(time.Since(started).Nanoseconds()) / 1e6
+	durationMs := float64(time.Since(pr.started).Nanoseconds()) / 1e6
 	p.summary.ProcessedRecords++
 	p.summary.ProcessedEvents[event.EventType]++
 	p.summary.RecordLatency(durationMs)
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
-		slog.Debug("event_processed", "event_id", event.EventID.String(), "event_type", eventType,
+		slog.Debug("event_processed", "event_id", event.EventID.String(), "event_type", pr.eventType,
 			"correlation_id", event.CorrelationID.String(), "topic", m.Topic, "partition", m.Partition,
 			"offset", m.Offset, "processing_attempt", attempts, "processing_duration_ms", durationMs,
 			"already_persisted", res.AlreadyPersisted, "affected_tables", res.AffectedTables,
 			"database_duration_ms", res.DurationMs)
 	}
 	return model.ProcessingOutcome{Status: model.Processed, Attempts: attempts, EventType: event.EventType}, nil
+}
+
+// ProcessBatch handles records polled together, in order. Consecutive new
+// events share one database transaction and one COMMIT; any other record
+// (invalid, duplicate, lease held elsewhere, Redis down) first commits the
+// events before it, then goes through the one-record path. If a group
+// transaction fails, its events are retried one at a time, so a bad event is
+// retried and dead-lettered alone and the others still commit.
+//
+// The returned outcomes cover a prefix of records: processing stops after
+// the first record that is not terminal, as the single-record loop does; the
+// records after it are left uncommitted and are redelivered. A FatalError
+// means the offset commit path failed.
+func (p *Processor) ProcessBatch(msgs []*model.ConsumedMessage) ([]model.ProcessingOutcome, error) {
+	outcomes := make([]model.ProcessingOutcome, 0, len(msgs))
+	var group []*prepared
+	stop := false
+	finishOne := func(pr *prepared, outcome model.ProcessingOutcome, err error) error {
+		p.observeTerminal(pr.eventType, outcome, pr.started)
+		outcomes = append(outcomes, outcome)
+		if !outcome.Terminal() {
+			stop = true
+		}
+		return err
+	}
+	flush := func() error {
+		defer func() { group = group[:0] }()
+		if len(group) == 0 {
+			return nil
+		}
+		if len(group) == 1 {
+			outcome, err := p.finish(group[0])
+			return finishOne(group[0], outcome, err)
+		}
+		results, err := p.persistGroup(group)
+		if err != nil {
+			slog.Warn("group_transaction_failed", "events", len(group), "error", err.Error(),
+				"action", "retry_one_by_one")
+			if p.metrics != nil {
+				p.metrics.Retries.WithLabelValues("group_transaction", "scheduled").Inc()
+			}
+			for _, pr := range group {
+				if stop {
+					// An earlier event is unresolved: give up this one's lease so its
+					// redelivery is not blocked until the lease expires.
+					p.safeRelease(context.Background(), pr.event.EventID, pr.token)
+					p.abandon()
+					continue
+				}
+				outcome, err := p.finish(pr)
+				if ferr := finishOne(pr, outcome, err); ferr != nil {
+					return ferr
+				}
+			}
+			return nil
+		}
+		// Committed: every event completes, even after an unresolved one, so no
+		// lease is left held on a committed event.
+		for i, pr := range group {
+			outcome, err := p.persisted(pr, results[i], 1)
+			if ferr := finishOne(pr, outcome, err); ferr != nil {
+				return ferr
+			}
+		}
+		return nil
+	}
+	for _, m := range msgs {
+		if stop {
+			break
+		}
+		if p.metrics != nil {
+			p.metrics.Inflight.Inc()
+		}
+		pr := p.prepare(m)
+		if pr.fresh(p.handlers) {
+			group = append(group, pr)
+			continue
+		}
+		pending := len(group) > 0
+		if err := flush(); err != nil {
+			p.abandon()
+			return outcomes, err
+		}
+		if pending && !stop && pr.redisErr == nil && pr.state == idempotency.Processing {
+			// The lease may be one this batch just held, for an earlier copy of the
+			// same event: now that the group has completed, ask again, as the
+			// one-record loop would have.
+			pr.token = uuid.NewString()
+			pr.state, pr.redisErr = p.store.Reserve(context.Background(), pr.event.EventID, pr.token, m, p.now().UTC())
+			if pr.fresh(p.handlers) {
+				group = append(group, pr)
+				continue
+			}
+		}
+		if stop {
+			// Not processed: release a lease taken in prepare and leave it for redelivery.
+			if pr.redisErr == nil && pr.state == idempotency.Reserved {
+				p.safeRelease(context.Background(), pr.event.EventID, pr.token)
+			}
+			p.abandon()
+			break
+		}
+		outcome, err := p.finish(pr)
+		if ferr := finishOne(pr, outcome, err); ferr != nil {
+			return outcomes, ferr
+		}
+	}
+	return outcomes, flush()
+}
+
+// abandon accounts for a record the batch stopped before processing: it
+// leaves the in-flight gauge and is redelivered, so it has no outcome.
+func (p *Processor) abandon() {
+	if p.metrics != nil {
+		p.metrics.Inflight.Dec()
+	}
+}
+
+// persistGroup writes the group's events in one transaction.
+func (p *Processor) persistGroup(group []*prepared) ([]*persistence.Result, error) {
+	items := make([]persistence.GroupItem, len(group))
+	for i, pr := range group {
+		m := pr.m
+		items[i] = persistence.GroupItem{Event: pr.event, Message: m, Handler: p.handlers[pr.event.EventType],
+			Context: model.ProcessingContext{Topic: m.Topic, Partition: m.Partition, Offset: m.Offset,
+				ConsumerGroup: p.cfg.ConsumerGroup, ProcessorInstanceID: p.instanceID, Attempt: 1}}
+	}
+	p.summary.DatabaseTransactionsStarted += len(group)
+	results, err := p.persist.PersistGroup(items)
+	if err != nil {
+		p.summary.DatabaseTransactionsRolledBack += len(group)
+	}
+	return results, err
 }
 
 // persistRecoveryFailure ports the except branches of _persist_with_retry.

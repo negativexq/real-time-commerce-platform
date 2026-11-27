@@ -66,6 +66,7 @@ type Processor struct {
 	MetricsPath              string
 	MetricsNamespace         string
 	MetricsServiceName       string
+	BatchMaxEvents           int // records processed together; 1 = one transaction per record
 }
 
 // env is a validating environment reader that accumulates the first error.
@@ -213,6 +214,7 @@ func LoadProcessor(args []string, lookup func(string) (string, bool)) (*Processo
 		DBLogSlowQueryMs:         e.integer("PROCESSOR_DB_LOG_SLOW_QUERY_MS", 250, 1, maxInt),
 		OffsetCommitBatchSize:    e.integer("PROCESSOR_OFFSET_COMMIT_BATCH_SIZE", 50, 1, 10_000),
 		OffsetCommitIntervalMs:   e.integer("PROCESSOR_OFFSET_COMMIT_INTERVAL_MS", 100, 1, 60_000),
+		BatchMaxEvents:           e.integer("PROCESSOR_BATCH_MAX_EVENTS", 50, 1, 1_000),
 		MetricsEnabled:           e.boolean("METRICS_ENABLED", true),
 		MetricsHost:              e.str("METRICS_HOST", "0.0.0.0"),
 		MetricsPath:              e.str("METRICS_PATH", "/metrics"),

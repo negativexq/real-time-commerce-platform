@@ -104,6 +104,11 @@ fresh database. Results:
   text is static.
 - **Only `PROCESSOR_WORKER_POOL_SIZE=1` is supported**, which is the default.
   The reverted pooled mode was not ported.
+- **New events from one fetched batch share a transaction.** Python opened
+  one transaction per event. Go commits up to `PROCESSOR_BATCH_MAX_EVENTS`
+  (default 50) together and retries a failed batch one event at a time.
+  `PROCESSOR_BATCH_MAX_EVENTS=1` restores the Python behaviour. Each
+  transaction's queries are sent as pgx pipelined batches.
 - **Kafka errors:** fatal errors and an unknown topic stop the loop. Other
   `kafka.Error` events are logged and polling continues, the same as the
   Python `poll()` handling.

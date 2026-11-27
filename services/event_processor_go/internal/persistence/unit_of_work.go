@@ -149,21 +149,48 @@ func (f *UnitOfWorkFactory) stage(name string, started time.Time) {
 	}
 }
 
+// GroupItem is one source event of a group transaction.
+type GroupItem struct {
+	Event   *contracts.Envelope
+	Message *model.ConsumedMessage
+	Context model.ProcessingContext
+	Handler Handler
+}
+
+// Persist writes one source event in its own transaction.
 func (f *UnitOfWorkFactory) Persist(e *contracts.Envelope, m *model.ConsumedMessage, pctx model.ProcessingContext, handler Handler) (*Result, error) {
+	results, err := f.PersistGroup([]GroupItem{{Event: e, Message: m, Context: pctx, Handler: handler}})
+	if err != nil {
+		return nil, err
+	}
+	return results[0], nil
+}
+
+// PersistGroup writes several source events in one transaction with one
+// COMMIT, so the commit and its WAL flush are paid once per group instead of
+// once per event. Events are applied in order, so each one's reads (fraud
+// context included) see the writes of the events before it, exactly as when
+// they are committed one by one. An event that is already in the ledger is
+// reported as AlreadyPersisted and skipped. Any other failure rolls back the
+// whole group and is returned classified: the caller then retries the events
+// one at a time to find the one that failed.
+func (f *UnitOfWorkFactory) PersistGroup(items []GroupItem) ([]*Result, error) {
 	started := time.Now()
-	result, err := f.persist(e, m, pctx, handler, started)
-	if err == nil {
-		return result, nil
+	results, err := f.persistGroup(items)
+	if err != nil {
+		return nil, classify(err)
 	}
-	if procerr.Is(err, procerr.AlreadyPersisted) {
-		return &Result{AlreadyPersisted: true, RowsWritten: map[string]int{}, DurationMs: msSince(started)}, nil
+	// One transaction's time, shared out so per-event averages stay comparable.
+	share := msSince(started) / float64(len(items))
+	for _, r := range results {
+		r.DurationMs = share
 	}
-	return nil, classify(err)
+	return results, nil
 }
 
 func msSince(t time.Time) float64 { return float64(time.Since(t).Nanoseconds()) / 1e6 }
 
-func (f *UnitOfWorkFactory) persist(e *contracts.Envelope, m *model.ConsumedMessage, pctx model.ProcessingContext, handler Handler, started time.Time) (*Result, error) {
+func (f *UnitOfWorkFactory) persistGroup(items []GroupItem) ([]*Result, error) {
 	ctx := context.Background()
 	acquireStarted := time.Now()
 	actx, cancel := context.WithTimeout(ctx, f.cfg.DBAcquireTimeout)
@@ -185,31 +212,73 @@ func (f *UnitOfWorkFactory) persist(e *contracts.Envelope, m *model.ConsumedMess
 	if f.metrics != nil {
 		f.metrics.DBPoolAcquire.Observe(time.Since(acquireStarted).Seconds())
 	}
-	pgxTx, err := conn.Begin(ctx)
+	// BEGIN and every ledger insert of the group share one round trip.
+	stageStarted := time.Now()
+	ledger := &dbtx.Batch{}
+	inserted := make([]bool, len(items))
+	for i, it := range items {
+		queueProcessedEventInsert(ledger, it.Event, it.Message, it.Context, f.cfg.PersistRawEventJSON, &inserted[i])
+	}
+	tx, err := dbtx.Begin(ctx, conn, f.metrics, "processed_events", ledger)
+	committed := false
+	if tx != nil {
+		defer func() {
+			if !committed {
+				_ = tx.Tx().Rollback(ctx)
+			}
+		}()
+	}
 	if err != nil {
 		return nil, err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = pgxTx.Rollback(ctx)
+	results := make([]*Result, len(items))
+	pending := 0
+	for i, it := range items {
+		if inserted[i] {
+			pending++
+			continue
 		}
-	}()
-	tx := dbtx.New(ctx, pgxTx, f.metrics)
-	res := &Result{}
-
-	tx.SetPhase("processed_events")
-	stageStarted := time.Now()
-	if err := insertProcessedEvent(tx, e, m, pctx, f.cfg.PersistRawEventJSON); err != nil {
-		return nil, err
+		err := resolveProcessedEventConflict(tx, it.Event, it.Message)
+		if !procerr.Is(err, procerr.AlreadyPersisted) {
+			return nil, err
+		}
+		results[i] = &Result{AlreadyPersisted: true, RowsWritten: map[string]int{}}
 	}
 	f.stage("processed_events", stageStarted)
+	if pending == 0 {
+		return results, nil // nothing new: roll back the empty transaction
+	}
+	for i, it := range items {
+		if results[i] != nil {
+			continue
+		}
+		res, err := f.apply(tx, it.Event, it.Handler)
+		if err != nil {
+			return nil, err
+		}
+		results[i] = res
+	}
+	commitStarted := time.Now()
+	if err := tx.Tx().Commit(ctx); err != nil {
+		return nil, err
+	}
+	committed = true
+	f.stage("commit", commitStarted)
+	return results, nil
+}
 
+// apply writes one event's business rows and, when eligible, its fraud
+// evaluation, inside the group transaction.
+func (f *UnitOfWorkFactory) apply(tx *dbtx.Tx, e *contracts.Envelope, handler Handler) (*Result, error) {
+	res := &Result{}
 	tx.SetPhase("business")
-	stageStarted = time.Now()
+	stageStarted := time.Now()
 	rows, err := handler(tx, e)
 	if err != nil {
 		return nil, err
+	}
+	if rows == nil {
+		rows = map[string]int{}
 	}
 	f.stage("business_persistence", stageStarted)
 
@@ -252,13 +321,6 @@ func (f *UnitOfWorkFactory) persist(e *contracts.Envelope, m *model.ConsumedMess
 			rows[table] += n
 		}
 	}
-	commitStarted := time.Now()
-	if err := pgxTx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	committed = true
-	f.stage("commit", commitStarted)
-
 	rows["processed_events"] = 1
 	for name, n := range rows {
 		if n != 0 {
@@ -267,7 +329,6 @@ func (f *UnitOfWorkFactory) persist(e *contracts.Envelope, m *model.ConsumedMess
 	}
 	sort.Strings(res.AffectedTables)
 	res.RowsWritten = rows
-	res.DurationMs = msSince(started)
 	return res, nil
 }
 

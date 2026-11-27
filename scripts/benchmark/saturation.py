@@ -40,6 +40,11 @@ SQL_OPERATIONS = (
     "fraud_evaluation_write",
     "fraud_alert_write",
     "outbox_insert",
+    # Statements sent together in one pgx batch are timed once per round
+    # trip under "<phase>_batch"; their statement counts stay per operation.
+    "processed_events_batch",
+    "fraud_context_batch",
+    "fraud_persistence_batch",
 )
 SCENARIO = "mixed_traffic"
 PERSONAS = {

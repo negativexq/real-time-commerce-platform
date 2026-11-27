@@ -97,7 +97,7 @@ Validation categories include `missing_value`, `missing_key`, `malformed_json`,
 
 Both `enable.auto.commit` and `enable.auto.offset.store` are false. A commit
 uses `processed offset + 1`, because Kafka stores the next offset to consume.
-The synchronous loop has at most one in-flight record. Assignment and
+The synchronous loop has at most one in-flight batch of records (see below). Assignment and
 revocation callbacks log topic-partitions; a revoked partition is marked
 ineligible for a subsequent source commit. Invalid or exhausted messages are
 committed only after confirmed DLQ delivery.
@@ -130,6 +130,31 @@ to a full batch/interval window of already-terminal events per partition
 instead of at most one, which is still bounded and still safe because
 PostgreSQL uniqueness and the Redis completion lease make replays no-ops -
 see the "duplicate delivery" sequence above.
+
+**Records already fetched are processed together.** After a poll returns a
+record, the loop takes up to `PROCESSOR_BATCH_MAX_EVENTS` (default 50) more
+records that librdkafka has already fetched, without waiting for any. Each
+record is validated and reserved in Redis in order. Consecutive new events
+share one PostgreSQL transaction and one `COMMIT`. The ledger inserts for the
+whole group go in the same round trip as `BEGIN`, and each event's reads,
+fraud context included, see the writes of the events before it. A
+transaction per event commits the same rows; the group just pays for the
+commit and its WAL flush once.
+
+- **Records that leave the group.** A record that is not a new event (invalid,
+  a completed duplicate, a lease held elsewhere, Redis unavailable) first
+  commits the group before it, then goes through the one-record path. A lease
+  that looks held is asked again once the group completes, because it may be
+  this batch's own lease for an earlier copy of the same event.
+- **A failed group.** If the group transaction fails, it rolls back and its
+  events are retried one at a time, so a bad event is retried and
+  dead-lettered alone while the others commit.
+- **After commit.** Every event's lease is completed before its offset is
+  marked terminal, in order. An event whose completion fails is unresolved:
+  its offset is never marked, so the tracker cannot commit past it, and the
+  loop stops after the batch, as it does for one record.
+- **Turning it off.** `PROCESSOR_BATCH_MAX_EVENTS=1` restores one transaction
+  per record.
 
 ## Redis idempotency
 
