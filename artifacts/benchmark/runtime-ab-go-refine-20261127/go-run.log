@@ -1,0 +1,37 @@
+rate=1000 repeat=0 starting
+%3|1795738150.755|FAIL|rdkafka#consumer-1| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738150.806|FAIL|rdkafka#consumer-1| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738150.861|FAIL|rdkafka#consumer-1| [thrd:GroupCoordinator]: GroupCoordinator: localhost:29092: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1000, "repeat": 0, "injected": 999.8185093350493, "service": 997.8915764626856, "lag_slope": 1.9269328723636239, "peak_lag": 89.0}
+rate=1000 repeat=1 starting
+%3|1795738239.323|FAIL|rdkafka#consumer-4| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738239.378|FAIL|rdkafka#consumer-4| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738239.433|FAIL|rdkafka#consumer-4| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1000, "repeat": 1, "injected": 999.0366909647234, "service": 997.4050553736774, "lag_slope": 1.6316355910460179, "peak_lag": 263.0}
+rate=1500 repeat=0 starting
+%3|1795738331.071|FAIL|rdkafka#consumer-5| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738331.190|FAIL|rdkafka#consumer-5| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738331.246|FAIL|rdkafka#consumer-5| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738331.496|FAIL|rdkafka#consumer-6| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738331.562|FAIL|rdkafka#consumer-6| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738331.617|FAIL|rdkafka#consumer-6| [thrd:GroupCoordinator]: GroupCoordinator: localhost:29092: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1500, "repeat": 0, "injected": 1496.138817228993, "service": 1446.3432757518933, "lag_slope": 49.79554147709964, "peak_lag": 2367.0}
+rate=1500 repeat=1 starting
+%3|1795738431.733|FAIL|rdkafka#consumer-7| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738431.859|FAIL|rdkafka#consumer-8| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738431.912|FAIL|rdkafka#consumer-8| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738431.976|FAIL|rdkafka#consumer-8| [thrd:GroupCoordinator]: GroupCoordinator: localhost:29092: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1500, "repeat": 1, "injected": 1498.2659259039544, "service": 1458.535600597175, "lag_slope": 39.73032530677948, "peak_lag": 1866.0}
+rate=1600 repeat=0 starting
+%3|1795738540.000|FAIL|rdkafka#consumer-9| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738540.053|FAIL|rdkafka#consumer-9| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738540.163|FAIL|rdkafka#consumer-10| [thrd:GroupCoordinator]: GroupCoordinator: localhost:29092: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1600, "repeat": 0, "injected": 1596.8106156785748, "service": 1519.9872073473693, "lag_slope": 76.82340833120546, "peak_lag": 3591.0}
+rate=1600 repeat=1 starting
+%3|1795738650.101|FAIL|rdkafka#consumer-11| [thrd:localhost:29092/bootstrap]: localhost:29092/bootstrap: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738650.215|FAIL|rdkafka#consumer-12| [thrd:localhost:29092/1]: localhost:29092/1: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+%3|1795738650.277|FAIL|rdkafka#consumer-12| [thrd:GroupCoordinator]: GroupCoordinator: localhost:29092: Connect to ipv6#[::1]:29092 failed: Connection refused (after 0ms in state CONNECT)
+{"rate": 1600, "repeat": 1, "injected": 1596.188568970482, "service": 1515.0405022068844, "lag_slope": 81.14806676359754, "peak_lag": 3797.0}
+wrote artifacts/benchmark/runtime-ab-go-refine-20261127/go/direct-saturation-1000.json
+wrote artifacts/benchmark/runtime-ab-go-refine-20261127/go/direct-saturation-1500.json
+wrote artifacts/benchmark/runtime-ab-go-refine-20261127/go/direct-saturation-1600.json
