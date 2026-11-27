@@ -382,7 +382,7 @@ primary consumer group offsets.
 | `infra/` | Prometheus rules/configuration and provisioned Grafana resources. |
 | `infrastructure/` | Kafka topic initialization script. |
 | `scripts/` | Deterministic smoke, verification, and scoped cleanup utilities. |
-| `services/` | Generator, processor, outbox publisher, and Demo Control API services. |
+| `services/` | Generator, processor (Go: `event_processor_go/`), outbox publisher, and Demo Control API services. The legacy Python processor in `event_processor/` still provides migrations, fraud configuration, and in-process smoke tooling. |
 | `shared/` | Versioned event schemas, common domain helpers, Kafka metadata, and metrics. |
 | `tests/` | Python unit and integration tests, plus event fixtures. |
 
@@ -393,8 +393,8 @@ and `pyproject.toml`.
 
 | Area | Technologies |
 | --- | --- |
-| Language | Python 3.12+, TypeScript 5 |
-| Backend | FastAPI, Pydantic v2, Uvicorn, psycopg 3, httpx, structlog |
+| Language | Python 3.12+, Go 1.26 (event processor), TypeScript 5 |
+| Backend | FastAPI, Pydantic v2, Uvicorn, psycopg 3, httpx, structlog; processor: pgx v5, go-redis v9, `confluent-kafka-go` |
 | Frontend | Next.js App Router, React, Tailwind CSS, Recharts |
 | Messaging | Apache Kafka 3.9 in KRaft mode, `confluent-kafka` |
 | Storage | PostgreSQL 17, Redis 7 |

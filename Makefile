@@ -6,7 +6,7 @@ PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 	generator-down generator-logs generator-run generator-sample generator-status \
 	generator-smoke generator-personas generator-normal generator-suspicious \
 	generator-bot generator-takeover generator-anomalies generator-persona-smoke \
-	generator-anomaly-smoke processor-build processor-up processor-down \
+	generator-anomaly-smoke go-check processor-build processor-up processor-down \
 	processor-run processor-logs processor-status processor-sample processor-smoke \
 	processor-duplicate-smoke processor-dlq-smoke processor-retry-smoke \
 	processor-idempotency-status processor-clear-test-state clean clean-volumes \
@@ -43,6 +43,9 @@ test:
 	$(PYTHON) -m pytest
 
 check: lint format-check type-check test
+
+go-check:
+	cd services/event_processor_go && test -z "$$(gofmt -l .)" && go vet ./... && go test ./...
 
 compose-config:
 	docker compose config
@@ -202,48 +205,48 @@ processor-status:
 	docker compose --profile processor ps event-processor
 
 processor-sample:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/processor-smoke.py normal
 
 processor-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py normal
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/processor-smoke.py normal
 
 processor-duplicate-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py duplicate
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/processor-smoke.py duplicate
 
 processor-dlq-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py dlq
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/processor-smoke.py dlq
 
 processor-retry-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/processor-smoke.py retry
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/processor-smoke.py retry
 
 persistence-sample:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py sample
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py sample
 
 persistence-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py normal
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py normal
 
 persistence-duplicate-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py duplicate
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py duplicate
 
 persistence-recovery-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py recovery
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py recovery
 
 persistence-dependency-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py dependency
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py dependency
 
 persistence-refund-smoke:
-	docker compose --profile processor run --rm \
-		--entrypoint python event-processor /app/scripts/persistence-smoke.py refund
+	docker compose --profile processor --profile tools run --rm \
+		--entrypoint python processor-tools /app/scripts/persistence-smoke.py refund
 
 fraud-rules:
 	$(PYTHON) scripts/fraud-admin.py rules

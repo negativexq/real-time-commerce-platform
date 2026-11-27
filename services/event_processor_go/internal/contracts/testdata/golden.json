@@ -1,0 +1,400 @@
+[
+ {
+  "name": "fixture/fraud_alert_created.json",
+  "input": "{\n  \"event_id\": \"00000000-0000-4000-8000-000000000010\",\n  \"event_type\": \"fraud_alert_created\",\n  \"event_version\": 1,\n  \"event_time\": \"2026-01-15T10:08:00Z\",\n  \"produced_at\": \"2026-01-15T10:08:01Z\",\n  \"source\": \"fixture\",\n  \"correlation_id\": \"00000000-0000-4000-8000-000000000100\",\n  \"payload\": {\n    \"alert_id\": \"00000000-0000-4000-8000-000000000701\",\n    \"event_id\": \"00000000-0000-4000-8000-000000000008\",\n    \"customer_id\": \"00000000-0000-4000-8000-000000000101\",\n    \"order_id\": \"00000000-0000-4000-8000-000000000301\",\n    \"fraud_score\": \"87.50\",\n    \"decision\": \"REVIEW\",\n    \"reasons\": [\n      \"payment_country_mismatch\",\n      \"high_velocity\"\n    ],\n    \"created_at\": \"2026-01-15T10:08:00Z\"\n  }\n}\n",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000010\",\"event_time\":\"2026-01-15T10:08:00Z\",\"event_type\":\"fraud_alert_created\",\"event_version\":1,\"payload\":{\"alert_id\":\"00000000-0000-4000-8000-000000000701\",\"created_at\":\"2026-01-15T10:08:00Z\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"decision\":\"REVIEW\",\"event_id\":\"00000000-0000-4000-8000-000000000008\",\"fraud_score\":\"87.50\",\"order_id\":\"00000000-0000-4000-8000-000000000301\",\"reasons\":[\"payment_country_mismatch\",\"high_velocity\"]},\"produced_at\":\"2026-01-15T10:08:01Z\",\"source\":\"fixture\"}",
+  "sha256": "06c0952e7f4b95607f38bb04f43ad1cc00bde7ed51b62d571bb21f4c3989a191",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "fixture/order_created.json",
+  "input": "{\n  \"event_id\": \"00000000-0000-4000-8000-000000000006\",\n  \"event_type\": \"order_created\",\n  \"event_version\": 1,\n  \"event_time\": \"2026-01-15T10:05:00Z\",\n  \"produced_at\": \"2026-01-15T10:05:01Z\",\n  \"source\": \"fixture\",\n  \"correlation_id\": \"00000000-0000-4000-8000-000000000100\",\n  \"payload\": {\n    \"order_id\": \"00000000-0000-4000-8000-000000000301\",\n    \"customer_id\": \"00000000-0000-4000-8000-000000000101\",\n    \"session_id\": \"00000000-0000-4000-8000-000000000201\",\n    \"cart_id\": \"00000000-0000-4000-8000-000000000401\",\n    \"item_count\": 2,\n    \"subtotal\": \"129.90\",\n    \"discount_amount\": \"10.00\",\n    \"total_amount\": \"119.90\",\n    \"currency\": \"TRY\",\n    \"shipping_country_code\": \"TR\",\n    \"billing_country_code\": \"TR\",\n    \"created_at\": \"2026-01-15T10:05:00Z\"\n  }\n}\n",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000006\",\"event_time\":\"2026-01-15T10:05:00Z\",\"event_type\":\"order_created\",\"event_version\":1,\"payload\":{\"billing_country_code\":\"TR\",\"cart_id\":\"00000000-0000-4000-8000-000000000401\",\"created_at\":\"2026-01-15T10:05:00Z\",\"currency\":\"TRY\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"10.00\",\"item_count\":2,\"order_id\":\"00000000-0000-4000-8000-000000000301\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"shipping_country_code\":\"TR\",\"subtotal\":\"129.90\",\"total_amount\":\"119.90\"},\"produced_at\":\"2026-01-15T10:05:01Z\",\"source\":\"fixture\"}",
+  "sha256": "cb44d486527eeb676c044e77a3239d0cc47d809f2b3d31bc67e7a1ede5e7e44f",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "fixture/payment_completed.json",
+  "input": "{\n  \"event_id\": \"00000000-0000-4000-8000-000000000007\",\n  \"event_type\": \"payment_completed\",\n  \"event_version\": 1,\n  \"event_time\": \"2026-01-15T10:06:00Z\",\n  \"produced_at\": \"2026-01-15T10:06:01Z\",\n  \"source\": \"fixture\",\n  \"correlation_id\": \"00000000-0000-4000-8000-000000000100\",\n  \"payload\": {\n    \"payment_id\": \"00000000-0000-4000-8000-000000000501\",\n    \"order_id\": \"00000000-0000-4000-8000-000000000301\",\n    \"customer_id\": \"00000000-0000-4000-8000-000000000101\",\n    \"amount\": \"119.90\",\n    \"currency\": \"TRY\",\n    \"payment_method\": \"credit_card\",\n    \"device_id\": \"00000000-0000-4000-8000-000000000601\",\n    \"ip_address\": \"2001:db8::1\",\n    \"country_code\": \"TR\",\n    \"completed_at\": \"2026-01-15T10:06:00Z\"\n  }\n}\n",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000007\",\"event_time\":\"2026-01-15T10:06:00Z\",\"event_type\":\"payment_completed\",\"event_version\":1,\"payload\":{\"amount\":\"119.90\",\"completed_at\":\"2026-01-15T10:06:00Z\",\"country_code\":\"TR\",\"currency\":\"TRY\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"ip_address\":\"2001:db8::1\",\"order_id\":\"00000000-0000-4000-8000-000000000301\",\"payment_id\":\"00000000-0000-4000-8000-000000000501\",\"payment_method\":\"credit_card\"},\"produced_at\":\"2026-01-15T10:06:01Z\",\"source\":\"fixture\"}",
+  "sha256": "1533f3bffff358786ac761354f94d38b7401b905579df3ca86419e361294799d",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "fixture/payment_failed.json",
+  "input": "{\n  \"event_id\": \"00000000-0000-4000-8000-000000000008\",\n  \"event_type\": \"payment_failed\",\n  \"event_version\": 1,\n  \"event_time\": \"2026-01-15T10:07:00Z\",\n  \"produced_at\": \"2026-01-15T10:07:01Z\",\n  \"source\": \"fixture\",\n  \"correlation_id\": \"00000000-0000-4000-8000-000000000100\",\n  \"payload\": {\n    \"payment_id\": \"00000000-0000-4000-8000-000000000502\",\n    \"order_id\": \"00000000-0000-4000-8000-000000000301\",\n    \"customer_id\": \"00000000-0000-4000-8000-000000000101\",\n    \"amount\": \"119.90\",\n    \"currency\": \"TRY\",\n    \"payment_method\": \"credit_card\",\n    \"failure_reason\": \"declined\",\n    \"device_id\": \"00000000-0000-4000-8000-000000000601\",\n    \"ip_address\": \"192.0.2.10\",\n    \"country_code\": \"TR\",\n    \"failed_at\": \"2026-01-15T10:07:00Z\"\n  }\n}\n",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000008\",\"event_time\":\"2026-01-15T10:07:00Z\",\"event_type\":\"payment_failed\",\"event_version\":1,\"payload\":{\"amount\":\"119.90\",\"country_code\":\"TR\",\"currency\":\"TRY\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"failed_at\":\"2026-01-15T10:07:00Z\",\"failure_reason\":\"declined\",\"ip_address\":\"192.0.2.10\",\"order_id\":\"00000000-0000-4000-8000-000000000301\",\"payment_id\":\"00000000-0000-4000-8000-000000000502\",\"payment_method\":\"credit_card\"},\"produced_at\":\"2026-01-15T10:07:01Z\",\"source\":\"fixture\"}",
+  "sha256": "8713bac9c8ae451f456f44457d076e53bfd792471cd31d8cbc51fd4620af53ac",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "fixture/user_registered.json",
+  "input": "{\n  \"event_id\": \"00000000-0000-4000-8000-000000000001\",\n  \"event_type\": \"user_registered\",\n  \"event_version\": 1,\n  \"event_time\": \"2026-01-15T10:00:00Z\",\n  \"produced_at\": \"2026-01-15T10:00:01Z\",\n  \"source\": \"fixture\",\n  \"correlation_id\": \"00000000-0000-4000-8000-000000000100\",\n  \"payload\": {\n    \"customer_id\": \"00000000-0000-4000-8000-000000000101\",\n    \"email_hash\": \"sha256:deterministic\",\n    \"country_code\": \"TR\",\n    \"persona\": \"normal\",\n    \"registered_at\": \"2026-01-15T10:00:00Z\"\n  }\n}\n",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"user_registered\",\"event_version\":1,\"payload\":{\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"email_hash\":\"sha256:deterministic\",\"persona\":\"normal\",\"registered_at\":\"2026-01-15T10:00:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"fixture\"}",
+  "sha256": "08bc1763ea6e704153d675951f093f8b40b6b09c3995d6a6948a1c218de27c67",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/basic",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "f9a57e67eb742946ee149b3e48fb9bec3e99c5820bc1db8e5040d88f041a55c6",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/ipv6",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"2001:DB8:0:0:0:0:0:1\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"2001:db8::1\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "3a6e42d0c83034d2b2dbbdc88d4b0e3e3fb03e59239df34ddb08fc447ed333e5",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/ipv4_mapped",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"::ffff:1.2.3.4\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"::ffff:1.2.3.4\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "bbaf4b0bc9f28a9f9df9bbf4a614d0b31d154ba7ca3f9ce7bc6c5add3f6cf032",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/ipv4_compat",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"::1.2.3.4\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"::102:304\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "8c0df97d35ac29e615850ec92e11fcb7f88deefe30506f963ccc4ec28988831c",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/ipv6_zeros",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"2001:0db8:0000:0000:0001:0000:0000:0001\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"2001:db8::1:0:0:1\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "550ca4b11f67152a3026ddf1a5861f344c3ecf6d24bdd6769cc417e8e0315d53",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/bad_ip_leading_zero",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"01.2.3.4\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "session/offset_time",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T12:59:00+03:00\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "f9a57e67eb742946ee149b3e48fb9bec3e99c5820bc1db8e5040d88f041a55c6",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/fraction_time",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00.123Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00.123000Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "d6725dc14f841d66d7de90b517710de51e17166dc16d0731469fc88f874c683f",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/fraction_long",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00.1234567Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00.123456Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "47dde038971c17604ad4233c3ea04a2c0c76cac25f33790dd9fd9859425ac78d",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/naive_time",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "session/lower_t",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15t09:59:00z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "f9a57e67eb742946ee149b3e48fb9bec3e99c5820bc1db8e5040d88f041a55c6",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/no_seconds",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "f9a57e67eb742946ee149b3e48fb9bec3e99c5820bc1db8e5040d88f041a55c6",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/compact_offset",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00-0130\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"00000000-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T11:29:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "149d4646b333c8ac204d11d6d9c75a987fcf9cac661e17976ff31b97299b67d8",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/upper_uuid",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"ABCDEF00-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"abcdef00-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "ce18db60629fe8657c8611d709e1a2cb47376cbfd70fc775d35c7cf7b8b6a7f3",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/simple_uuid",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"abcdef00000040008000000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"session_started\",\"event_version\":1,\"payload\":{\"channel\":\"web\",\"country_code\":\"TR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"device_id\":\"abcdef00-0000-4000-8000-000000000601\",\"device_type\":\"mobile\",\"ip_address\":\"203.0.113.7\",\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"started_at\":\"2026-01-15T09:59:00Z\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "ce18db60629fe8657c8611d709e1a2cb47376cbfd70fc775d35c7cf7b8b6a7f3",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "session/bad_country",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"tr\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "session/bad_enum",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"email\", \"started_at\": \"2026-01-15T09:59:00Z\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "session/extra_field",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"session_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"device_id\": \"00000000-0000-4000-8000-000000000601\", \"device_type\": \"mobile\", \"ip_address\": \"203.0.113.7\", \"country_code\": \"TR\", \"channel\": \"web\", \"started_at\": \"2026-01-15T09:59:00Z\", \"extra\": true}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/basic",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"10.00\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"100.00\",\"total_amount\":\"90.00\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "7d18349b1efba2ccb06ad3e49e9ffbdd25c11ee91ac568563d254431efe41f0f",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/numbers",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": 100, \"discount_amount\": 10.5, \"total_amount\": 89.5, \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"10.5\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"100\",\"total_amount\":\"89.5\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "e32c023201905ecd60dbb7ab7d48ed052cb02f1321c69b27fa65a2468ca7b98a",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/scientific",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"1E+2\", \"discount_amount\": \"0\", \"total_amount\": \"100\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"0\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"1E+2\",\"total_amount\":\"100\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "02add79dd26d67bd23d9b87ff0c2ee46c28bf27533352f17dc8b548b0a04d3cd",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/tiny",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"0.0000001\", \"discount_amount\": \"0\", \"total_amount\": \"1E-7\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"0\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"1E-7\",\"total_amount\":\"1E-7\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "a248f3f326f1ec0b9399dac8d6c57a8aea8576f506f008848c33f697f24da0eb",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/spaces",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \" 100.00 \", \"discount_amount\": \"10\", \"total_amount\": \"90.000\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"10\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"100.00\",\"total_amount\":\"90.000\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "1de665d298d0ea64065a0c894b9991f107de734496adbda6212ba22256363c8e",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/underscore",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"1_000.00\", \"discount_amount\": \"0\", \"total_amount\": \"1000\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"0\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"1000.00\",\"total_amount\":\"1000\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "dc76ce90642f400581c6fa27e0d61353698e87d16e73cc6d9a9f7dfa97b63b91",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "checkout/bad_total",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"91.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/discount_gt",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"100.00\", \"discount_amount\": \"200\", \"total_amount\": \"-100\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/negative",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"-1\", \"discount_amount\": \"0\", \"total_amount\": \"-1\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/nan",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"NaN\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/int_as_float",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2.0, \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/int_as_string",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": \"2\", \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/bool_count",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": true, \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/zero_count",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 0, \"subtotal\": \"100.00\", \"discount_amount\": \"10.00\", \"total_amount\": \"90.00\", \"currency\": \"EUR\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "checkout/big_exponent",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"checkout_started\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"cart_id\": \"00000000-0000-4000-8000-000000000301\", \"item_count\": 2, \"subtotal\": \"12345678901234567890.123456789\", \"discount_amount\": \"0.123456789\", \"total_amount\": \"12345678901234567890.000000000\", \"currency\": \"EUR\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"checkout_started\",\"event_version\":1,\"payload\":{\"cart_id\":\"00000000-0000-4000-8000-000000000301\",\"currency\":\"EUR\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"discount_amount\":\"0.123456789\",\"item_count\":2,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"subtotal\":\"12345678901234567890.123456789\",\"total_amount\":\"12345678901234567890.000000000\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "4d4a1a855b9d5b766f3e5785e2e8214f793647e9c4385f76c2bafff089512cb8",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "product/unicode",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"  ev & bahçe — \\\"özel\\\" \\\\ \\n\\t\\u0001  \", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"ev & bahçe — \\\"özel\\\" \\\\ \\n\\t\\u0001\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "272456a2f834a51e6d66884317deb1b67e57a9042d8ad150c62d0973c6a5abde",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "product/emoji",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"kitap 📚\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"kitap 📚\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "0b157d784cd71f5fcc641595215baa9f2b95535682bfb5db413b5c15c843b95d",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "product/blank_category",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"   \", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "product/zero_price",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"0\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"0\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "b3027c7157b5f12e16f5cb82def5b2d2d23c61a63f7db1459142964c4698adb4",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "product/neg_zero_price",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"-0.00\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"-0.00\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "2831f37fd42c0045f6e4f84adb444160007815cfd470317ab28ac33bf27faaa7",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "product/zero_stock",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 0}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":0,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "f5f641170da6087cbd28a0ece0d2f8f2b404f6b0eca848bb477b3a44f97637be",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "envelope/source_strip",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"  golden  \", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "0174590e40240e0f32598c101215672371d561deed67390105c8bbecf5f1a8d5",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "envelope/clock_skew",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T09:54:59Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "envelope/clock_skew_edge",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T09:55:00Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T09:55:00Z\",\"source\":\"golden\"}",
+  "sha256": "dd4c4dc2d75bbd6d625f99a8df2e201804094546a7da99e9a5e4c3932374634e",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "envelope/version_zero",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 0, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "envelope/missing_source",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "envelope/payload_list",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": []}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "envelope/not_object",
+  "input": "[1, 2]",
+  "ok": false,
+  "error": "ValueError"
+ },
+ {
+  "name": "envelope/duplicate_key",
+  "input": "{\"source\":\"a\",\"event_id\": \"00000000-0000-4000-8000-000000000001\", \"event_type\": \"product_viewed\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:00:00Z\", \"produced_at\": \"2026-01-15T10:00:01Z\", \"source\": \"golden\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"session_id\": \"00000000-0000-4000-8000-000000000201\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"product_id\": \"00000000-0000-4000-8000-000000000701\", \"category\": \"electronics\", \"unit_price\": \"19.99\", \"currency\": \"USD\", \"quantity_available\": 5}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000001\",\"event_time\":\"2026-01-15T10:00:00Z\",\"event_type\":\"product_viewed\",\"event_version\":1,\"payload\":{\"category\":\"electronics\",\"currency\":\"USD\",\"customer_id\":\"00000000-0000-4000-8000-000000000101\",\"product_id\":\"00000000-0000-4000-8000-000000000701\",\"quantity_available\":5,\"session_id\":\"00000000-0000-4000-8000-000000000201\",\"unit_price\":\"19.99\"},\"produced_at\":\"2026-01-15T10:00:01Z\",\"source\":\"golden\"}",
+  "sha256": "0174590e40240e0f32598c101215672371d561deed67390105c8bbecf5f1a8d5",
+  "key": "00000000-0000-4000-8000-000000000101"
+ },
+ {
+  "name": "alert/null_ids",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000010\", \"event_type\": \"fraud_alert_created\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:08:00Z\", \"produced_at\": \"2026-01-15T10:08:01Z\", \"source\": \"fixture\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"alert_id\": \"00000000-0000-4000-8000-000000000701\", \"event_id\": \"00000000-0000-4000-8000-000000000008\", \"customer_id\": null, \"order_id\": null, \"fraud_score\": \"87.50\", \"decision\": \"REVIEW\", \"reasons\": [\"payment_country_mismatch\", \"high_velocity\"], \"created_at\": \"2026-01-15T10:08:00Z\"}}",
+  "ok": true,
+  "canonical": "{\"correlation_id\":\"00000000-0000-4000-8000-000000000100\",\"event_id\":\"00000000-0000-4000-8000-000000000010\",\"event_time\":\"2026-01-15T10:08:00Z\",\"event_type\":\"fraud_alert_created\",\"event_version\":1,\"payload\":{\"alert_id\":\"00000000-0000-4000-8000-000000000701\",\"created_at\":\"2026-01-15T10:08:00Z\",\"customer_id\":null,\"decision\":\"REVIEW\",\"event_id\":\"00000000-0000-4000-8000-000000000008\",\"fraud_score\":\"87.50\",\"order_id\":null,\"reasons\":[\"payment_country_mismatch\",\"high_velocity\"]},\"produced_at\":\"2026-01-15T10:08:01Z\",\"source\":\"fixture\"}",
+  "sha256": "f5682f77616fec42076f3518d866db38855dd9901e77bcd9f3af2aa8be198e5b",
+  "key": "00000000-0000-4000-8000-000000000100"
+ },
+ {
+  "name": "alert/empty_reasons",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000010\", \"event_type\": \"fraud_alert_created\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:08:00Z\", \"produced_at\": \"2026-01-15T10:08:01Z\", \"source\": \"fixture\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"alert_id\": \"00000000-0000-4000-8000-000000000701\", \"event_id\": \"00000000-0000-4000-8000-000000000008\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"order_id\": \"00000000-0000-4000-8000-000000000301\", \"fraud_score\": \"87.50\", \"decision\": \"REVIEW\", \"reasons\": [], \"created_at\": \"2026-01-15T10:08:00Z\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ },
+ {
+  "name": "alert/score_high",
+  "input": "{\"event_id\": \"00000000-0000-4000-8000-000000000010\", \"event_type\": \"fraud_alert_created\", \"event_version\": 1, \"event_time\": \"2026-01-15T10:08:00Z\", \"produced_at\": \"2026-01-15T10:08:01Z\", \"source\": \"fixture\", \"correlation_id\": \"00000000-0000-4000-8000-000000000100\", \"payload\": {\"alert_id\": \"00000000-0000-4000-8000-000000000701\", \"event_id\": \"00000000-0000-4000-8000-000000000008\", \"customer_id\": \"00000000-0000-4000-8000-000000000101\", \"order_id\": \"00000000-0000-4000-8000-000000000301\", \"fraud_score\": \"100.5\", \"decision\": \"REVIEW\", \"reasons\": [\"payment_country_mismatch\", \"high_velocity\"], \"created_at\": \"2026-01-15T10:08:00Z\"}}",
+  "ok": false,
+  "error": "ValidationError"
+ }
+]

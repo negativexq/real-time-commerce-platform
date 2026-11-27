@@ -2,6 +2,13 @@
 
 ## Purpose
 
+> **Runtime:** the processor that runs in Compose is the Go port in
+> [`services/event_processor_go/`](../services/event_processor_go/README.md),
+> adopted on 2026-11-27 after a byte-level parity check and a benchmark A/B.
+> It keeps every behaviour described below. The Python package in
+> `services/event_processor/` remains the reference implementation and still
+> supplies migrations, fraud configuration and the in-process smoke tooling.
+
 Sprint 6 introduced the synchronous Kafka consumer. Sprint 7 preserves its
 validation, Redis leases, retries, DLQ, and manual offsets while replacing the
 no-op audit boundary with transactional PostgreSQL repositories. Sprint 8 adds

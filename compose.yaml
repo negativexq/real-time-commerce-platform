@@ -173,7 +173,7 @@ services:
     profiles: ["processor"]
     build:
       context: .
-      dockerfile: services/event_processor/Dockerfile
+      dockerfile: services/event_processor_go/Dockerfile
     depends_on:
       kafka:
         condition: service_healthy
@@ -185,7 +185,7 @@ services:
         condition: service_healthy
       postgres-migrate:
         condition: service_completed_successfully
-    environment:
+    environment: &processor-environment
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
       METRICS_HOST: 0.0.0.0
       METRICS_NAMESPACE: ${METRICS_NAMESPACE:-commerce}
@@ -269,11 +269,33 @@ services:
     cpus: ${PROCESSOR_CPU_LIMIT:-8}
     restart: unless-stopped
 
+  # In-process Python smoke scripts (scripts/processor-smoke.py,
+  # scripts/persistence-smoke.py) import the legacy Python processor
+  # package; the running processor is the Go service above.
+  processor-tools:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: services/event_processor/Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-migrate:
+        condition: service_completed_successfully
+    environment: *processor-environment
+    restart: "no"
+
   demo-verification-processor:
     profiles: ["demo-verification"]
     build:
       context: .
-      dockerfile: services/event_processor/Dockerfile
+      dockerfile: services/event_processor_go/Dockerfile
     depends_on:
       kafka:
         condition: service_healthy

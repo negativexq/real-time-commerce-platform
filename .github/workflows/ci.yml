@@ -29,6 +29,26 @@ jobs:
       - name: Run checks
         run: make check
 
+  go-processor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/event_processor_go/go.mod
+          cache-dependency-path: services/event_processor_go/go.sum
+
+      - name: Format, vet and test
+        run: make go-check
+
+      - name: Build processor image
+        run: docker compose --profile processor build event-processor
+
   integration:
     runs-on: ubuntu-latest
     needs: quality
